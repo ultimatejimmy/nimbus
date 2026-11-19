@@ -1,0 +1,50 @@
+{
+  "progress": {
+    "a1b2c3d4": {
+      "book_id": "a1b2c3d4",
+      "device_id": "Pixel-Web_4c1e",
+      "percent": 0.512,
+      "updated_at": 1795200000
+    },
+    "b2c3d4e5": {
+      "book_id": "b2c3d4e5",
+      "device_id": "Kobo-Libra-2_9f2a",
+      "percent": 0.91,
+      "updated_at": 1795150000
+    },
+    "c3d4e5f6": {
+      "book_id": "c3d4e5f6",
+      "device_id": "Pixel-Web_4c1e",
+      "percent": 0.85,
+      "updated_at": 1795160000
+    }
+  },
+  "annotations": {
+    "a1b2c3d4": {
+      "active_ids": ["ann_001", "ann_002"],
+      "tombstone_ids": ["ann_003", "ann_004"],
+      "ann_002_note": "Edited on Web",
+      "ann_002_color": "green"
+    }
+  },
+  "sessions": [
+    {
+      "device_id": "Kobo-Libra-2_9f2a",
+      "book_id": "a1b2c3d4",
+      "start_time": 1795115000,
+      "duration_sec": 1840
+    },
+    {
+      "device_id": "Kobo-Libra-2_9f2a",
+      "book_id": "b2c3d4e5",
+      "start_time": 1795145000,
+      "duration_sec": 920
+    },
+    {
+      "device_id": "Pixel-Web_4c1e",
+      "book_id": "a1b2c3d4",
+      "start_time": 1795195000,
+      "duration_sec": 2400
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-19T13:30:00Z",
+  "updated_by": "Calibre-Desktop_7b01",
+  "books": {
+    "a1b2c3d4": {
+      "id": "a1b2c3d4",
+      "title": "Mistborn: The Final Empire",
+      "authors": ["Brandon Sanderson"],
+      "series": "Mistborn",
+      "series_index": 1,
+      "tags": ["Fantasy", "Favorites"],
+      "language": "en",
+      "isbn": "9780765311788",
+      "calibre_uuid": "c4f1e2a0-1111-4444-8888-000000000001",
+      "folder": "Books/Brandon Sanderson - Mistborn [a1b2c3d4]",
+      "filename": "Mistborn.epub",
+      "format": "epub",
+      "size_bytes": 1482910,
+      "has_cover": true,
+      "cover_etag": "9a8b7c",
+      "hashes": {
+        "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "added_at": "2026-11-19T13:00:00Z",
+      "updated_at": "2026-11-19T13:30:00Z",
+      "deleted": false
+    },
+    "b2c3d4e5": {
+      "id": "b2c3d4e5",
+      "title": "Dune",
+      "authors": ["Frank Herbert"],
+      "series": "Dune",
+      "series_index": 1,
+      "tags": ["Sci-Fi"],
+      "language": "en",
+      "isbn": "9780441172719",
+      "calibre_uuid": null,
+      "folder": "Books/Frank Herbert - Dune [b2c3d4e5]",
+      "filename": "Dune.epub",
+      "format": "epub",
+      "size_bytes": 2104512,
+      "has_cover": true,
+      "cover_etag": "1b2c3d",
+      "hashes": {
+        "partial_md5": "098f6bcd4621d373cade4e832627b4f6",
+        "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+      },
+      "added_at": "2026-11-18T10:00:00Z",
+      "updated_at": "2026-11-18T10:00:00Z",
+      "deleted": false
+    },
+    "c3d4e5f6": {
+      "id": "c3d4e5f6",
+      "title": "Designing Data-Intensive Applications",
+      "authors": ["Martin Kleppmann"],
+      "series": null,
+      "series_index": null,
+      "tags": ["Tech"],
+      "language": "en",
+      "isbn": "9781449373320",
+      "calibre_uuid": null,
+      "folder": "Books/Martin Kleppmann - Designing Data-Intensive Applications [c3d4e5f6]",
+      "filename": "DDIA.pdf",
+      "format": "pdf",
+      "size_bytes": 18432100,
+      "has_cover": false,
+      "cover_etag": null,
+      "hashes": {
+        "partial_md5": "5d41402abc4b2a76b9719d911017c592",
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      },
+      "added_at": "2026-11-17T08:00:00Z",
+      "updated_at": "2026-11-17T08:00:00Z",
+      "deleted": false
+    }
+  }
+}

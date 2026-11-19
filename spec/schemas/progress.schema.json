@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nimbus.local/schemas/progress.schema.json",
+  "title": "Nimbus Device Progress",
+  "type": "object",
+  "required": ["version", "device_id", "updated_at", "books"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "device_id": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "books": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["book_id", "percent", "updated_at"],
+        "properties": {
+          "book_id": { "type": "string", "minLength": 1 },
+          "partial_md5": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+          "percent": { "type": "number", "minimum": 0, "maximum": 1 },
+          "page": { "type": ["integer", "null"], "minimum": 0 },
+          "total_pages": { "type": ["integer", "null"], "minimum": 0 },
+          "chapter": { "type": ["string", "null"] },
+          "xpointer": { "type": ["string", "null"] },
+          "cfi": { "type": ["string", "null"] },
+          "text_anchor": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["unread", "reading", "finished", "abandoned"] },
+          "rating": { "type": ["integer", "null"], "minimum": 0, "maximum": 5 },
+          "updated_at": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

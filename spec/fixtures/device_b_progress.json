@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "device_id": "Pixel-Web_4c1e",
+  "updated_at": "2026-11-20T12:00:00Z",
+  "books": {
+    "a1b2c3d4": {
+      "book_id": "a1b2c3d4",
+      "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "percent": 0.512,
+      "page": 265,
+      "total_pages": 517,
+      "chapter": "Chapter 18",
+      "xpointer": null,
+      "cfi": "epubcfi(/6/40!/4/12/1:0)",
+      "text_anchor": "Vin stepped onto the balcony overlooking",
+      "status": "reading",
+      "rating": 5,
+      "updated_at": 1795200000
+    },
+    "b2c3d4e5": {
+      "book_id": "b2c3d4e5",
+      "partial_md5": "098f6bcd4621d373cade4e832627b4f6",
+      "percent": 0.8,
+      "page": 400,
+      "total_pages": 500,
+      "chapter": "Book Two",
+      "xpointer": null,
+      "cfi": "epubcfi(/6/30!/4/8/1:0)",
+      "text_anchor": "The sleeper must awaken",
+      "status": "reading",
+      "rating": 5,
+      "updated_at": 1795140000
+    },
+    "c3d4e5f6": {
+      "book_id": "c3d4e5f6",
+      "partial_md5": "5d41402abc4b2a76b9719d911017c592",
+      "percent": 0.85,
+      "page": 425,
+      "total_pages": 500,
+      "chapter": "Chapter 9",
+      "xpointer": null,
+      "cfi": null,
+      "text_anchor": "Consistency and Consensus",
+      "status": "reading",
+      "rating": 5,
+      "updated_at": 1795160000
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "device_id": "Kobo-Libra-2_9f2a",
+  "updated_at": "2026-11-19T14:05:12Z",
+  "books": {
+    "a1b2c3d4": {
+      "book_id": "a1b2c3d4",
+      "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "percent": 0.4215,
+      "page": 218,
+      "total_pages": 517,
+      "chapter": "Chapter 14",
+      "xpointer": "/body/DocFragment[16]/body/p[24]/text().12",
+      "cfi": null,
+      "text_anchor": "Ash fell from the sky over Luthadel",
+      "status": "reading",
+      "rating": 5,
+      "updated_at": 1795118712
+    },
+    "b2c3d4e5": {
+      "book_id": "b2c3d4e5",
+      "partial_md5": "098f6bcd4621d373cade4e832627b4f6",
+      "percent": 0.91,
+      "page": 455,
+      "total_pages": 500,
+      "chapter": "Book Three",
+      "xpointer": "/body/DocFragment[40]/body/p[2]/text().0",
+      "cfi": null,
+      "text_anchor": "He who can destroy a thing controls a thing",
+      "status": "reading",
+      "rating": 5,
+      "updated_at": 1795150000
+    },
+    "c3d4e5f6": {
+      "book_id": "c3d4e5f6",
+      "partial_md5": "5d41402abc4b2a76b9719d911017c592",
+      "percent": 0.6,
+      "page": 300,
+      "total_pages": 500,
+      "chapter": "Chapter 7",
+      "xpointer": null,
+      "cfi": null,
+      "text_anchor": "Transactions",
+      "status": "reading",
+      "rating": null,
+      "updated_at": 1795160000
+    }
+  }
+}

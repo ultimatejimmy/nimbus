@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nimbus.local/schemas/catalog.schema.json",
+  "title": "Nimbus Catalog",
+  "type": "object",
+  "required": ["version", "updated_at", "books"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "updated_by": { "type": "string" },
+    "books": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "title", "authors", "folder", "filename", "format", "hashes", "added_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]{6,16}$" },
+          "title": { "type": "string", "minLength": 1 },
+          "authors": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "series": { "type": ["string", "null"] },
+          "series_index": { "type": ["number", "null"] },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "language": { "type": ["string", "null"] },
+          "isbn": { "type": ["string", "null"] },
+          "calibre_uuid": { "type": ["string", "null"] },
+          "folder": { "type": "string", "minLength": 1 },
+          "filename": { "type": "string", "minLength": 1 },
+          "format": { "type": "string", "enum": ["epub", "pdf", "cbz", "mobi", "azw3", "fb2"] },
+          "size_bytes": { "type": "integer", "minimum": 0 },
+          "has_cover": { "type": "boolean" },
+          "cover_etag": { "type": ["string", "null"] },
+          "hashes": {
+            "type": "object",
+            "required": ["partial_md5"],
+            "properties": {
+              "partial_md5": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          },
+          "added_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "deleted": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

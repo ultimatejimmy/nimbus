@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nimbus.local/schemas/sessions.schema.json",
+  "title": "Nimbus Device Monthly Reading Sessions",
+  "type": "object",
+  "required": ["version", "device_id", "month", "sessions"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "device_id": { "type": "string", "minLength": 1 },
+    "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["book_id", "start_time", "duration_sec"],
+        "properties": {
+          "book_id": { "type": "string", "minLength": 1 },
+          "partial_md5": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+          "start_time": { "type": "integer", "minimum": 0 },
+          "duration_sec": { "type": "integer", "minimum": 0 },
+          "pages_read": { "type": "integer", "minimum": 0 },
+          "start_percent": { "type": "number", "minimum": 0, "maximum": 1 },
+          "end_percent": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "device_id": "Pixel-Web_4c1e",
+  "month": "2026-11",
+  "sessions": [
+    {
+      "book_id": "a1b2c3d4",
+      "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "start_time": 1795195000,
+      "duration_sec": 2400,
+      "pages_read": 47,
+      "start_percent": 0.4215,
+      "end_percent": 0.512
+    }
+  ]
+}

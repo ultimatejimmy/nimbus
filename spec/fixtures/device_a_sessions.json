@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "device_id": "Kobo-Libra-2_9f2a",
+  "month": "2026-11",
+  "sessions": [
+    {
+      "book_id": "a1b2c3d4",
+      "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "start_time": 1795115000,
+      "duration_sec": 1840,
+      "pages_read": 24,
+      "start_percent": 0.37,
+      "end_percent": 0.4215
+    },
+    {
+      "book_id": "a1b2c3d4",
+      "partial_md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "start_time": 1795115000,
+      "duration_sec": 1800,
+      "pages_read": 22,
+      "start_percent": 0.37,
+      "end_percent": 0.415
+    },
+    {
+      "book_id": "b2c3d4e5",
+      "partial_md5": "098f6bcd4621d373cade4e832627b4f6",
+      "start_time": 1795145000,
+      "duration_sec": 920,
+      "pages_read": 15,
+      "start_percent": 0.88,
+      "end_percent": 0.91
+    }
+  ]
+}

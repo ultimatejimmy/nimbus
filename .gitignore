@@ -1,0 +1,33 @@
+# OS & Editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python / Calibre
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+calibre/dist/
+calibre/build/
+*.zip
+
+# Node / Web
+web/node_modules/
+web/dist/
+web/.vite/
+*.local
+
+# Lua / KOReader test artifacts
+*.luac
+koreader/tests/tmp/
+
+# Secrets / Local test credentials
+*.env
+.env.*
+*_creds.lua
+*_oauth.lua

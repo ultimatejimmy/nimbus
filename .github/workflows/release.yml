@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Test & Package Nimbus Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Validate Spec & Run Calibre Tests
+        run: |
+          python spec/validate_fixtures.py
+          python -m unittest discover -s calibre/tests -v
+          python calibre/build_zip.py
+
+      - name: Test & Build Web PWA
+        run: |
+          npm --prefix web ci
+          npm --prefix web test
+          npm --prefix web run build
+          (cd web/dist && zip -r ../../nimbus-web-dist.zip .)
+
+      - name: Package KOReader Plugin
+        run: |
+          (cd koreader && zip -r ../nimbus.koplugin.zip nimbus.koplugin -x "*.git*" "*/.*")
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            nimbus.koplugin.zip
+            calibre/dist/NimbusCalibre.zip
+            nimbus-web-dist.zip
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-beta') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nimbus.local/schemas/annotations.schema.json",
+  "title": "Nimbus Device Annotations",
+  "type": "object",
+  "required": ["version", "device_id", "updated_at", "books"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "device_id": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "books": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "book_id", "type", "text", "created_at", "updated_at", "deleted"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "book_id": { "type": "string", "minLength": 1 },
+            "type": { "type": "string", "enum": ["highlight", "note", "bookmark"] },
+            "chapter": { "type": ["string", "null"] },
+            "page": { "type": ["integer", "null"], "minimum": 0 },
+            "percent": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "pos0": { "type": ["string", "null"] },
+            "pos1": { "type": ["string", "null"] },
+            "cfi_range": { "type": ["string", "null"] },
+            "text": { "type": "string" },
+            "note": { "type": ["string", "null"] },
+            "color": { "type": ["string", "null"] },
+            "created_at": { "type": "integer", "minimum": 0 },
+            "updated_at": { "type": "integer", "minimum": 0 },
+            "deleted": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

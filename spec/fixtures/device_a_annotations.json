@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "device_id": "Kobo-Libra-2_9f2a",
+  "updated_at": "2026-11-19T14:05:12Z",
+  "books": {
+    "a1b2c3d4": [
+      {
+        "id": "ann_001",
+        "book_id": "a1b2c3d4",
+        "type": "highlight",
+        "chapter": "Chapter 2",
+        "page": 32,
+        "percent": 0.062,
+        "pos0": "/body/DocFragment[4]/body/p[5]/text().0",
+        "pos1": "/body/DocFragment[4]/body/p[5]/text().30",
+        "cfi_range": null,
+        "text": "There's always another secret.",
+        "note": null,
+        "color": "yellow",
+        "created_at": 1795100000,
+        "updated_at": 1795100000,
+        "deleted": false
+      },
+      {
+        "id": "ann_002",
+        "book_id": "a1b2c3d4",
+        "type": "highlight",
+        "chapter": "Chapter 10",
+        "page": 150,
+        "percent": 0.29,
+        "pos0": "/body/DocFragment[12]/body/p[10]/text().0",
+        "pos1": "/body/DocFragment[12]/body/p[10]/text().40",
+        "cfi_range": null,
+        "text": "I represent that one thing you've never been able to kill.",
+        "note": null,
+        "color": "yellow",
+        "created_at": 1795110000,
+        "updated_at": 1795110000,
+        "deleted": false
+      },
+      {
+        "id": "ann_003",
+        "book_id": "a1b2c3d4",
+        "type": "highlight",
+        "chapter": "Chapter 12",
+        "page": 180,
+        "percent": 0.35,
+        "pos0": "/body/DocFragment[14]/body/p[1]/text().0",
+        "pos1": "/body/DocFragment[14]/body/p[1]/text().20",
+        "cfi_range": null,
+        "text": "Accidental highlight",
+        "note": null,
+        "color": "yellow",
+        "created_at": 1795115000,
+        "updated_at": 1795115000,
+        "deleted": false
+      },
+      {
+        "id": "ann_004",
+        "book_id": "a1b2c3d4",
+        "type": "bookmark",
+        "chapter": "Chapter 14",
+        "page": 218,
+        "percent": 0.4215,
+        "pos0": "/body/DocFragment[16]/body/p[24]/text().0",
+        "pos1": null,
+        "cfi_range": null,
+        "text": "Bookmark at Chapter 14",
+        "note": null,
+        "color": "blue",
+        "created_at": 1795129000,
+        "updated_at": 1795130000,
+        "deleted": true
+      }
+    ]
+  }
+}
