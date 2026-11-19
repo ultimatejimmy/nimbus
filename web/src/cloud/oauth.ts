@@ -2,32 +2,41 @@ import { OAuthTokens } from './types';
 
 export const DEFAULT_RELAY_URL = 'https://backup.ultimatejimmy.workers.dev';
 
-export const OAUTH_CONFIG = {
+interface OAuthProviderConfig {
+  name: string;
+  clientId: string;
+  scope: string;
+  deviceCodeUrl: string;
+  tokenUrl?: string;
+  relayPollUrl?: string;
+  relayRefreshUrl?: string;
+}
+
+export const OAUTH_CONFIG: Record<'gdrive' | 'onedrive' | 'dropbox', OAuthProviderConfig> = {
   gdrive: {
     name: 'Google Drive',
     clientId: '444320595925-2mlkslggov1f25qv45th2tq3dl466f9u.apps.googleusercontent.com',
     scope: 'https://www.googleapis.com/auth/drive.file',
-    initUrl: `${DEFAULT_RELAY_URL}/api/oauth/gdrive/init`,
-    pollUrl: `${DEFAULT_RELAY_URL}/api/oauth/gdrive/poll`,
-    refreshUrl: `${DEFAULT_RELAY_URL}/api/oauth/gdrive/refresh`,
+    deviceCodeUrl: 'https://oauth2.googleapis.com/device/code',
+    relayPollUrl: `${DEFAULT_RELAY_URL}/api/oauth/gdrive/poll`,
+    relayRefreshUrl: `${DEFAULT_RELAY_URL}/api/oauth/gdrive/refresh`,
   },
   onedrive: {
     name: 'Microsoft OneDrive',
     clientId: '982359c5-d74b-408c-8ff0-7d43c678195e',
     scope: 'Files.ReadWrite offline_access',
-    initUrl: `${DEFAULT_RELAY_URL}/api/oauth/onedrive/init`,
-    pollUrl: `${DEFAULT_RELAY_URL}/api/oauth/onedrive/poll`,
-    refreshUrl: `${DEFAULT_RELAY_URL}/api/oauth/onedrive/refresh`,
+    deviceCodeUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode',
+    tokenUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
   },
   dropbox: {
     name: 'Dropbox',
     clientId: 'khboin1ohr74q7y',
     scope: '',
-    initUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/init`,
-    pollUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/poll`,
-    refreshUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/refresh`,
+    deviceCodeUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/init`,
+    relayPollUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/poll`,
+    relayRefreshUrl: `${DEFAULT_RELAY_URL}/api/oauth/dropbox/refresh`,
   },
-} as const;
+};
 
 export type OAuthProvider = keyof typeof OAUTH_CONFIG;
 
@@ -39,14 +48,27 @@ export interface DeviceCodeInfo {
   expires_in: number;
 }
 
+async function parseJsonSafe(resp: Response): Promise<Record<string, any>> {
+  const text = await resp.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text || `HTTP ${resp.status}` };
+  }
+}
+
 export async function requestDeviceCode(provider: OAuthProvider): Promise<DeviceCodeInfo> {
   const cfg = OAUTH_CONFIG[provider];
-  const resp = await fetch(cfg.initUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: cfg.clientId, scope: cfg.scope }),
+  const form = new URLSearchParams({
+    client_id: cfg.clientId,
+    scope: cfg.scope,
   });
-  const data = await resp.json();
+  const resp = await fetch(cfg.deviceCodeUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
+  });
+  const data = await parseJsonSafe(resp);
   if (!resp.ok || !data.device_code) {
     throw new Error(data.error_description || data.error || `OAuth init failed (${resp.status})`);
   }
@@ -66,12 +88,23 @@ export async function requestDeviceCode(provider: OAuthProvider): Promise<Device
 
 export async function pollTokenOnce(provider: OAuthProvider, deviceCode: string): Promise<OAuthTokens | null> {
   const cfg = OAUTH_CONFIG[provider];
-  const resp = await fetch(cfg.pollUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_code: deviceCode, client_id: cfg.clientId }),
-  });
-  const data = await resp.json();
+  const resp = cfg.relayPollUrl
+    ? await fetch(cfg.relayPollUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_code: deviceCode, client_id: cfg.clientId }),
+      })
+    : await fetch(cfg.tokenUrl!, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: cfg.clientId,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        }).toString(),
+      });
+
+  const data = await parseJsonSafe(resp);
   if (resp.ok && data.access_token) {
     return {
       access_token: data.access_token,
@@ -91,12 +124,23 @@ export async function refreshAccessToken(provider: OAuthProvider, tokens: OAuthT
   if (!tokens.refresh_token) {
     throw new Error('Missing refresh_token; please sign in again.');
   }
-  const resp = await fetch(cfg.refreshUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: tokens.refresh_token, client_id: cfg.clientId }),
-  });
-  const data = await resp.json();
+  const resp = cfg.relayRefreshUrl
+    ? await fetch(cfg.relayRefreshUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: tokens.refresh_token, client_id: cfg.clientId }),
+      })
+    : await fetch(cfg.tokenUrl!, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: cfg.clientId,
+          refresh_token: tokens.refresh_token,
+          grant_type: 'refresh_token',
+        }).toString(),
+      });
+
+  const data = await parseJsonSafe(resp);
   if (!resp.ok || !data.access_token) {
     throw new Error(data.error_description || data.error || `Token refresh failed (${resp.status})`);
   }

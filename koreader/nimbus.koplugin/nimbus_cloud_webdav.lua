@@ -114,7 +114,8 @@ function WebDAV.uploadString(remote_path, content_str, content_type, creds, cb)
     cb(false, "WebDAV PUT failed (HTTP " .. tostring(code) .. ")")
 end
 
-function WebDAV.uploadFile(remote_path, local_path, creds, cb)
+function WebDAV.uploadFile(remote_path, local_path, creds, cb, opts)
+    opts = opts or {}
     local dir = remote_path:match("^(.*)/[^/]+$")
     if dir and dir ~= "" then
         local ok_dir, err = ensureDirSync(creds, dir)
@@ -131,9 +132,11 @@ function WebDAV.uploadFile(remote_path, local_path, creds, cb)
             ["Content-Type"] = "application/octet-stream",
             ["Content-Length"] = tostring(size),
         }),
-        source = ltn12.source.file(f),
+        source = Http.makeFileProgressSource(f, size, opts.on_progress, opts.is_canceled),
         total_timeout = 300,
     })
+    pcall(function() f:close() end)
+    if opts.is_canceled and opts.is_canceled() then return cb(false, "canceled") end
     if code == 200 or code == 201 or code == 204 then return cb(true) end
     cb(false, "WebDAV file PUT failed (HTTP " .. tostring(code) .. ")")
 end
@@ -149,16 +152,22 @@ function WebDAV.downloadString(remote_path, creds, cb)
     cb(false, "WebDAV GET failed (HTTP " .. tostring(code) .. ")")
 end
 
-function WebDAV.downloadFile(remote_path, local_dest_path, creds, cb)
+function WebDAV.downloadFile(remote_path, local_dest_path, creds, cb, opts)
+    opts = opts or {}
     local f = io.open(local_dest_path, "wb")
     if not f then return cb(false, "Cannot write local file: " .. tostring(local_dest_path)) end
     local _, code = Http.request({
         url = buildUrl(creds, remote_path),
         method = "GET",
         headers = makeHeaders(creds),
-        sink = ltn12.sink.file(f),
+        sink = Http.makeFileProgressSink(f, opts.expected_size or 0, opts.on_progress, opts.is_canceled),
         total_timeout = 300,
     })
+    pcall(function() f:close() end)
+    if opts.is_canceled and opts.is_canceled() then
+        os.remove(local_dest_path)
+        return cb(false, "canceled")
+    end
     if code == 200 then return cb(true) end
     os.remove(local_dest_path)
     cb(false, "WebDAV file GET failed (HTTP " .. tostring(code) .. ")")

@@ -86,7 +86,8 @@ function Dropbox.uploadString(remote_path, content_str, content_type, creds, cb)
     end)
 end
 
-function Dropbox.uploadFile(remote_path, local_path, creds, cb)
+function Dropbox.uploadFile(remote_path, local_path, creds, cb, opts)
+    opts = opts or {}
     withToken(function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
@@ -108,9 +109,11 @@ function Dropbox.uploadFile(remote_path, local_path, creds, cb)
                     mute = true,
                 }),
             },
-            source = ltn12.source.file(f),
+            source = Http.makeFileProgressSource(f, size, opts.on_progress, opts.is_canceled),
             total_timeout = 300,
         })
+        pcall(function() f:close() end)
+        if opts.is_canceled and opts.is_canceled() then return cb(false, "canceled") end
         if code == 200 then return cb(true) end
         cb(false, "Dropbox file upload failed (HTTP " .. tostring(code) .. "): " .. tostring(body))
     end)
@@ -134,7 +137,8 @@ function Dropbox.downloadString(remote_path, creds, cb)
     end)
 end
 
-function Dropbox.downloadFile(remote_path, local_dest_path, creds, cb)
+function Dropbox.downloadFile(remote_path, local_dest_path, creds, cb, opts)
+    opts = opts or {}
     withToken(function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
@@ -147,9 +151,14 @@ function Dropbox.downloadFile(remote_path, local_dest_path, creds, cb)
                 ["Authorization"] = "Bearer " .. token_or_err,
                 ["Dropbox-API-Arg"] = Http.jsonEncode({ path = norm }),
             },
-            sink = ltn12.sink.file(f),
+            sink = Http.makeFileProgressSink(f, opts.expected_size or 0, opts.on_progress, opts.is_canceled),
             total_timeout = 300,
         })
+        pcall(function() f:close() end)
+        if opts.is_canceled and opts.is_canceled() then
+            os.remove(local_dest_path)
+            return cb(false, "canceled")
+        end
         if code == 200 then return cb(true) end
         os.remove(local_dest_path)
         cb(false, "Dropbox download failed (HTTP " .. tostring(code) .. ")")

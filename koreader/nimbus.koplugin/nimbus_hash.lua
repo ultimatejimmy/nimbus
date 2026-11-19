@@ -83,6 +83,12 @@ function Hash.annotationId(book_id, text, anchor)
     return "ann_" .. string.format("%010x", os.time())
 end
 
+--- Computes lowercase 32-char MD5 hex of a string.
+function Hash.md5Hex(str)
+    if not ok_sha2 or not sha2 or not sha2.md5 then return nil end
+    return sha2.md5(tostring(str or ""))
+end
+
 --- Generates an 8-char random lowercase alphanumeric book_id.
 function Hash.generateBookId()
     local seed_str = tostring(os.time()) .. ":" .. tostring(os.clock()) .. ":" .. tostring(math.random(1, 1000000))

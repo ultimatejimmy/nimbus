@@ -58,27 +58,43 @@ function Cloud.clearCredentials(provider)
     if d and d.clearFolderCache then d.clearFolderCache() end
 end
 
---- Imports credentials/OAuth tokens for a provider from backup.koplugin.
+--- Imports credentials/OAuth tokens for a provider (or best available) from backup.koplugin.
 function Cloud.importFromBackupPlugin(provider)
-    local available, creds, oauth = Settings.detectBackupPluginAccounts()
+    local available, creds, tokens, backup_provider = Settings.detectBackupPluginAccounts()
+    if #available == 0 then
+        return false, _("No saved cloud accounts found in backup.koplugin.")
+    end
+
+    local target = provider
+    if not target then
+        local avail_set = {}
+        for _, p in ipairs(available) do avail_set[p] = true end
+        if backup_provider and avail_set[backup_provider] then
+            target = backup_provider
+        else
+            target = available[1]
+        end
+    end
+
     local found = false
     for _, p in ipairs(available) do
-        if p == provider then found = true break end
+        if p == target then found = true break end
     end
     if not found then
         return false, _("No saved account found for this provider in backup.koplugin.")
     end
 
-    if provider == Constants.CLOUD_PROVIDERS.WEBDAV then
-        Cloud.saveCredentials(provider, creds.webdav)
+    if target == Constants.CLOUD_PROVIDERS.WEBDAV then
+        Cloud.saveCredentials(target, creds.webdav)
     else
-        OAuth.saveTokens(provider, oauth[provider])
+        OAuth.saveTokens(target, tokens[target])
     end
 
     local cfg = Settings.load()
-    cfg.provider = provider
+    cfg.provider = target
+    cfg.provider_user_selected = true
     Settings.save(cfg)
-    return true
+    return true, target
 end
 
 function Cloud.withRoot(rel_path)
@@ -90,17 +106,21 @@ function Cloud.withRoot(rel_path)
     return root .. "/" .. rel
 end
 
-function Cloud.isConfigured()
-    local cfg = Settings.load()
-    if not cfg.provider or cfg.provider == Constants.CLOUD_PROVIDERS.NONE then
+function Cloud.isProviderConfigured(provider)
+    if not provider or provider == Constants.CLOUD_PROVIDERS.NONE then
         return false
     end
-    if cfg.provider == Constants.CLOUD_PROVIDERS.WEBDAV then
-        local c = Cloud.loadCredentials(cfg.provider)
+    if provider == Constants.CLOUD_PROVIDERS.WEBDAV then
+        local c = Cloud.loadCredentials(provider)
         return c.url ~= nil and c.url ~= ""
     end
-    local t = OAuth.loadTokens(cfg.provider)
+    local t = OAuth.loadTokens(provider)
     return t ~= nil and (t.access_token ~= nil or t.refresh_token ~= nil)
+end
+
+function Cloud.isConfigured(provider)
+    local cfg = Settings.load()
+    return Cloud.isProviderConfigured(provider or cfg.provider)
 end
 
 local function getActive()
@@ -123,10 +143,10 @@ function Cloud.uploadString(rel_path, content_str, content_type, cb)
     driver.uploadString(Cloud.withRoot(rel_path), content_str, content_type, creds, cb)
 end
 
-function Cloud.uploadFile(rel_path, local_path, cb)
+function Cloud.uploadFile(rel_path, local_path, cb, opts)
     local driver, creds, err = getActive()
     if not driver then return cb(false, err) end
-    driver.uploadFile(Cloud.withRoot(rel_path), local_path, creds, cb)
+    driver.uploadFile(Cloud.withRoot(rel_path), local_path, creds, cb, opts)
 end
 
 function Cloud.downloadString(rel_path, cb)
@@ -135,10 +155,10 @@ function Cloud.downloadString(rel_path, cb)
     driver.downloadString(Cloud.withRoot(rel_path), creds, cb)
 end
 
-function Cloud.downloadFile(rel_path, local_dest_path, cb)
+function Cloud.downloadFile(rel_path, local_dest_path, cb, opts)
     local driver, creds, err = getActive()
     if not driver then return cb(false, err) end
-    driver.downloadFile(Cloud.withRoot(rel_path), local_dest_path, creds, cb)
+    driver.downloadFile(Cloud.withRoot(rel_path), local_dest_path, creds, cb, opts)
 end
 
 function Cloud.listDir(rel_dir, cb)

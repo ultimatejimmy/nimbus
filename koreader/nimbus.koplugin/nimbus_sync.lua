@@ -57,16 +57,39 @@ function Sync.saveLocalState(st)
     return Settings.writeLuaTable(getLocalStatePath(), st)
 end
 
+local function getCatalogCachePath()
+    return Settings.getNimbusDir() .. "/catalog_cache.lua"
+end
+
+function Sync.loadCachedCatalog()
+    local cached = Settings.readLuaTable(getCatalogCachePath())
+    if type(cached) == "table" and type(cached.catalog) == "table" then
+        return cached.catalog, cached.merged_progress or {}, cached.saved_at
+    end
+    return { books = {} }, {}, 0
+end
+
+function Sync.saveCachedCatalog(catalog, merged_progress)
+    if type(catalog) ~= "table" then return false end
+    return Settings.writeLuaTable(getCatalogCachePath(), {
+        saved_at = os.time(),
+        catalog = catalog,
+        merged_progress = merged_progress or {},
+    })
+end
+
 function Sync.loadCatalog(cb)
     Cloud.downloadString("_sync/catalog.json", function(ok, body_or_err)
         if not ok then
             if body_or_err == "not_found" then
-                return cb(true, {
+                local empty_cat = {
                     version = Constants.SCHEMA_VERSION,
                     updated_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                     updated_by = Settings.load().device_id,
                     books = {},
-                })
+                }
+                Sync.saveCachedCatalog(empty_cat, nil)
+                return cb(true, empty_cat)
             end
             return cb(false, body_or_err)
         end
@@ -74,6 +97,8 @@ function Sync.loadCatalog(cb)
         if not data or type(data.books) ~= "table" then
             return cb(false, "Invalid catalog.json format")
         end
+        local _, prev_prog = Sync.loadCachedCatalog()
+        Sync.saveCachedCatalog(data, prev_prog)
         cb(true, data)
     end)
 end
@@ -187,10 +212,11 @@ local function sanitizeFolderPart(str, fallback)
 end
 
 --- Uploads a local book to Books/<Author> - <Title> [<id>]/ and updates catalog.json.
-function Sync.uploadBook(filepath, doc_props, cover_path, cb)
+function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
     if not Cloud.isConfigured() then
         return cb(false, "Cloud provider is not configured")
     end
+    opts = opts or {}
     doc_props = doc_props or {}
     local title = doc_props.title or (filepath:match("([^/\\]+)%.[^%.]+$")) or "Untitled"
     local authors = doc_props.authors
@@ -229,18 +255,34 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb)
         Cloud.uploadFile(folder .. "/" .. filename, filepath, function(ok, err)
             ok_up = ok
             up_err = err
-        end)
+        end, opts)
         if not ok_up then return cb(false, up_err) end
 
         local has_cover = false
-        if cover_path then
-            local cf = io.open(cover_path, "rb")
+        local resolved_cover = cover_path
+        if not resolved_cover then
+            local ok_cov, Covers = pcall(require, "nimbus_covers")
+            if ok_cov and Covers and Covers.extractLocalCoverToFile then
+                local cache_cov = Covers.getCoverFilePath({ id = book_id, local_path = filepath })
+                if cache_cov and Covers.extractLocalCoverToFile(filepath, cache_cov, opts.open_doc) then
+                    resolved_cover = cache_cov
+                end
+            end
+        end
+        if resolved_cover then
+            local cf = io.open(resolved_cover, "rb")
             if cf then
                 cf:close()
-                Cloud.uploadFile(folder .. "/cover.jpg", cover_path, function(ok_c)
+                Cloud.uploadFile(folder .. "/cover.jpg", resolved_cover, function(ok_c)
                     has_cover = ok_c
                 end)
             end
+        end
+
+        local rel_dir = ""
+        local ok_sc, Scanner = pcall(require, "nimbus_scanner")
+        if ok_sc and Scanner and Scanner.getRelativeDir then
+            rel_dir = Scanner.getRelativeDir(filepath)
         end
 
         local now_iso = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -255,6 +297,7 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb)
             isbn = doc_props.isbn,
             calibre_uuid = nil,
             folder = folder,
+            relative_dir = rel_dir,
             filename = filename,
             format = Constants.SUPPORTED_FORMATS[ext] and ext or "epub",
             size_bytes = size_bytes,
@@ -277,6 +320,27 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb)
             cb(true, entry)
         end)
     end)
+end
+
+--- Backfills `relative_dir` onto existing catalog entries matched to local books.
+function Sync.backfillRelativeDirs(catalog, device_books)
+    if type(catalog) ~= "table" or type(catalog.books) ~= "table" then return false end
+    local ok_sc, Scanner = pcall(require, "nimbus_scanner")
+    if not ok_sc or not Scanner or not Scanner.getRelativeDir then return false end
+    local changed = false
+    for _, b in ipairs(device_books or {}) do
+        if b.cloud_id and b.local_path and catalog.books[b.cloud_id] then
+            local entry = catalog.books[b.cloud_id]
+            if not entry.relative_dir or entry.relative_dir == "" then
+                local rel = Scanner.getRelativeDir(b.local_path)
+                if rel and rel ~= "" then
+                    entry.relative_dir = rel
+                    changed = true
+                end
+            end
+        end
+    end
+    return changed
 end
 
 --- Syncs reading statistics for the active month (and optionally imports remote sessions).

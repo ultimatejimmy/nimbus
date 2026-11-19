@@ -251,7 +251,8 @@ function GDrive.uploadFile(remote_path, local_path, creds, cb, opts)
             return cb(false, "Failed to initiate resumable upload (HTTP " .. tostring(code) .. "): " .. tostring(body))
         end
 
-        local source = ltn12.source.file(f)
+        opts = opts or {}
+        local source = Http.makeFileProgressSource(f, size, opts.on_progress, opts.is_canceled)
         local _, up_code, _, _, up_body = Http.request({
             url = upload_url,
             method = "PUT",
@@ -262,6 +263,10 @@ function GDrive.uploadFile(remote_path, local_path, creds, cb, opts)
             source = source,
             total_timeout = 300,
         })
+        pcall(function() f:close() end)
+        if opts.is_canceled and opts.is_canceled() then
+            return cb(false, "canceled")
+        end
         if up_code == 200 or up_code == 201 then
             return cb(true)
         end
@@ -286,20 +291,27 @@ function GDrive.downloadString(remote_path, creds, cb)
     end)
 end
 
-function GDrive.downloadFile(remote_path, local_dest_path, creds, cb)
+function GDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
+    opts = opts or {}
     withToken(function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local item, err = resolveFileSync(token_or_err, remote_path)
         if not item then return cb(false, err) end
         local f = io.open(local_dest_path, "wb")
         if not f then return cb(false, "Cannot write local file: " .. tostring(local_dest_path)) end
+        local total_size = tonumber(item.size) or opts.expected_size or 0
         local _, code = Http.request({
             url = DRIVE_API .. "/files/" .. item.id .. "?alt=media",
             method = "GET",
             headers = { ["Authorization"] = "Bearer " .. token_or_err },
-            sink = ltn12.sink.file(f),
+            sink = Http.makeFileProgressSink(f, total_size, opts.on_progress, opts.is_canceled),
             total_timeout = 300,
         })
+        pcall(function() f:close() end)
+        if opts.is_canceled and opts.is_canceled() then
+            os.remove(local_dest_path)
+            return cb(false, "canceled")
+        end
         if code == 200 then return cb(true) end
         os.remove(local_dest_path)
         cb(false, "Download failed (HTTP " .. tostring(code) .. ")")

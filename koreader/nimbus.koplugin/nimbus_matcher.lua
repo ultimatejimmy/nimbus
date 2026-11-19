@@ -25,10 +25,11 @@ end
 -- @param catalog table { books = { [id] = entry } }
 -- @param doc_props table|nil optional { title, authors, isbn, partial_md5, sha256 }
 -- @return book_id|nil, match_method|nil, candidates|nil
-function Matcher.resolve(filepath, catalog, doc_props)
+function Matcher.resolve(filepath, catalog, doc_props, opts)
     catalog = catalog or {}
     local books = catalog.books or {}
     doc_props = doc_props or {}
+    opts = opts or {}
 
     -- 1. Local link map
     if filepath then
@@ -50,8 +51,8 @@ function Matcher.resolve(filepath, catalog, doc_props)
         end
     end
 
-    -- 3. sha256
-    local sha = doc_props.sha256 or (filepath and Hash.sha256File(filepath))
+    -- 3. sha256 (only compute full-file SHA-256 on disk when explicitly allowed)
+    local sha = doc_props.sha256 or (opts.allow_slow_sha256 and filepath and Hash.sha256File(filepath))
     if sha then
         for id, entry in pairs(books) do
             if not entry.deleted and entry.hashes and entry.hashes.sha256 == sha then

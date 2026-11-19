@@ -150,6 +150,10 @@ local test_files = {
     "tests/nimbus_hash_test.lua",
     "tests/nimbus_matcher_test.lua",
     "tests/nimbus_drivers_test.lua",
+    "tests/nimbus_settings_test.lua",
+    "tests/nimbus_progress_test.lua",
+    "tests/nimbus_scanner_test.lua",
+    "tests/nimbus_kosync_test.lua",
 }
 
 for _, tf in ipairs(test_files) do

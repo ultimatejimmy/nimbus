@@ -54,6 +54,64 @@ function Http.jsonDecode(str)
     return nil
 end
 
+function Http.makeFileProgressSource(file_handle, total_expected, on_progress, is_canceled)
+    local sent = 0
+    local finalized = false
+    local chunk_size = 65536
+    return function()
+        if is_canceled and is_canceled() then
+            return nil, "canceled"
+        end
+        if total_expected and total_expected > 0 and sent >= total_expected then
+            if on_progress and not finalized then
+                finalized = true
+                on_progress(total_expected, total_expected, "finalizing")
+            end
+            return nil
+        end
+        local chunk = file_handle:read(chunk_size)
+        if not chunk or #chunk == 0 then
+            if on_progress and not finalized then
+                finalized = true
+                on_progress(total_expected or sent, total_expected or sent, "finalizing")
+            end
+            return nil
+        end
+        sent = sent + #chunk
+        if on_progress then
+            local total = total_expected and total_expected > 0 and total_expected or sent
+            on_progress(math.min(sent, total), total, "uploading")
+        end
+        return chunk
+    end
+end
+
+function Http.makeFileProgressSink(file_handle, total_expected, on_progress, is_canceled)
+    local received = 0
+    return function(chunk, err)
+        if is_canceled and is_canceled() then
+            return nil, "canceled"
+        end
+        if chunk == nil then
+            if file_handle then file_handle:close() end
+            if on_progress then
+                local total = (total_expected and total_expected > 0) and total_expected or received
+                on_progress(total, total, "done")
+            end
+            return 1
+        end
+        if chunk ~= "" then
+            file_handle:write(chunk)
+            received = received + #chunk
+            if on_progress then
+                local total = (total_expected and total_expected > 0) and total_expected or received
+                on_progress(received, total, "downloading")
+            end
+        end
+        return 1
+    end
+end
+
 function Http.request(req)
     if not ok_ltn or not ltn12 then
         return nil, "ltn12 not available", nil, nil, ""

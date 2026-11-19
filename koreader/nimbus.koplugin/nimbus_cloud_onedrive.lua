@@ -114,7 +114,8 @@ function OneDrive.uploadString(remote_path, content_str, content_type, creds, cb
     end)
 end
 
-function OneDrive.uploadFile(remote_path, local_path, creds, cb)
+function OneDrive.uploadFile(remote_path, local_path, creds, cb, opts)
+    opts = opts or {}
     withToken(function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
@@ -137,9 +138,11 @@ function OneDrive.uploadFile(remote_path, local_path, creds, cb)
                     ["Content-Type"] = "application/octet-stream",
                     ["Content-Length"] = tostring(size),
                 },
-                source = ltn12.source.file(f),
+                source = Http.makeFileProgressSource(f, size, opts.on_progress, opts.is_canceled),
                 total_timeout = 300,
             })
+            pcall(function() f:close() end)
+            if opts.is_canceled and opts.is_canceled() then return cb(false, "canceled") end
             if code == 200 or code == 201 then return cb(true) end
             return cb(false, "OneDrive upload failed (HTTP " .. tostring(code) .. "): " .. tostring(body))
         end
@@ -201,7 +204,8 @@ function OneDrive.downloadString(remote_path, creds, cb)
     end)
 end
 
-function OneDrive.downloadFile(remote_path, local_dest_path, creds, cb)
+function OneDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
+    opts = opts or {}
     withToken(function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
@@ -211,9 +215,14 @@ function OneDrive.downloadFile(remote_path, local_dest_path, creds, cb)
             url = GRAPH_API .. "/root:/" .. Http.urlEncodePath(norm) .. ":/content",
             method = "GET",
             headers = { ["Authorization"] = "Bearer " .. token_or_err },
-            sink = ltn12.sink.file(f),
+            sink = Http.makeFileProgressSink(f, opts.expected_size or 0, opts.on_progress, opts.is_canceled),
             total_timeout = 300,
         })
+        pcall(function() f:close() end)
+        if opts.is_canceled and opts.is_canceled() then
+            os.remove(local_dest_path)
+            return cb(false, "canceled")
+        end
         if code == 200 then return cb(true) end
         os.remove(local_dest_path)
         cb(false, "OneDrive download failed (HTTP " .. tostring(code) .. ")")

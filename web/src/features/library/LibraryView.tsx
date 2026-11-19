@@ -65,7 +65,7 @@ export const LibraryView: React.FC<Props> = ({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Cloud Library</h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {books.length} book{books.length === 1 ? '' : 's'} synced across your cloud storage
           </p>
         </div>
@@ -83,7 +83,7 @@ export const LibraryView: React.FC<Props> = ({
           />
           <button
             onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-400"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
           >
             <Upload className="h-4 w-4" />
             Upload Book
@@ -98,10 +98,10 @@ export const LibraryView: React.FC<Props> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search title, author, series, or tag..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900 py-2 pl-9 pr-3 text-sm text-slate-100 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5 rounded-lg border border-slate-800 bg-slate-900 p-1">
+        <div className="flex flex-wrap gap-1.5 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
           {(
             [
               ['all', 'All'],
@@ -115,7 +115,9 @@ export const LibraryView: React.FC<Props> = ({
               key={id}
               onClick={() => setFilter(id)}
               className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                filter === id ? 'bg-sky-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800'
+                filter === id
+                  ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-slate-950'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
             >
               {label}
@@ -125,9 +127,9 @@ export const LibraryView: React.FC<Props> = ({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-16 text-center text-slate-400">
-          <BookOpen className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-          <p className="font-medium text-slate-300">No books match your filter</p>
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-16 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-400">
+          <BookOpen className="mx-auto mb-3 h-10 w-10 text-slate-400 dark:text-slate-600" />
+          <p className="font-medium text-slate-700 dark:text-slate-300">No books match your filter</p>
           <p className="mt-1 text-xs">Drag & drop an EPUB, PDF, or CBZ here to upload to Nimbus Cloud.</p>
         </div>
       ) : (
@@ -141,21 +143,21 @@ export const LibraryView: React.FC<Props> = ({
             return (
               <div
                 key={book.id}
-                className="group flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/70 transition hover:border-slate-700"
+                className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700"
               >
                 <div
                   onClick={() => onOpenBook(book)}
-                  className="relative aspect-[2/3] cursor-pointer overflow-hidden bg-slate-800"
+                  className="relative aspect-[2/3] cursor-pointer overflow-hidden bg-slate-100 dark:bg-slate-800"
                 >
                   {cover ? (
                     <img src={cover} alt={book.title} className="h-full w-full object-cover transition group-hover:scale-105" />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center p-4 text-center">
-                      <BookOpen className="mb-2 h-8 w-8 text-slate-500" />
-                      <span className="line-clamp-3 text-xs font-medium text-slate-300">{book.title}</span>
+                      <BookOpen className="mb-2 h-8 w-8 text-slate-400 dark:text-slate-500" />
+                      <span className="line-clamp-3 text-xs font-medium text-slate-600 dark:text-slate-300">{book.title}</span>
                     </div>
                   )}
-                  <span className="absolute right-2 top-2 rounded bg-slate-950/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-200">
+                  <span className="absolute right-2 top-2 rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-100 dark:bg-slate-950/80 dark:text-slate-200">
                     {book.format}
                   </span>
                   {isOffline && (
@@ -164,8 +166,8 @@ export const LibraryView: React.FC<Props> = ({
                     </span>
                   )}
                   {pct > 0 && (
-                    <div className="absolute inset-x-0 bottom-0 h-1.5 bg-slate-950/80">
-                      <div className="h-full bg-sky-400" style={{ width: `${pct}%` }} />
+                    <div className="absolute inset-x-0 bottom-0 h-1.5 bg-slate-200/80 dark:bg-slate-950/80">
+                      <div className="h-full bg-emerald-500 dark:bg-emerald-400" style={{ width: `${pct}%` }} />
                     </div>
                   )}
                 </div>
@@ -174,20 +176,20 @@ export const LibraryView: React.FC<Props> = ({
                   <div>
                     <h3
                       onClick={() => onOpenBook(book)}
-                      className="line-clamp-2 cursor-pointer text-sm font-medium text-slate-100 hover:text-sky-400"
+                      className="line-clamp-2 cursor-pointer text-sm font-medium text-slate-900 hover:text-emerald-600 dark:text-slate-100 dark:hover:text-emerald-400"
                     >
                       {book.title}
                     </h3>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-400">
+                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
                       {(book.authors || []).join(', ')}
                     </p>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                     <span className="inline-flex items-center gap-1">
                       {prog?.status === 'finished' ? (
                         <>
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Done
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" /> Done
                         </>
                       ) : (
                         `${pct}%`
@@ -204,7 +206,7 @@ export const LibraryView: React.FC<Props> = ({
                           setBusyId(null);
                         }
                       }}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                      className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                       title={isOffline ? 'Remove offline copy' : 'Download for offline reading'}
                     >
                       {isOffline ? <Trash2 className="h-3.5 w-3.5" /> : <CloudDownload className="h-3.5 w-3.5" />}

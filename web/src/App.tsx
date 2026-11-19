@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BarChart3, BookOpen, Cloud, Highlighter, RefreshCw, Settings } from 'lucide-react';
+import { BarChart3, BookOpen, CloudLightning, Highlighter, Moon, RefreshCw, Settings, Sun } from 'lucide-react';
 import { buildWebCloudFS, NimbusWebConfig } from './cloud';
 import { OAuthProvider } from './cloud/oauth';
 import {
@@ -21,12 +21,24 @@ import {
   pushDeviceProgress,
   pushDeviceSession,
   syncAllFromCloud,
+  syncCoversFromCloud,
   uploadBookToCloud,
 } from './sync/syncEngine';
 
 type TabId = 'library' | 'highlights' | 'stats' | 'settings';
 
 const CONFIG_KEY = 'nimbus_web_config_v1';
+const THEME_KEY = 'nimbus_web_theme_v1';
+
+function loadTheme(): 'light' | 'dark' {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {
+    // ignore
+  }
+  return 'dark';
+}
 
 function loadConfig(): NimbusWebConfig {
   try {
@@ -43,6 +55,7 @@ function loadConfig(): NimbusWebConfig {
 
 export function App() {
   const [config, setConfig] = useState<NimbusWebConfig>(() => loadConfig());
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => loadTheme());
   const [tab, setTab] = useState<TabId>('library');
   const [showConnect, setShowConnect] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -56,6 +69,8 @@ export function App() {
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
 
   const [activeBook, setActiveBook] = useState<{ book: BookCatalogEntry; blob: Blob } | null>(null);
+  const [openingBookTitle, setOpeningBookTitle] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   const saveConfig = (next: NimbusWebConfig) => {
     setConfig(next);
@@ -74,18 +89,30 @@ export function App() {
   }, [config]);
 
   const loadFromIndexedDB = async () => {
-    const [cat, prog, anns, sess, offline] = await Promise.all([
+    const [cat, prog, anns, sess, offline, covers] = await Promise.all([
       db.catalog.toArray(),
       db.progress.toArray(),
       db.annotations.toArray(),
       db.sessions.toArray(),
       db.books.toCollection().primaryKeys(),
+      db.covers.toArray(),
     ]);
     setBooks(cat);
     setProgressByBook(Object.fromEntries(prog.map((p) => [p.book_id, p])));
     setAnnotationsByBook(Object.fromEntries(anns.map((a) => [a.book_id, a.items])));
     setSessions(sess.map((s) => s.session));
     setOfflineIds(new Set(offline));
+    if (covers.length > 0) {
+      setCoverUrls((prev) => {
+        const next = { ...prev };
+        for (const c of covers) {
+          if (!next[c.book_id]) {
+            next[c.book_id] = URL.createObjectURL(c.data);
+          }
+        }
+        return next;
+      });
+    }
   };
 
   const runSync = async () => {
@@ -95,12 +122,28 @@ export function App() {
       const snap = await syncAllFromCloud(fs, config);
       setDevices(snap.devices);
       await loadFromIndexedDB();
+      void syncCoversFromCloud(fs, Object.values(snap.catalog.books || {}), (bookId, blob) => {
+        const url = URL.createObjectURL(blob);
+        setCoverUrls((prev) => {
+          if (prev[bookId]) URL.revokeObjectURL(prev[bookId]);
+          return { ...prev, [bookId]: url };
+        });
+      });
     } catch (e) {
       console.error('Sync failed:', e);
     } finally {
       setSyncing(false);
     }
   };
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
 
   useEffect(() => {
     loadFromIndexedDB();
@@ -126,9 +169,18 @@ export function App() {
   };
 
   const openBook = async (book: BookCatalogEntry) => {
-    const cached = await db.books.get(book.id);
-    const blob = cached ? cached.data : await downloadOffline(book);
-    setActiveBook({ book, blob });
+    setOpenError(null);
+    setOpeningBookTitle(book.title);
+    try {
+      const cached = await db.books.get(book.id);
+      const blob = cached ? cached.data : await downloadOffline(book);
+      setActiveBook({ book, blob });
+    } catch (e: any) {
+      console.error('Failed to open book:', e);
+      setOpenError(`Failed to open "${book.title}": ${e?.message || String(e)}`);
+    } finally {
+      setOpeningBookTitle(null);
+    }
   };
 
   const handleSaveProgress = async (prog: ProgressRecord) => {
@@ -170,13 +222,13 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <nav className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur">
+    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
+      <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/90">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 font-semibold tracking-tight text-sky-400">
-              <Cloud className="h-5 w-5" />
-              <span className="text-slate-100">Nimbus</span>
+            <div className="flex items-center gap-2 font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
+              <CloudLightning className="h-5 w-5" />
+              <span className="text-slate-900 dark:text-slate-100">Nimbus</span>
             </div>
             <div className="flex items-center gap-1">
               {(
@@ -191,7 +243,9 @@ export function App() {
                   key={id}
                   onClick={() => setTab(id)}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                    tab === id ? 'bg-slate-800 text-sky-300' : 'text-slate-400 hover:text-slate-200'
+                    tab === id
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-slate-800 dark:text-emerald-300'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -202,10 +256,19 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:text-slate-100"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+
             {config.provider === 'none' ? (
               <button
                 onClick={() => setShowConnect(true)}
-                className="rounded-lg bg-sky-500 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400"
+                className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
               >
                 Connect Cloud
               </button>
@@ -213,9 +276,9 @@ export function App() {
               <button
                 onClick={runSync}
                 disabled={syncing}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-700"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin text-sky-400' : ''}`} />
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin text-emerald-500 dark:text-emerald-400' : ''}`} />
                 {syncing ? 'Syncing…' : 'Synced'}
               </button>
             )}
@@ -224,6 +287,20 @@ export function App() {
       </nav>
 
       <main className="mx-auto max-w-6xl px-4 py-8">
+        {openingBookTitle && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span>Downloading & opening “{openingBookTitle}”…</span>
+          </div>
+        )}
+        {openError && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">
+            <span>{openError}</span>
+            <button onClick={() => setOpenError(null)} className="ml-4 text-xs underline">
+              Dismiss
+            </button>
+          </div>
+        )}
         {tab === 'library' && (
           <LibraryView
             books={books}

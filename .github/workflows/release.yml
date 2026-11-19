@@ -3,15 +3,46 @@ name: Release
 on:
   push:
     tags:
-      - '**'
+      - '**' # Matches KOReader tags (e.g. 2026.11.19) and Calibre tags (e.g. calibre-2026.11.19)
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
-    name: Test & Package Nimbus Artifacts
+  release-koreader:
+    name: Create KOReader Plugin Release
+    if: "!startsWith(github.ref_name, 'calibre-')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create KOReader Plugin Archive
+        run: |
+          cd koreader
+          zip -r ../nimbus.koplugin.zip nimbus.koplugin -x "*.git*" "*/.*"
+
+      - name: Create Draft Release (KOReader / Storefront)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: nimbus.koplugin.zip
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
+          make_latest: ${{ !contains(github.ref_name, '-beta') && !contains(github.ref_name, '-alpha') && !contains(github.ref_name, '-rc') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-calibre:
+    name: Create Calibre Plugin Release
+    if: "startsWith(github.ref_name, 'calibre-')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,40 +57,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
-      - name: Validate Spec & Run Calibre Tests
+      - name: Test & Package Calibre Plugin
         run: |
           python spec/validate_fixtures.py
           python -m unittest discover -s calibre/tests -v
           python calibre/build_zip.py
 
-      - name: Test & Build Web PWA
-        run: |
-          npm --prefix web ci
-          npm --prefix web test
-          npm --prefix web run build
-          (cd web/dist && zip -r ../../nimbus-web-dist.zip .)
-
-      - name: Package KOReader Plugin
-        run: |
-          (cd koreader && zip -r ../nimbus.koplugin.zip nimbus.koplugin -x "*.git*" "*/.*")
-
-      - name: Create Draft Release
+      - name: Create Draft Release (Calibre Companion)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            nimbus.koplugin.zip
-            calibre/dist/NimbusCalibre.zip
-            nimbus-web-dist.zip
+          name: "Nimbus Calibre Plugin (${{ github.ref_name }})"
+          files: calibre/dist/NimbusCalibre.zip
           draft: true
-          prerelease: ${{ contains(github.ref_name, '-beta') }}
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
+          make_latest: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

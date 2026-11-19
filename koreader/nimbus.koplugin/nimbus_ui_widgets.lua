@@ -1,0 +1,752 @@
+--[[--
+nimbus_ui_widgets.lua
+Shared Storefront/Libbee/Beeline UI primitives and mixin composer for Nimbus.
+--]]
+
+local Blitbuffer = require("ffi/blitbuffer")
+local Button = require("ui/widget/button")
+local CenterContainer = require("ui/widget/container/centercontainer")
+local Device = require("device")
+local Font = require("ui/font")
+local FrameContainer = require("ui/widget/container/framecontainer")
+local Geom = require("ui/geometry")
+local GestureRange = require("ui/gesturerange")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
+local ImageWidget = require("ui/widget/imagewidget")
+local InputContainer = require("ui/widget/container/inputcontainer")
+local InputText = require("ui/widget/inputtext")
+local LineWidget = require("ui/widget/linewidget")
+local TextBoxWidget = require("ui/widget/textboxwidget")
+local TextWidget = require("ui/widget/textwidget")
+local UIManager = require("ui/uimanager")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
+local _ = require("gettext")
+local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
+if not ok_lfs or not lfs then
+    ok_lfs, lfs = pcall(require, "lfs")
+end
+
+local theme = require("nimbus_theme")
+
+local Widgets = {}
+local sc = theme.sc
+local _asset_path_cache = {}
+local _active_toast = nil
+
+--- Merges mixin functions into target table (matching xray.koplugin).
+function Widgets.applyMixin(target, source)
+    for k, v in pairs(source or {}) do
+        target[k] = v
+    end
+    return target
+end
+
+function Widgets.isTouchDevice()
+    if Device and type(Device.isTouchDevice) == "function" then
+        return Device:isTouchDevice()
+    elseif Device and Device.isTouchDevice ~= nil then
+        return Device.isTouchDevice == true
+    end
+    return true
+end
+
+function Widgets.getAssetPath(filename)
+    if _asset_path_cache[filename] then
+        return _asset_path_cache[filename]
+    end
+    local info = debug.getinfo(1, "S")
+    local dir = (info and info.source and info.source:match("^@(.*[/\\])")) or ""
+    local candidates = {
+        dir .. "assets/" .. filename,
+        "plugins/nimbus.koplugin/assets/" .. filename,
+    }
+    for _, p in ipairs(candidates) do
+        if lfs and lfs.attributes and lfs.attributes(p, "mode") == "file" then
+            _asset_path_cache[filename] = p
+            return p
+        end
+    end
+    local fallback = dir .. "assets/" .. filename
+    _asset_path_cache[filename] = fallback
+    return fallback
+end
+
+function Widgets.makeTapItem(widget, callback, hold_callback)
+    local item = InputContainer:new{ widget }
+    local sz = widget:getSize()
+    item.dimen = sz
+    local function getRange()
+        local d = item.dimen
+        if not d then return Geom:new{ x = -1, y = -1, w = 1, h = 1 } end
+        return Geom:new{ x = d.x or 0, y = d.y or 0, w = d.w or sz.w, h = d.h or sz.h }
+    end
+    item.ges_events = {
+        Tap = { GestureRange:new{ ges = "tap", range = getRange } },
+    }
+    item.onTap = function()
+        if callback then callback() end
+        return true
+    end
+    if hold_callback then
+        item.ges_events.Hold = { GestureRange:new{ ges = "hold", range = getRange } }
+        item.onHold = function()
+            hold_callback()
+            return true
+        end
+    end
+    return item
+end
+
+function Widgets.createIconButton(opts)
+    local size = opts.size or sc(26)
+    local pad = opts.padding or sc(4)
+    local pad_h = opts.padding_h or pad
+    local icon = ImageWidget:new{
+        file = Widgets.getAssetPath(opts.icon),
+        width = size,
+        height = size,
+        scale_factor = 0,
+        is_icon = true,
+        alpha = true,
+    }
+    local frame = FrameContainer:new{
+        padding = pad,
+        padding_left = pad_h,
+        padding_right = pad_h,
+        bordersize = opts.is_focused and (theme.border_focus or sc(2)) or (opts.bordersize or 0),
+        color = Blitbuffer.COLOR_BLACK,
+        background = opts.is_focused and (theme.color_focus_bg or Blitbuffer.COLOR_LIGHT_GRAY) or opts.background,
+        radius = (opts.is_focused and (theme.radius_focus or sc(4))) or opts.radius or 0,
+        icon,
+    }
+    return Widgets.makeTapItem(frame, opts.callback)
+end
+
+--- Creates a Storefront/Libbee-styled primary (black) or secondary (bordered white) button.
+function Widgets.createButton(opts)
+    local is_primary = opts.is_primary == true
+    local border_w = opts.bordersize or sc(1)
+    local pad_v = opts.padding or sc(7)
+    local pad_h = opts.padding_h or sc(10)
+    local font_sz = opts.text_font_size or 15
+    local is_bold = (opts.bold ~= nil) and opts.bold or is_primary
+
+    local max_tw = opts.width and math.max(sc(40), opts.width - (pad_h * 2) - (border_w * 2)) or nil
+    local label = TextWidget:new{
+        text = opts.text or "",
+        face = Font:getFace("cfont", font_sz),
+        bold = is_bold,
+        fgcolor = is_primary and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK,
+        max_width = max_tw,
+    }
+    local lbl_sz = label:getSize()
+    local content = opts.width and CenterContainer:new{
+        dimen = Geom:new{ w = opts.width - (pad_h * 2) - (border_w * 2), h = lbl_sz.h },
+        label,
+    } or label
+
+    local frame = FrameContainer:new{
+        padding_top = pad_v,
+        padding_bottom = pad_v,
+        padding_left = pad_h,
+        padding_right = pad_h,
+        bordersize = border_w,
+        color = Blitbuffer.COLOR_BLACK,
+        background = is_primary and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
+        radius = opts.radius or theme.radius_btn or sc(4),
+        content,
+    }
+    return Widgets.makeTapItem(frame, opts.callback)
+end
+
+function Widgets.createBadge(text, is_highlighted)
+    if not text or text == "" then return nil end
+    local label = TextWidget:new{
+        text = text,
+        face = Font:getFace("cfont", 12),
+        bold = is_highlighted,
+        fgcolor = is_highlighted and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK,
+    }
+    return FrameContainer:new{
+        padding = sc(2),
+        padding_left = sc(6),
+        padding_right = sc(6),
+        bordersize = sc(1),
+        color = Blitbuffer.COLOR_BLACK,
+        radius = theme.radius_badge or sc(10),
+        background = is_highlighted and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
+        label,
+    }
+end
+
+function Widgets.createFilterChip(label_text, on_clear)
+    local lbl = TextWidget:new{
+        text = label_text .. "  ✕",
+        face = Font:getFace("cfont", 13),
+        bold = true,
+        fgcolor = Blitbuffer.COLOR_BLACK,
+    }
+    local pill = FrameContainer:new{
+        padding = sc(3),
+        padding_left = sc(8),
+        padding_right = sc(8),
+        bordersize = sc(1),
+        color = Blitbuffer.COLOR_BLACK,
+        radius = theme.radius_badge or sc(10),
+        background = theme.color_focus_bg or Blitbuffer.COLOR_LIGHT_GRAY,
+        lbl,
+    }
+    return Widgets.makeTapItem(pill, on_clear)
+end
+
+function Widgets.createSectionHeader(title, inner_w)
+    local label = TextWidget:new{
+        text = tostring(title or ""):upper(),
+        face = Font:getFace("cfont", 13),
+        bold = true,
+        fgcolor = Blitbuffer.COLOR_BLACK,
+    }
+    return FrameContainer:new{
+        padding = sc(4),
+        padding_left = sc(8),
+        radius = theme.radius_btn or sc(4),
+        bordersize = 0,
+        width = inner_w,
+        background = Blitbuffer.COLOR_LIGHT_GRAY,
+        label,
+    }
+end
+
+function Widgets.createSettingRow(left_text, right_widget, inner_w, callback, pad_v, pad_h)
+    pad_v = pad_v or sc(6)
+    pad_h = pad_h or pad_v
+    local avail_w = inner_w - (pad_h * 2)
+    local right_w = right_widget and ((right_widget.getSize and right_widget:getSize().w) or sc(60)) or 0
+    local max_left_w = math.max(sc(60), avail_w - right_w - sc(8))
+
+    local left_w = TextWidget:new{
+        text = left_text,
+        face = Font:getFace("cfont", 16),
+        fgcolor = Blitbuffer.COLOR_BLACK,
+        max_width = max_left_w,
+    }
+    local spacer_w = math.max(sc(8), avail_w - left_w:getSize().w - right_w)
+    local elems = { left_w, HorizontalSpan:new{ width = spacer_w } }
+    if right_widget then table.insert(elems, right_widget) end
+
+    local frame = FrameContainer:new{
+        bordersize = 0,
+        padding_top = pad_v,
+        padding_bottom = pad_v,
+        padding_left = pad_h,
+        padding_right = pad_h,
+        width = inner_w,
+        HorizontalGroup:new(elems),
+    }
+    if not callback then return frame end
+    return Widgets.makeTapItem(frame, callback)
+end
+
+function Widgets.createMenuRow(left_text, right_widget, inner_w, callback)
+    return Widgets.createSettingRow(left_text, right_widget, inner_w, callback, sc(7), sc(10))
+end
+
+function Widgets.createMenuList(rows, inner_w)
+    local border = sc(1)
+    local list_inner_w = inner_w - (border * 2)
+    local vg = VerticalGroup:new{ align = "left" }
+    for idx, r in ipairs(rows or {}) do
+        if idx > 1 then
+            table.insert(vg, LineWidget:new{
+                dimen = Geom:new{ w = list_inner_w, h = sc(1) },
+                background = Blitbuffer.COLOR_LIGHT_GRAY,
+            })
+        end
+        table.insert(vg, r)
+    end
+    return FrameContainer:new{
+        padding = 0,
+        bordersize = border,
+        color = Blitbuffer.COLOR_BLACK,
+        radius = theme.radius_btn or sc(4),
+        background = Blitbuffer.COLOR_WHITE,
+        width = inner_w,
+        vg,
+    }
+end
+
+local function createChoiceRow(icon_file, label, subtitle, is_active, inner_w, callback)
+    local icon = ImageWidget:new{
+        file = Widgets.getAssetPath(icon_file),
+        width = sc(20),
+        height = sc(20),
+        scale_factor = 0,
+        is_icon = true,
+        alpha = true,
+    }
+    local max_text_w = math.max(sc(80), inner_w - sc(38))
+    local text_items = {
+        TextWidget:new{
+            text = label or "",
+            face = Font:getFace("cfont", 15),
+            bold = is_active,
+            fgcolor = Blitbuffer.COLOR_BLACK,
+            max_width = max_text_w,
+        },
+    }
+    if subtitle and subtitle ~= "" then
+        table.insert(text_items, TextWidget:new{
+            text = subtitle,
+            face = Font:getFace("cfont", 12),
+            fgcolor = theme.color_label_dim,
+            max_width = max_text_w,
+        })
+    end
+    local text_vg = VerticalGroup:new{ align = "left", unpack(text_items) }
+    local row = HorizontalGroup:new{
+        align = "center",
+        icon,
+        HorizontalSpan:new{ width = sc(10) },
+        text_vg,
+    }
+    local frame = FrameContainer:new{
+        padding = sc(5),
+        bordersize = 0,
+        width = inner_w,
+        background = Blitbuffer.COLOR_WHITE,
+        row,
+    }
+    return Widgets.makeTapItem(frame, callback)
+end
+
+function Widgets.createCheckboxRow(label, subtitle, is_checked, inner_w, callback)
+    return createChoiceRow(is_checked and "check-square.svg" or "square.svg", label, subtitle, is_checked, inner_w, callback)
+end
+
+function Widgets.createRadioRow(label, subtitle, is_selected, inner_w, callback)
+    return createChoiceRow(is_selected and "radio-active.svg" or "radio.svg", label, subtitle, is_selected, inner_w, callback)
+end
+
+--- Kindle-style two-tab bar (`On Device (N)` | `Cloud (M)`).
+function Widgets.createTwoTabBar(tabs, active_id, total_w, on_select)
+    local tab_w = math.floor(total_w / #tabs)
+    local tab_items = {}
+    for _, tab in ipairs(tabs) do
+        local is_active = (tab.id == active_id)
+        local label = TextWidget:new{
+            text = tab.label,
+            face = Font:getFace("cfont", 15),
+            bold = is_active,
+            fgcolor = is_active and Blitbuffer.COLOR_BLACK or theme.color_label_dim,
+        }
+        local indicator = LineWidget:new{
+            dimen = Geom:new{ w = tab_w, h = is_active and sc(3) or sc(1) },
+            background = is_active and Blitbuffer.COLOR_BLACK or theme.color_bg_dim,
+        }
+        local cell = VerticalGroup:new{
+            align = "center",
+            CenterContainer:new{
+                dimen = Geom:new{ w = tab_w, h = sc(34) },
+                label,
+            },
+            indicator,
+        }
+        local tap_cell = Widgets.makeTapItem(cell, function()
+            if on_select then on_select(tab.id) end
+        end)
+        table.insert(tab_items, tap_cell)
+    end
+    return FrameContainer:new{
+        padding = 0,
+        bordersize = 0,
+        width = total_w,
+        background = Blitbuffer.COLOR_WHITE,
+        HorizontalGroup:new(tab_items),
+    }
+end
+
+--- Closes any active toast immediately so it never lingers beneath modals or progress dialogs.
+function Widgets.closeToast()
+    if _active_toast then
+        local t = _active_toast
+        _active_toast = nil
+        if t._timer then
+            UIManager:unschedule(t._timer)
+            t._timer = nil
+        end
+        UIManager:close(t, "ui")
+    end
+end
+
+--- Styled Storefront/Libbee card toast replacing KOReader's unstyled InfoMessage.
+function Widgets.showToast(text, timeout)
+    Widgets.closeToast()
+    local sw = Device.screen:getWidth()
+    local sh = Device.screen:getHeight()
+    local max_w = math.min(sw - sc(32), sc(420))
+
+    local icon = ImageWidget:new{
+        file = Widgets.getAssetPath("info.svg"),
+        width = sc(22),
+        height = sc(22),
+        scale_factor = 0,
+        is_icon = true,
+        alpha = true,
+    }
+    local label = TextBoxWidget:new{
+        text = tostring(text or ""),
+        face = Font:getFace("cfont", 16),
+        fgcolor = Blitbuffer.COLOR_BLACK,
+        width = max_w - sc(64),
+        alignment = "center",
+    }
+    local card = FrameContainer:new{
+        padding = sc(14),
+        padding_left = sc(16),
+        padding_right = sc(16),
+        radius = theme.radius_window or sc(4),
+        bordersize = theme.border_window or sc(2),
+        color = Blitbuffer.COLOR_BLACK,
+        background = Blitbuffer.COLOR_WHITE,
+        HorizontalGroup:new{
+            align = "center",
+            icon,
+            HorizontalSpan:new{ width = sc(10) },
+            label,
+        },
+    }
+
+    local toast
+    toast = InputContainer:new{
+        dimen = Geom:new{ w = sw, h = sh },
+        key_events = { Close = { { "Back" }, { "Escape" } } },
+        ges_events = {
+            TapDismiss = {
+                GestureRange:new{
+                    ges = "tap",
+                    range = Geom:new{ x = 0, y = 0, w = sw, h = sh },
+                },
+            },
+        },
+        CenterContainer:new{
+            dimen = Geom:new{ w = sw, h = sh },
+            card,
+        },
+    }
+    toast.onTapDismiss = function()
+        Widgets.closeToast()
+        return true
+    end
+    toast.onClose = function()
+        Widgets.closeToast()
+        return true
+    end
+    local dur = tonumber(timeout) or 2.5
+    if dur > 0 then
+        toast._timer = UIManager:scheduleIn(dur, function()
+            if _active_toast == toast then
+                Widgets.closeToast()
+            end
+        end)
+    end
+    _active_toast = toast
+    UIManager:show(toast, "ui")
+    return toast
+end
+
+--- Generic Storefront/Libbee-styled modal card dialog.
+function Widgets.showCardDialog(opts)
+    Widgets.closeToast()
+    local sw = Device.screen:getWidth()
+    local sh = Device.screen:getHeight()
+    local dialog_w = opts.width or math.min(sw - sc(24), sc(420))
+    local pad = sc(14)
+    local border = theme.border_window or sc(2)
+    local inner_w = dialog_w - (pad * 2) - (border * 2)
+
+    local overlay
+    local function closeDlg()
+        if overlay then
+            local ov = overlay
+            overlay = nil
+            if opts.on_before_close then
+                pcall(opts.on_before_close)
+            end
+            UIManager:close(ov, "ui")
+        end
+    end
+
+    local close_icon = Widgets.createIconButton{
+        icon = "x.svg",
+        size = sc(22),
+        padding = sc(6),
+        callback = function()
+            closeDlg()
+            if opts.on_close then opts.on_close() end
+        end,
+    }
+    local title_w = TextWidget:new{
+        text = opts.title or "Nimbus",
+        face = Font:getFace("NotoSerif-Regular.ttf", 20),
+        bold = true,
+        fgcolor = Blitbuffer.COLOR_BLACK,
+        max_width = inner_w - sc(36),
+    }
+    local header_row = HorizontalGroup:new{
+        title_w,
+        HorizontalSpan:new{ width = math.max(sc(8), inner_w - title_w:getSize().w - close_icon:getSize().w) },
+        close_icon,
+    }
+
+    local content_items = {
+        align = "left",
+        header_row,
+        VerticalSpan:new{ width = sc(8) },
+        LineWidget:new{
+            dimen = Geom:new{ w = inner_w, h = sc(1) },
+            background = Blitbuffer.COLOR_BLACK,
+        },
+        VerticalSpan:new{ width = sc(10) },
+    }
+
+    if opts.body_widget then
+        table.insert(content_items, opts.body_widget(inner_w, closeDlg))
+    elseif opts.body_text then
+        table.insert(content_items, TextBoxWidget:new{
+            text = opts.body_text,
+            face = Font:getFace("cfont", 16),
+            fgcolor = Blitbuffer.COLOR_BLACK,
+            width = inner_w,
+        })
+    end
+
+    if opts.buttons and #opts.buttons > 0 then
+        table.insert(content_items, VerticalSpan:new{ width = sc(12) })
+        local btn_gap = sc(8)
+        local n = #opts.buttons
+        local btn_w = math.floor((inner_w - btn_gap * (n - 1)) / n)
+        local btn_row = {}
+        for i, b in ipairs(opts.buttons) do
+            if i > 1 then table.insert(btn_row, HorizontalSpan:new{ width = btn_gap }) end
+            table.insert(btn_row, Widgets.createButton{
+                text = b.text,
+                is_primary = b.is_primary,
+                width = btn_w,
+                callback = function()
+                    if not b.keep_open then closeDlg() end
+                    if b.callback then b.callback(closeDlg) end
+                end,
+            })
+        end
+        table.insert(content_items, HorizontalGroup:new(btn_row))
+    end
+
+    local card = FrameContainer:new{
+        padding = pad,
+        radius = theme.radius_window or sc(4),
+        bordersize = border,
+        color = Blitbuffer.COLOR_BLACK,
+        background = Blitbuffer.COLOR_WHITE,
+        width = dialog_w,
+        VerticalGroup:new(content_items),
+    }
+
+    local container_widget = CenterContainer:new{
+        dimen = Geom:new{ w = sw, h = opts.container_h or sh },
+        card,
+    }
+
+    overlay = InputContainer:new{
+        dimen = Geom:new{ w = sw, h = sh },
+        key_events = { Close = { { "Back" }, { "Escape" } } },
+        container_widget,
+    }
+    overlay.onClose = function()
+        closeDlg()
+        if opts.on_close then opts.on_close() end
+        return true
+    end
+    overlay.onCloseDialog = overlay.onClose
+    UIManager:show(overlay, "ui")
+    return overlay, closeDlg
+end
+
+--- Styled confirmation card dialog replacing KOReader's ConfirmBox.
+function Widgets.showConfirmDialog(opts)
+    opts = opts or {}
+    return Widgets.showCardDialog{
+        title = opts.title or _("Confirm"),
+        body_text = opts.text or "",
+        on_close = opts.cancel_callback,
+        buttons = {
+            {
+                text = opts.cancel_text or _("Cancel"),
+                callback = function()
+                    if opts.cancel_callback then opts.cancel_callback() end
+                end,
+            },
+            {
+                text = opts.ok_text or _("OK"),
+                is_primary = true,
+                callback = function()
+                    if opts.ok_callback then opts.ok_callback() end
+                end,
+            },
+        },
+    }
+end
+
+--- Styled single- or multi-field input card dialog replacing KOReader's InputDialog & MultiInputDialog.
+-- @param opts table { title, description, input, hint, fields = { { label, text, hint, text_type } }, buttons = { ... }, on_submit = function(val_or_vals) }
+function Widgets.showInputDialog(opts)
+    opts = opts or {}
+    local fields_spec = opts.fields or {
+        {
+            label = opts.description,
+            text = opts.input or "",
+            hint = opts.hint or "",
+            text_type = opts.text_type,
+        },
+    }
+    local inputs = {}
+    local overlay_ref = nil
+
+    local function getValues()
+        local vals = {}
+        for i, inp in ipairs(inputs) do
+            vals[i] = (inp.getText and inp:getText()) or inp.text or ""
+        end
+        return vals[1], vals
+    end
+
+    local function cleanupInputs()
+        for _, inp in ipairs(inputs) do
+            pcall(function() inp:onCloseKeyboard() end)
+            pcall(function() inp:onCloseWidget() end)
+        end
+    end
+
+    local action_buttons = {}
+    if opts.buttons then
+        for _, b in ipairs(opts.buttons) do
+            table.insert(action_buttons, {
+                text = b.text,
+                is_primary = b.is_primary,
+                keep_open = b.keep_open,
+                callback = function(closeDlg)
+                    local v1, all_v = getValues()
+                    if b.callback then b.callback(v1, all_v, closeDlg) end
+                end,
+            })
+        end
+    else
+        table.insert(action_buttons, {
+            text = opts.cancel_text or _("Cancel"),
+            callback = function()
+                if opts.on_cancel then opts.on_cancel() end
+            end,
+        })
+        table.insert(action_buttons, {
+            text = opts.save_text or _("Save"),
+            is_primary = true,
+            callback = function()
+                local v1, all_v = getValues()
+                if opts.on_submit then opts.on_submit(v1, all_v) end
+            end,
+        })
+    end
+
+    local has_phys_kb = (Device.hasKeyboard and Device:hasKeyboard()) or (Device.hasScreenKB and Device:hasScreenKB())
+    local vk_disabled = _G.G_reader_settings and _G.G_reader_settings.nilOrFalse and _G.G_reader_settings:nilOrFalse("virtual_keyboard_enabled")
+    local should_show_vk = not (has_phys_kb and vk_disabled)
+
+    local sh = Device.screen:getHeight()
+    local overlay, closeDlg = Widgets.showCardDialog{
+        title = opts.title or _("Input"),
+        container_h = should_show_vk and math.floor(sh * 0.58) or sh,
+        on_before_close = cleanupInputs,
+        on_close = opts.on_cancel,
+        body_widget = function(inner_w, close_fn)
+            local vg = VerticalGroup:new{ align = "left" }
+            for idx, fspec in ipairs(fields_spec) do
+                if idx > 1 then
+                    table.insert(vg, VerticalSpan:new{ width = sc(8) })
+                end
+                if fspec.label and fspec.label ~= "" then
+                    table.insert(vg, TextWidget:new{
+                        text = fspec.label,
+                        face = Font:getFace("cfont", 14),
+                        fgcolor = theme.color_label_dim,
+                        max_width = inner_w,
+                    })
+                    table.insert(vg, VerticalSpan:new{ width = sc(4) })
+                end
+                local inp = InputText:new{
+                    text = fspec.text or "",
+                    hint = fspec.hint or "",
+                    text_type = fspec.text_type,
+                    face = Font:getFace("cfont", 16),
+                    width = inner_w - sc(20),
+                    padding = sc(8),
+                    margin = 0,
+                    bordersize = sc(1),
+                    focused = (idx == 1),
+                    scroll = false,
+                    enter_callback = function()
+                        local v1, all_v = getValues()
+                        close_fn()
+                        if opts.on_submit then
+                            opts.on_submit(v1, all_v)
+                        else
+                            for _, b in ipairs(action_buttons) do
+                                if b.is_primary and b.callback then
+                                    b.callback(close_fn)
+                                    break
+                                end
+                            end
+                        end
+                    end,
+                }
+                if inp._frame_textwidget then
+                    inp._frame_textwidget.radius = theme.radius_btn or sc(4)
+                    inp._frame_textwidget.color = (idx == 1) and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY
+                end
+                table.insert(inputs, inp)
+                table.insert(vg, inp)
+            end
+            return vg
+        end,
+        buttons = action_buttons,
+    }
+
+    overlay_ref = overlay
+    overlay_ref.getFocusableWidgetXY = function() return nil end
+    overlay_ref.onSwitchFocus = function(_, target_inp)
+        for _, inp in ipairs(inputs) do
+            if inp ~= target_inp then
+                pcall(function() inp:unfocus() end)
+                pcall(function() inp:onCloseKeyboard() end)
+            end
+        end
+        pcall(function() target_inp:focus() end)
+        if should_show_vk then
+            pcall(function() target_inp:onShowKeyboard() end)
+        end
+        UIManager:setDirty(overlay_ref, "ui")
+    end
+
+    for _, inp in ipairs(inputs) do
+        inp.parent = overlay_ref
+        if inp.text_widget then
+            inp.text_widget.dialog = overlay_ref
+        end
+    end
+    if should_show_vk and inputs[1] then
+        pcall(function() inputs[1]:onShowKeyboard() end)
+    end
+    return overlay, closeDlg
+end
+
+return Widgets

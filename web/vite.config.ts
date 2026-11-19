@@ -28,4 +28,10 @@ export default defineConfig({
   build: {
     target: 'esnext',
   },
+  server: {
+    port: 5180,
+  },
+  preview: {
+    port: 4180,
+  },
 });

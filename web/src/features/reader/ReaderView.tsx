@@ -1,7 +1,103 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Highlighter, List, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Highlighter, List, Moon, Sun, Type } from 'lucide-react';
 import { AnnotationRecord, BookCatalogEntry, ProgressRecord, ReadingSession } from '../../cloud/types';
 import { annotationId } from '../../sync/hasher';
+
+interface ReaderPrefs {
+  theme: 'dark' | 'light' | 'sepia';
+  fontFamily: 'serif' | 'sans' | 'mono' | 'publisher';
+  fontSize: number;
+  lineHeight: number;
+  margin: 'narrow' | 'medium' | 'wide';
+  flow: 'paginated' | 'scrolled';
+  columns: '1' | '2' | '3';
+}
+
+const READER_PREFS_KEY = 'nimbus_reader_prefs_v1';
+
+const DEFAULT_PREFS: ReaderPrefs = {
+  theme: 'dark',
+  fontFamily: 'serif',
+  fontSize: 18,
+  lineHeight: 1.6,
+  margin: 'medium',
+  flow: 'paginated',
+  columns: '2',
+};
+
+function loadReaderPrefs(): ReaderPrefs {
+  try {
+    const raw = localStorage.getItem(READER_PREFS_KEY);
+    if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch {
+    // ignore
+  }
+  return DEFAULT_PREFS;
+}
+
+function buildReaderCss(prefs: ReaderPrefs): string {
+  const palette =
+    prefs.theme === 'dark'
+      ? { bg: '#090d16', fg: '#e2e8f0', link: '#34d399', scheme: 'dark' }
+      : prefs.theme === 'sepia'
+        ? { bg: '#f4ecd8', fg: '#433422', link: '#047857', scheme: 'light' }
+        : { bg: '#ffffff', fg: '#0f172a', link: '#059669', scheme: 'light' };
+
+  const fontStack =
+    prefs.fontFamily === 'serif'
+      ? 'Literata, Georgia, "Times New Roman", serif'
+      : prefs.fontFamily === 'sans'
+        ? 'Inter, system-ui, -apple-system, sans-serif'
+        : prefs.fontFamily === 'mono'
+          ? 'ui-monospace, SFMono-Regular, Menlo, monospace'
+          : 'inherit';
+
+  const fontRule = prefs.fontFamily === 'publisher' ? '' : `font-family: ${fontStack} !important;`;
+
+  return `
+    :root {
+      color-scheme: ${palette.scheme};
+    }
+    html, body {
+      background-color: ${palette.bg} !important;
+      color: ${palette.fg} !important;
+      ${fontRule}
+      font-size: ${prefs.fontSize}px !important;
+      line-height: ${prefs.lineHeight} !important;
+    }
+    body, p, div, span, li, blockquote, h1, h2, h3, h4, h5, h6 {
+      color: ${palette.fg} !important;
+      background-color: transparent !important;
+      ${fontRule}
+      line-height: ${prefs.lineHeight} !important;
+    }
+    p, li, blockquote {
+      font-size: ${prefs.fontSize}px !important;
+    }
+    a, a * {
+      color: ${palette.link} !important;
+    }
+  `;
+}
+
+function applyRendererPrefs(view: any, prefs: ReaderPrefs) {
+  const renderer = view?.renderer;
+  if (!renderer) return;
+  const marginMap = {
+    narrow: { gap: '3%', margin: '24px', maxInline: '920px' },
+    medium: { gap: '7%', margin: '48px', maxInline: '720px' },
+    wide: { gap: '12%', margin: '72px', maxInline: '580px' },
+  }[prefs.margin];
+
+  renderer.setAttribute('flow', prefs.flow);
+  renderer.setAttribute('gap', marginMap.gap);
+  renderer.setAttribute('margin', marginMap.margin);
+  renderer.setAttribute('max-inline-size', marginMap.maxInline);
+  renderer.setAttribute('max-column-count', prefs.columns);
+  if (typeof renderer.setStyles === 'function') {
+    renderer.setStyles(buildReaderCss(prefs));
+  }
+}
 
 interface Props {
   book: BookCatalogEntry;
@@ -28,13 +124,16 @@ export const ReaderView: React.FC<Props> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<any>(null);
 
-  const [theme, setTheme] = useState<'dark' | 'light' | 'sepia'>('dark');
+  const [prefs, setPrefs] = useState<ReaderPrefs>(() => loadReaderPrefs());
+  const [showAppearance, setShowAppearance] = useState(false);
   const [percent, setPercent] = useState<number>(initialProgress?.percent || 0);
   const [chapter, setChapter] = useState<string>(initialProgress?.chapter || '');
   const [toc, setToc] = useState<{ label: string; href: string }[]>([]);
   const [showToc, setShowToc] = useState(false);
   const [pdfPage, setPdfPage] = useState<number>(initialProgress?.page || 1);
   const [pdfTotal, setPdfTotal] = useState<number>(initialProgress?.total_pages || 1);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pdfDocRef = useRef<any>(null);
 
   const sessionStartRef = useRef<number>(Math.floor(Date.now() / 1000));
@@ -63,22 +162,30 @@ export const ReaderView: React.FC<Props> = ({
   // Initialize foliate-js for EPUB/CBZ/MOBI/FB2 or pdf.js for PDF
   useEffect(() => {
     let disposed = false;
+    setLoading(true);
+    setErrorMsg(null);
 
     if (book.format === 'pdf') {
       (async () => {
-        const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/build/pdf.worker.min.mjs',
-          import.meta.url,
-        ).toString();
-        const data = await fileBlob.arrayBuffer();
-        const doc = await pdfjs.getDocument({ data }).promise;
-        if (disposed) return;
-        pdfDocRef.current = doc;
-        setPdfTotal(doc.numPages);
-        const startPage = Math.min(doc.numPages, Math.max(1, initialProgress?.page || 1));
-        setPdfPage(startPage);
-        renderPdfPage(doc, startPage);
+        try {
+          const pdfjs = await import('pdfjs-dist');
+          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+            'pdfjs-dist/build/pdf.worker.min.mjs',
+            import.meta.url,
+          ).toString();
+          const data = await fileBlob.arrayBuffer();
+          const doc = await pdfjs.getDocument({ data }).promise;
+          if (disposed) return;
+          pdfDocRef.current = doc;
+          setPdfTotal(doc.numPages);
+          const startPage = Math.min(doc.numPages, Math.max(1, initialProgress?.page || 1));
+          setPdfPage(startPage);
+          await renderPdfPage(doc, startPage);
+        } catch (err: any) {
+          if (!disposed) setErrorMsg(err?.message || 'Failed to open PDF.');
+        } finally {
+          if (!disposed) setLoading(false);
+        }
       })();
       return () => {
         disposed = true;
@@ -86,45 +193,54 @@ export const ReaderView: React.FC<Props> = ({
     }
 
     (async () => {
-      await import('foliate-js/view.js');
-      if (disposed || !containerRef.current) return;
-      const view = document.createElement('foliate-view') as any;
-      view.style.width = '100%';
-      view.style.height = '100%';
-      containerRef.current.innerHTML = '';
-      containerRef.current.appendChild(view);
-      viewRef.current = view;
+      try {
+        await import('foliate-js/view.js');
+        if (disposed || !containerRef.current) return;
+        const view = document.createElement('foliate-view') as any;
+        view.style.width = '100%';
+        view.style.height = '100%';
+        containerRef.current.innerHTML = '';
+        containerRef.current.appendChild(view);
+        viewRef.current = view;
 
-      const file = new File([fileBlob], book.filename, { type: 'application/epub+zip' });
-      await view.open(file);
+        const file = new File([fileBlob], book.filename);
+        await view.open(file);
+        if (disposed) return;
 
-      if (view.book?.toc) {
-        setToc(view.book.toc.map((t: any) => ({ label: t.label, href: t.href })));
-      }
+        if (view.book?.toc) {
+          setToc(view.book.toc.map((t: any) => ({ label: t.label, href: t.href })));
+        }
 
-      view.addEventListener('relocate', (e: any) => {
-        const detail = e.detail || {};
-        const frac = Number(detail.fraction ?? 0);
-        pagesTurnedRef.current += 1;
-        setPercent(frac);
-        if (detail.tocItem?.label) setChapter(detail.tocItem.label);
-        onSaveProgress({
-          book_id: book.id,
-          partial_md5: book.hashes.partial_md5,
-          percent: frac,
-          chapter: detail.tocItem?.label || chapter || null,
-          cfi: detail.cfi || null,
-          status: frac >= 0.99 ? 'finished' : 'reading',
-          updated_at: Math.floor(Date.now() / 1000),
+        view.addEventListener('relocate', (e: any) => {
+          const detail = e.detail || {};
+          const frac = Number(detail.fraction ?? 0);
+          pagesTurnedRef.current += 1;
+          setPercent(frac);
+          if (detail.tocItem?.label) setChapter(detail.tocItem.label);
+          onSaveProgress({
+            book_id: book.id,
+            partial_md5: book.hashes.partial_md5,
+            percent: frac,
+            chapter: detail.tocItem?.label || chapter || null,
+            cfi: detail.cfi || null,
+            status: frac >= 0.99 ? 'finished' : 'reading',
+            updated_at: Math.floor(Date.now() / 1000),
+          });
         });
-      });
 
-      if (initialProgress?.cfi) {
-        await view.init({ lastLocation: initialProgress.cfi });
-      } else if (initialProgress?.percent) {
-        await view.init({ lastLocation: initialProgress.percent });
-      } else {
-        await view.init({});
+        if (initialProgress?.cfi) {
+          await view.init({ lastLocation: initialProgress.cfi });
+        } else if (initialProgress?.percent && initialProgress.percent > 0) {
+          await view.init({ lastLocation: { fraction: initialProgress.percent } });
+        } else {
+          await view.init({});
+        }
+        applyRendererPrefs(view, prefs);
+      } catch (err: any) {
+        console.error('Reader open error:', err);
+        if (!disposed) setErrorMsg(err?.message || `Failed to open ${book.filename}.`);
+      } finally {
+        if (!disposed) setLoading(false);
       }
     })();
 
@@ -133,6 +249,21 @@ export const ReaderView: React.FC<Props> = ({
       if (viewRef.current?.close) viewRef.current.close();
     };
   }, [book.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(READER_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // ignore
+    }
+    if (viewRef.current) {
+      applyRendererPrefs(viewRef.current, prefs);
+    }
+  }, [prefs]);
+
+  const updatePref = <K extends keyof ReaderPrefs>(key: K, value: ReaderPrefs[K]) => {
+    setPrefs((prev) => ({ ...prev, [key]: value }));
+  };
 
   const renderPdfPage = async (doc: any, pageNum: number) => {
     if (!canvasRef.current) return;
@@ -202,17 +333,24 @@ export const ReaderView: React.FC<Props> = ({
   };
 
   const themeBg =
-    theme === 'light'
+    prefs.theme === 'light'
       ? 'bg-white text-slate-900'
-      : theme === 'sepia'
+      : prefs.theme === 'sepia'
         ? 'bg-[#f4ecd8] text-[#433422]'
-        : 'bg-slate-950 text-slate-100';
+        : 'bg-[#090d16] text-slate-100';
+
+  const pdfFilter =
+    prefs.theme === 'dark'
+      ? 'invert(0.92) hue-rotate(180deg)'
+      : prefs.theme === 'sepia'
+        ? 'sepia(0.35)'
+        : 'none';
 
   return (
     <div className={`fixed inset-0 z-40 flex flex-col ${themeBg}`}>
-      <header className="flex items-center justify-between border-b border-slate-800/40 px-4 py-2.5">
+      <header className="relative flex items-center justify-between border-b border-slate-500/20 px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-slate-800/30">
+          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-slate-500/15">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
@@ -224,23 +362,201 @@ export const ReaderView: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {toc.length > 0 && (
-            <button onClick={() => setShowToc((s) => !s)} className="rounded-lg p-2 hover:bg-slate-800/30" title="Table of Contents">
+            <button onClick={() => setShowToc((s) => !s)} className="rounded-lg p-2 hover:bg-slate-500/15" title="Table of Contents">
               <List className="h-4 w-4" />
             </button>
           )}
-          <button onClick={quickHighlight} className="rounded-lg p-2 hover:bg-slate-800/30" title="Save Highlight">
+          <button onClick={quickHighlight} className="rounded-lg p-2 hover:bg-slate-500/15" title="Save Highlight">
             <Highlighter className="h-4 w-4" />
           </button>
           <button
-            onClick={() => setTheme((t) => (t === 'dark' ? 'sepia' : t === 'sepia' ? 'light' : 'dark'))}
-            className="rounded-lg p-2 hover:bg-slate-800/30"
-            title="Switch Reader Theme"
+            onClick={() => setShowAppearance((s) => !s)}
+            className={`rounded-lg p-2 hover:bg-slate-500/15 ${showAppearance ? 'bg-emerald-500/20 text-emerald-500' : ''}`}
+            title="Reader Appearance & Typography"
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <Type className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() =>
+              updatePref('theme', prefs.theme === 'dark' ? 'sepia' : prefs.theme === 'sepia' ? 'light' : 'dark')
+            }
+            className="rounded-lg p-2 hover:bg-slate-500/15"
+            title={`Theme: ${prefs.theme} (click to cycle)`}
+          >
+            {prefs.theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
         </div>
+
+        {showAppearance && (
+          <div className="absolute right-4 top-14 z-30 w-72 space-y-4 rounded-xl border border-slate-700/60 bg-slate-900 p-4 text-slate-100 shadow-2xl">
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Theme</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    ['light', 'Light'],
+                    ['sepia', 'Sepia'],
+                    ['dark', 'Dark'],
+                  ] as const
+                ).map(([t, label]) => (
+                  <button
+                    key={t}
+                    onClick={() => updatePref('theme', t)}
+                    className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                      prefs.theme === t
+                        ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                        : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Font Style</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    ['serif', 'Serif'],
+                    ['sans', 'Sans'],
+                    ['mono', 'Mono'],
+                    ['publisher', 'Publisher'],
+                  ] as const
+                ).map(([f, label]) => (
+                  <button
+                    key={f}
+                    onClick={() => updatePref('fontFamily', f)}
+                    className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                      prefs.fontFamily === f
+                        ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                        : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-300">Font Size</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => updatePref('fontSize', Math.max(12, prefs.fontSize - 2))}
+                  className="rounded border border-slate-700 px-2.5 py-0.5 text-xs hover:bg-slate-800"
+                >
+                  A-
+                </button>
+                <span className="w-10 text-center text-xs font-medium">{prefs.fontSize}px</span>
+                <button
+                  onClick={() => updatePref('fontSize', Math.min(32, prefs.fontSize + 2))}
+                  className="rounded border border-slate-700 px-2.5 py-0.5 text-xs hover:bg-slate-800"
+                >
+                  A+
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-300">Line Spacing</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => updatePref('lineHeight', Math.max(1.1, Number((prefs.lineHeight - 0.1).toFixed(1))))}
+                  className="rounded border border-slate-700 px-2.5 py-0.5 text-xs hover:bg-slate-800"
+                >
+                  -
+                </button>
+                <span className="w-10 text-center text-xs font-medium">{prefs.lineHeight.toFixed(1)}</span>
+                <button
+                  onClick={() => updatePref('lineHeight', Math.min(2.4, Number((prefs.lineHeight + 0.1).toFixed(1))))}
+                  className="rounded border border-slate-700 px-2.5 py-0.5 text-xs hover:bg-slate-800"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Margins</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    ['narrow', 'Narrow'],
+                    ['medium', 'Medium'],
+                    ['wide', 'Wide'],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => updatePref('margin', m)}
+                    className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                      prefs.margin === m
+                        ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                        : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Layout</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    ['paginated', 'Paginated'],
+                    ['scrolled', 'Scrolled'],
+                  ] as const
+                ).map(([fl, label]) => (
+                  <button
+                    key={fl}
+                    onClick={() => updatePref('flow', fl)}
+                    className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                      prefs.flow === fl
+                        ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                        : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {prefs.flow === 'paginated' && (
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Columns</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      ['1', '1 Col'],
+                      ['2', '2 Cols'],
+                      ['3', '3 Cols'],
+                    ] as const
+                  ).map(([col, label]) => (
+                    <button
+                      key={col}
+                      onClick={() => updatePref('columns', col)}
+                      className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                        prefs.columns === col
+                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                          : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -280,12 +596,28 @@ export const ReaderView: React.FC<Props> = ({
         )}
 
         <div className="relative flex-1 overflow-auto">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-inherit/80">
+              <p className="text-sm font-medium opacity-80">Opening “{book.title}”…</p>
+            </div>
+          )}
+          {errorMsg && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm font-medium text-rose-500">{errorMsg}</p>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+              >
+                Back to Library
+              </button>
+            </div>
+          )}
           {book.format === 'pdf' ? (
             <div className="flex justify-center p-4">
-              <canvas ref={canvasRef} className="max-w-full shadow-lg" />
+              <canvas ref={canvasRef} style={{ filter: pdfFilter }} className="max-w-full shadow-lg" />
             </div>
           ) : (
-            <div ref={containerRef} className="h-full w-full" />
+            <div ref={containerRef} className="absolute inset-0" />
           )}
 
           <button

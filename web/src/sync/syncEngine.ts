@@ -249,3 +249,38 @@ export async function uploadBookToCloud(
   await db.catalog.put(entry);
   return entry;
 }
+
+export async function syncCoversFromCloud(
+  fs: RootPrefixedCloudFS,
+  books: BookCatalogEntry[],
+  onCoverReady?: (bookId: string, blob: Blob) => void,
+  concurrency = 4,
+): Promise<void> {
+  const queue = books.filter((b) => b.has_cover && !b.deleted);
+  if (queue.length === 0) return;
+
+  let idx = 0;
+  const worker = async () => {
+    while (idx < queue.length) {
+      const book = queue[idx++];
+      try {
+        const cached = await db.covers.get(book.id);
+        const targetEtag = book.cover_etag || '';
+        if (cached && (!targetEtag || cached.etag === targetEtag)) {
+          onCoverReady?.(book.id, cached.data);
+          continue;
+        }
+        const bytes = await fs.downloadBytes(`${book.folder}/cover.jpg`);
+        const blob = new Blob([bytes.slice().buffer], { type: 'image/jpeg' });
+        await db.covers.put({ book_id: book.id, etag: targetEtag, data: blob });
+        onCoverReady?.(book.id, blob);
+      } catch (err) {
+        if (!(err instanceof CloudNotFoundError)) {
+          console.warn('Cover download failed for', book.title, err);
+        }
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()));
+}

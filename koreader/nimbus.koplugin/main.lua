@@ -5,8 +5,6 @@ Entry point for nimbus.koplugin (KOReader Plugin).
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
-local InfoMessage = require("ui/widget/infomessage")
-local ConfirmBox = require("ui/widget/confirmbox")
 local Dispatcher = require("dispatcher")
 local Event = require("ui/event")
 local _ = require("gettext")
@@ -18,19 +16,147 @@ local Hash = require("nimbus_hash")
 local Matcher = require("nimbus_matcher")
 local Merge = require("nimbus_merge")
 local Sync = require("nimbus_sync")
+local KOSync = require("nimbus_kosync")
 local UILibrary = require("nimbus_ui_library")
-local UISettings = require("nimbus_ui_settings")
+local Widgets = require("nimbus_ui_widgets")
+local NimbusProgress = require("nimbus_progress")
+
+local function calculateOptimalPos(order_tools)
+    local pos = 2
+    for idx, id in ipairs(order_tools) do
+        if id == "Storefront" or id == "xray" or id == "backup" then
+            if idx >= pos then
+                pos = idx + 1
+            end
+        end
+    end
+    return pos
+end
+
+local function injectIntoToolsMenu()
+    local menu_orders = {
+        "ui/elements/reader_menu_order",
+        "ui/elements/filemanager_menu_order",
+        "apps/reader/modules/readermenuorder",
+    }
+    for _, order_path in ipairs(menu_orders) do
+        local ok, order = pcall(require, order_path)
+        if ok and type(order) == "table" and type(order.tools) == "table" then
+            for i = #order.tools, 1, -1 do
+                if order.tools[i] == "nimbus" or order.tools[i] == "Nimbus" then
+                    table.remove(order.tools, i)
+                end
+            end
+            local pos = calculateOptimalPos(order.tools)
+            table.insert(order.tools, pos, "nimbus")
+        end
+    end
+
+    local ok_ms, MenuSorter = pcall(require, "ui/menusorter")
+    if ok_ms and MenuSorter and not MenuSorter._nimbus_hooked then
+        MenuSorter._nimbus_hooked = true
+        local orig_sort = MenuSorter.sort
+        MenuSorter.sort = function(this, item_table, order)
+            if order and type(order.tools) == "table" and item_table and (item_table.nimbus or item_table.Nimbus) then
+                for i = #order.tools, 1, -1 do
+                    if order.tools[i] == "nimbus" or order.tools[i] == "Nimbus" then
+                        table.remove(order.tools, i)
+                    end
+                end
+                local pos = calculateOptimalPos(order.tools)
+                table.insert(order.tools, pos, "nimbus")
+            end
+            return orig_sort(this, item_table, order)
+        end
+    end
+end
 
 local Nimbus = WidgetContainer:extend{
     name = "nimbus",
     is_doc_only = false,
 }
 
+local _live_nimbus_plugin = nil
+
+local function embedIntoFileManager(fm_self)
+    if not fm_self or not fm_self[1] or not fm_self[1][1] then return end
+    if not Settings.load().use_as_home_screen or fm_self._nimbus_browsing_files then return end
+    if fm_self._nimbus_embedded_view and fm_self[1][1] == fm_self._nimbus_embedded_view then return end
+
+    local ok_err, err = pcall(function()
+        fm_self._nimbus_orig_fc = fm_self._nimbus_orig_fc or fm_self[1][1]
+        local view = UILibrary.buildView(function(filepath)
+            if _live_nimbus_plugin then
+                _live_nimbus_plugin:openBookFile(filepath)
+            else
+                local ok_rm, ReaderUI = pcall(require, "apps/reader/readerui")
+                if ok_rm and ReaderUI and ReaderUI.showReader then
+                    ReaderUI:showReader(filepath)
+                end
+            end
+        end, {
+            is_home_screen = true,
+            embedded_fm = fm_self,
+            on_sync_now = function()
+                Sync.syncStats()
+            end,
+        })
+        fm_self._nimbus_embedded_view = view
+        fm_self[1][1] = view
+    end)
+    if not ok_err then
+        local ok_log, logger = pcall(require, "logger")
+        if ok_log and logger and logger.warn then
+            logger.warn("Nimbus: failed to embed into FileManager, falling back:", tostring(err))
+        end
+        if fm_self._nimbus_orig_fc then
+            fm_self[1][1] = fm_self._nimbus_orig_fc
+        end
+    end
+end
+
+local function installHomeScreenPatch()
+    local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
+    if not ok_fm or not FileManager or FileManager._nimbus_setup_patched then return end
+    FileManager._nimbus_setup_patched = true
+    local orig_setupLayout = FileManager.setupLayout
+    FileManager.setupLayout = function(fm_self, ...)
+        orig_setupLayout(fm_self, ...)
+        embedIntoFileManager(fm_self)
+    end
+
+    local ok_fc, FileChooser = pcall(require, "ui/widget/filechooser")
+    if ok_fc and FileChooser and not FileChooser._nimbus_refresh_patched then
+        FileChooser._nimbus_refresh_patched = true
+        local orig_refreshPath = FileChooser.refreshPath
+        FileChooser.refreshPath = function(fc_self, ...)
+            local res = orig_refreshPath(fc_self, ...)
+            local inst = FileManager.instance
+            if inst and inst._nimbus_embedded_view and not inst._nimbus_browsing_files and inst._nimbus_embedded_view.refreshView then
+                inst._nimbus_embedded_view.refreshView()
+            end
+            return res
+        end
+    end
+end
+
 function Nimbus:init()
+    _live_nimbus_plugin = self
     self._last_sync_ts = 0
+    injectIntoToolsMenu()
+    local cfg = Settings.load()
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
+    end
+    installHomeScreenPatch()
+    if cfg.use_as_home_screen then
+        if _G.G_reader_settings and _G.G_reader_settings.saveSetting then
+            _G.G_reader_settings:saveSetting("start_with", "filemanager")
+        end
+        if self.ui and not self.ui.document and self.ui[1] then
+            embedIntoFileManager(self.ui)
+        end
     end
 end
 
@@ -80,100 +206,39 @@ function Nimbus:openBookFile(filepath)
     end
 end
 
-function Nimbus:openLibrary()
+function Nimbus:openLibrary(is_home_screen)
+    local has_doc = (self.ui and self.ui.document ~= nil)
+    local open_doc_info = nil
+    if has_doc then
+        local fp, props = self:getDocProps()
+        open_doc_info = {
+            filepath = fp,
+            props = props,
+            open_doc = self.ui.document,
+        }
+    end
     UILibrary.show(function(filepath)
         self:openBookFile(filepath)
-    end)
+    end, {
+        is_home_screen = (is_home_screen == true),
+        open_doc_info = open_doc_info,
+        on_sync_now = function()
+            if has_doc then
+                self:syncCurrentBook(false)
+            end
+            Sync.syncStats()
+        end,
+    })
 end
 
 function Nimbus:addToMainMenu(menu_items)
-    local cfg = Settings.load()
+    injectIntoToolsMenu()
     menu_items.nimbus = {
-        text = _("Nimbus Cloud"),
+        text = _("Nimbus"),
         sorting_hint = "tools",
-        sub_item_table = {
-            {
-                text = _("Open Cloud Library"),
-                callback = function()
-                    self:openLibrary()
-                end,
-            },
-            {
-                text = _("Sync Current Book Now"),
-                enabled_func = function()
-                    return self.ui and self.ui.document ~= nil
-                end,
-                callback = function()
-                    self:syncCurrentBook(true)
-                end,
-            },
-            {
-                text = _("Upload Current Book to Cloud"),
-                enabled_func = function()
-                    return self.ui and self.ui.document ~= nil
-                end,
-                callback = function()
-                    self:uploadCurrentBook()
-                end,
-            },
-            {
-                text = _("Sync Reading Statistics"),
-                callback = function()
-                    Sync.syncStats(function(ok, res)
-                        UIManager:show(InfoMessage:new{
-                            text = ok and string.format(_("Synced %d reading session(s)."), tonumber(res) or 0)
-                                or (_("Stats sync failed: ") .. tostring(res)),
-                            timeout = 3,
-                        })
-                    end)
-                end,
-                separator = true,
-            },
-            {
-                text = _("Auto-sync on Book Open/Close"),
-                checked_func = function() return Settings.load().auto_sync_open end,
-                callback = function()
-                    local c = Settings.load()
-                    c.auto_sync_open = not c.auto_sync_open
-                    c.auto_sync_close = c.auto_sync_open
-                    Settings.save(c)
-                end,
-            },
-            {
-                text = _("Whispersync Auto-Jump Forward"),
-                checked_func = function() return Settings.load().whispersync_auto_jump end,
-                callback = function()
-                    local c = Settings.load()
-                    c.whispersync_auto_jump = not c.whispersync_auto_jump
-                    Settings.save(c)
-                end,
-            },
-            {
-                text = _("Sync Highlights & Notes"),
-                checked_func = function() return Settings.load().sync_highlights end,
-                callback = function()
-                    local c = Settings.load()
-                    c.sync_highlights = not c.sync_highlights
-                    Settings.save(c)
-                end,
-            },
-            {
-                text = _("Sync Reading Statistics"),
-                checked_func = function() return Settings.load().sync_stats end,
-                callback = function()
-                    local c = Settings.load()
-                    c.sync_stats = not c.sync_stats
-                    Settings.save(c)
-                end,
-                separator = true,
-            },
-            {
-                text = _("Account & Settings…"),
-                callback = function()
-                    UISettings.showProviderMenu()
-                end,
-            },
-        },
+        callback = function()
+            self:openLibrary()
+        end,
     }
 end
 
@@ -237,24 +302,45 @@ function Nimbus:jumpToRemotePosition(remote_prog)
     end
 end
 
-function Nimbus:uploadCurrentBook()
+function Nimbus:uploadCurrentBook(on_done)
     local filepath, props = self:getDocProps()
-    if not filepath then return end
-    local msg = InfoMessage:new{ text = _("Uploading book to Nimbus Cloud…") }
-    UIManager:show(msg)
-    UIManager:forceRePaint()
+    if not filepath then
+        if on_done then on_done(false) end
+        return
+    end
+    local filename = filepath:match("([^/\\]+)$") or filepath
+    local prog_dlg = NimbusProgress:new{
+        title = _("Uploading to Nimbus Cloud"),
+        subtitle = _("Preparing upload…"),
+        detail = filename,
+        progress = 0,
+    }
+    prog_dlg:show()
+
     Sync.uploadBook(filepath, props, nil, function(ok, res)
-        UIManager:close(msg)
-        UIManager:show(InfoMessage:new{
-            text = ok and string.format(_("Uploaded '%s' to Nimbus Cloud!"), tostring(res.title))
-                or (_("Upload failed: ") .. tostring(res)),
-            timeout = 3,
-        })
-    end)
+        prog_dlg:close()
+        if ok then
+            Widgets.showToast(string.format(_("Uploaded '%s' to Nimbus Cloud!"), tostring(res.title)), 3)
+        elseif res ~= "canceled" then
+            Widgets.showToast(_("Upload failed: ") .. tostring(res), 4)
+        end
+        if on_done then on_done(ok) end
+    end, {
+        is_canceled = function() return prog_dlg:isCanceled() end,
+        on_progress = function(sent, total, phase)
+            local pct = (total and total > 0) and math.floor((sent / total) * 100) or 0
+            local sub = (phase == "finalizing")
+                and _("Finalizing catalog…")
+                or string.format("%s / %s (%d%%)", NimbusProgress.formatBytes(sent), NimbusProgress.formatBytes(total), pct)
+            prog_dlg:setProgress(pct, sub)
+        end,
+    })
 end
 
 function Nimbus:syncCurrentBook(interactive)
-    if not Cloud.isConfigured() then return end
+    local cloud_ok = Cloud.isConfigured()
+    local kosync_ok = KOSync.isConfigured()
+    if not cloud_ok and not kosync_ok then return end
     local filepath, props = self:getDocProps()
     if not filepath then return end
 
@@ -264,67 +350,84 @@ function Nimbus:syncCurrentBook(interactive)
     end
     self._last_sync_ts = now
 
-    Sync.loadCatalog(function(ok_cat, catalog)
-        if not ok_cat then
-            if interactive then
-                UIManager:show(InfoMessage:new{ text = _("Sync error: ") .. tostring(catalog), timeout = 3 })
+    local cfg = Settings.load()
+    local pmd5 = Hash.partialMD5(filepath)
+
+    local function applyRemoteCandidate(remote, local_prog)
+        if not remote or remote.device_id == cfg.device_id or not local_prog then return end
+        local remote_ts = tonumber(remote.updated_at) or 0
+        local local_ts = tonumber(local_prog.updated_at) or 0
+        local remote_pct = tonumber(remote.percent) or 0
+        local local_pct = tonumber(local_prog.percent) or 0
+
+        if remote_ts > local_ts and remote_pct > (local_pct + Constants.WHISPERSYNC_FORWARD_THRESHOLD) then
+            if cfg.whispersync_auto_jump then
+                self:jumpToRemotePosition(remote)
+                Widgets.showToast(string.format(_("Jumped to %.1f%% from %s"), remote_pct * 100, tostring(remote.device_id)), 4)
+            else
+                Widgets.showConfirmDialog{
+                    title = _("Reading Sync"),
+                    text = string.format(_("Jump forward to %.1f%% from %s?"), remote_pct * 100, tostring(remote.device_id)),
+                    ok_text = _("Jump"),
+                    cancel_text = _("Stay Here"),
+                    ok_callback = function() self:jumpToRemotePosition(remote) end,
+                }
             end
-            return
         end
+    end
 
-        local book_id = Matcher.resolve(filepath, catalog, props)
-        if not book_id then
-            if interactive then
-                UIManager:show(InfoMessage:new{ text = _("Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."), timeout = 3 })
+    local best_remote = nil
+    local local_prog = self:getCurrentProgressState(pmd5, pmd5)
+
+    if cloud_ok then
+        Sync.loadCatalog(function(ok_cat, catalog)
+            if not ok_cat then
+                if interactive then
+                    Widgets.showToast(_("Sync error: ") .. tostring(catalog), 3)
+                end
+                return
             end
-            return
-        end
 
-        local cfg = Settings.load()
-        local pmd5 = Hash.partialMD5(filepath)
-        local local_prog = self:getCurrentProgressState(book_id, pmd5)
-
-        -- Pull remote progress shards & apply Whispersync rule
-        Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
-            if ok_p then
-                local merged = Merge.mergeProgress(shards)
-                local remote = merged[book_id]
-                if remote and remote.device_id ~= cfg.device_id and local_prog then
-                    local remote_ts = tonumber(remote.updated_at) or 0
-                    local local_ts = tonumber(local_prog.updated_at) or 0
-                    local remote_pct = tonumber(remote.percent) or 0
-                    local local_pct = tonumber(local_prog.percent) or 0
-
-                    if remote_ts > local_ts and remote_pct > (local_pct + Constants.WHISPERSYNC_FORWARD_THRESHOLD) then
-                        if cfg.whispersync_auto_jump then
-                            self:jumpToRemotePosition(remote)
-                            UIManager:show(InfoMessage:new{
-                                text = string.format(_("Jumped to %.1f%% from %s"), remote_pct * 100, tostring(remote.device_id)),
-                                timeout = 4,
-                            })
-                        else
-                            UIManager:show(ConfirmBox:new{
-                                text = string.format(_("Jump forward to %.1f%% from %s?"), remote_pct * 100, tostring(remote.device_id)),
-                                ok_callback = function() self:jumpToRemotePosition(remote) end,
-                            })
-                        end
+            local book_id = Matcher.resolve(filepath, catalog, props)
+            if book_id then
+                local_prog = self:getCurrentProgressState(book_id, pmd5)
+                Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
+                    if ok_p then
+                        local merged = Merge.mergeProgress(shards)
+                        best_remote = merged[book_id]
                     end
+                end)
+
+                if local_prog then
+                    local st = Sync.loadLocalState()
+                    st.progress[book_id] = local_prog
+                    Sync.saveLocalState(st)
+                    Sync.uploadDeviceProgress(st.progress)
+                end
+            elseif interactive and not kosync_ok then
+                Widgets.showToast(_("Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."), 3)
+            end
+        end)
+    end
+
+    if kosync_ok then
+        KOSync.pullProgress(filepath, props, function(ok_k, k_remote)
+            if ok_k and k_remote then
+                if not best_remote or (tonumber(k_remote.percent) or 0) > (tonumber(best_remote.percent) or 0) then
+                    best_remote = k_remote
                 end
             end
         end)
-
-        -- Push local progress
         if local_prog then
-            local st = Sync.loadLocalState()
-            st.progress[book_id] = local_prog
-            Sync.saveLocalState(st)
-            Sync.uploadDeviceProgress(st.progress)
+            KOSync.pushProgress(filepath, props, local_prog)
         end
+    end
 
-        if interactive then
-            UIManager:show(InfoMessage:new{ text = _("Nimbus sync complete."), timeout = 2 })
-        end
-    end)
+    applyRemoteCandidate(best_remote, local_prog)
+
+    if interactive then
+        Widgets.showToast(_("Reading sync complete."), 2)
+    end
 end
 
 function Nimbus:onReaderReady()
@@ -338,12 +441,46 @@ end
 
 function Nimbus:onCloseDocument()
     local cfg = Settings.load()
-    if cfg.auto_sync_close then
-        self:syncCurrentBook(false)
-        if cfg.sync_stats then
-            Sync.syncStats()
+    if not cfg.auto_sync_close then return end
+
+    local filepath, props = self:getDocProps()
+    if not filepath then return end
+    local pmd5 = Hash.partialMD5(filepath)
+    local local_prog = self:getCurrentProgressState(pmd5, pmd5)
+    if not local_prog then return end
+
+    -- Update in-memory scanner cache immediately so Home Screen shows the new % without re-scanning disk
+    local ok_sc, Scanner = pcall(require, "nimbus_scanner")
+    if ok_sc and Scanner and type(Scanner._mem_cache) == "table" then
+        for _, item in ipairs(Scanner._mem_cache) do
+            if item.local_path == filepath then
+                item.percent = local_prog.percent
+                item.status = local_prog.status
+                break
+            end
         end
     end
+
+    -- Defer blocking HTTPS uploads until after Home Screen has painted
+    UIManager:scheduleIn(0.6, function()
+        if Cloud.isConfigured() then
+            local cached_cat = Sync.loadCachedCatalog()
+            local book_id = Matcher.resolve(filepath, cached_cat, props)
+            if book_id then
+                local_prog.book_id = book_id
+                local st = Sync.loadLocalState()
+                st.progress[book_id] = local_prog
+                Sync.saveLocalState(st)
+                Sync.uploadDeviceProgress(st.progress)
+            end
+        end
+        if KOSync.isConfigured() then
+            KOSync.pushProgress(filepath, props, local_prog)
+        end
+        if cfg.sync_stats and Cloud.isConfigured() then
+            Sync.syncStats()
+        end
+    end)
 end
 
 function Nimbus:onSuspend()
