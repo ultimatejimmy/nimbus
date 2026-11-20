@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CloudLightning, ExternalLink, Loader2, X } from 'lucide-react';
+import { Check, CloudLightning, Copy, ExternalLink, Loader2, X } from 'lucide-react';
 import { NimbusWebConfig } from '../../cloud';
 import { DeviceCodeInfo, OAuthProvider, pollTokenOnce, requestDeviceCode } from '../../cloud/oauth';
 import { CloudProviderId, OAuthTokens } from '../../cloud/types';
@@ -19,6 +19,7 @@ export const ConnectModal: React.FC<Props> = ({ config, onSaveConfig, onClose })
   const [wdPass, setWdPass] = useState(config.webdav?.password || '');
   const [wdProxy, setWdProxy] = useState(config.webdav?.corsProxy || '');
   const [deviceInfo, setDeviceInfo] = useState<DeviceCodeInfo | null>(null);
+  const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -55,15 +56,32 @@ export const ConnectModal: React.FC<Props> = ({ config, onSaveConfig, onClose })
     };
   }, [deviceInfo, provider]);
 
+  const copyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      return true;
+    } catch {
+      setCopied(false);
+      return false;
+    }
+  };
+
   const startOAuth = async () => {
     if (provider !== 'gdrive' && provider !== 'onedrive' && provider !== 'dropbox') return;
     setErrorMsg('');
+    setCopied(false);
     setStatusMsg('Requesting authorization code...');
     setBusy(true);
     try {
       const info = await requestDeviceCode(provider);
       setDeviceInfo(info);
-      setStatusMsg('Waiting for browser authorization...');
+      const didCopy = info.user_code ? await copyCode(info.user_code) : false;
+      setStatusMsg(
+        didCopy
+          ? 'Code copied to clipboard — paste it in the opened tab!'
+          : 'Waiting for browser authorization...',
+      );
       if (info.verification_url) window.open(info.verification_url, '_blank', 'noopener');
     } catch (e: any) {
       setErrorMsg(e?.message || String(e));
@@ -187,9 +205,19 @@ export const ConnectModal: React.FC<Props> = ({ config, onSaveConfig, onClose })
               {deviceInfo ? (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
                   <p className="text-xs text-slate-600 dark:text-slate-300">Enter this code in the opened browser tab:</p>
-                  <p className="my-2 font-mono text-2xl font-bold tracking-widest text-emerald-700 dark:text-emerald-300">
-                    {deviceInfo.user_code}
-                  </p>
+                  <div className="my-2 flex items-center justify-center gap-2">
+                    <p className="font-mono text-2xl font-bold tracking-widest text-emerald-700 dark:text-emerald-300">
+                      {deviceInfo.user_code}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => copyCode(deviceInfo.user_code)}
+                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-1.5 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                      title={copied ? 'Copied!' : 'Copy code'}
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
                   <a
                     href={deviceInfo.verification_url}
                     target="_blank"
