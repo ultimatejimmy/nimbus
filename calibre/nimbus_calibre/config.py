@@ -71,11 +71,16 @@ def make_identifier_key(name: str, existing_keys: Iterable[str]) -> str:
     return candidate
 
 
+def normalize_remote_root(val: str) -> str:
+    return "/".join(p for p in str(val or "").replace("\\", "/").split("/") if p).strip().lower()
+
+
 def _normalize_account(acc: Dict[str, Any], existing_keys: Iterable[str]) -> Dict[str, Any]:
     out = copy.deepcopy(acc)
     out.setdefault("id", new_account_id())
     out["name"] = str(out.get("name") or PROVIDER_LABELS.get(out.get("provider", ""), "Nimbus Cloud")).strip()
     out["provider"] = out.get("provider") or "none"
+    out["auth_source_id"] = str(out.get("auth_source_id") or "").strip()
     out["remote_root"] = str(out.get("remote_root") or "Nimbus").strip() or "Nimbus"
     out["tag"] = str(out.get("tag") or "").strip()
     out["identity"] = str(out.get("identity") or "").strip()
@@ -89,6 +94,54 @@ def _normalize_account(acc: Dict[str, Any], existing_keys: Iterable[str]) -> Dic
     if not out.get("identifier_key"):
         out["identifier_key"] = make_identifier_key(out["name"], existing_keys)
     return out
+
+
+def resolve_account_for_cloud(
+    acc: Dict[str, Any],
+    all_accounts: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Resolve shared login credentials (auth_source_id) into a ready-to-use cloud config dict."""
+    resolved = copy.deepcopy(acc)
+    accounts_list = all_accounts if all_accounts is not None else get_accounts()
+    by_id = {a["id"]: a for a in accounts_list}
+
+    visited = {resolved.get("id")}
+    owner = resolved
+    src_id = resolved.get("auth_source_id") or ""
+    while src_id and src_id in by_id and src_id not in visited:
+        visited.add(src_id)
+        owner = by_id[src_id]
+        src_id = owner.get("auth_source_id") or ""
+
+    resolved["token_owner_id"] = owner["id"]
+    if owner["id"] != resolved.get("id"):
+        resolved["provider"] = owner.get("provider") or "none"
+        resolved["oauth_tokens"] = copy.deepcopy(owner.get("oauth_tokens") or {})
+        resolved["webdav"] = copy.deepcopy(owner.get("webdav") or {})
+        resolved["identity"] = owner.get("identity") or ""
+    return resolved
+
+
+def promote_credentials_on_remove(
+    accounts: List[Dict[str, Any]],
+    removed_acc: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Promote the first dependent account if a parent account sharing credentials is removed."""
+    removed_id = removed_acc.get("id")
+    updated = [copy.deepcopy(a) for a in accounts if a.get("id") != removed_id]
+    dependents = [a for a in updated if a.get("auth_source_id") == removed_id]
+    if not dependents:
+        return updated
+
+    new_owner = dependents[0]
+    new_owner["auth_source_id"] = ""
+    new_owner["provider"] = removed_acc.get("provider") or new_owner.get("provider") or "none"
+    new_owner["oauth_tokens"] = copy.deepcopy(removed_acc.get("oauth_tokens") or {})
+    new_owner["webdav"] = copy.deepcopy(removed_acc.get("webdav") or {})
+    new_owner["identity"] = removed_acc.get("identity") or ""
+    for dep in dependents[1:]:
+        dep["auth_source_id"] = new_owner["id"]
+    return updated
 
 
 def migrate_legacy_config() -> bool:
@@ -141,6 +194,11 @@ def save_accounts(accounts: List[Dict[str, Any]], default_account_id: str = "") 
         normalized.append(norm)
 
     ids = {a["id"] for a in normalized}
+    for a in normalized:
+        src_id = a.get("auth_source_id") or ""
+        if src_id and (src_id not in ids or src_id == a["id"]):
+            a["auth_source_id"] = ""
+
     if default_account_id not in ids:
         default_account_id = normalized[0]["id"] if normalized else ""
 
@@ -150,9 +208,10 @@ def save_accounts(accounts: List[Dict[str, Any]], default_account_id: str = "") 
     # Keep legacy fields roughly in sync with the default account for compatibility
     default_acc = next((a for a in normalized if a["id"] == default_account_id), None)
     if default_acc:
-        prefs["provider"] = default_acc["provider"]
-        prefs["remote_root"] = default_acc["remote_root"]
-        prefs["webdav"] = dict(default_acc["webdav"])
+        resolved_def = resolve_account_for_cloud(default_acc, normalized)
+        prefs["provider"] = resolved_def["provider"]
+        prefs["remote_root"] = resolved_def["remote_root"]
+        prefs["webdav"] = dict(resolved_def["webdav"])
     else:
         prefs["provider"] = "none"
     return normalized

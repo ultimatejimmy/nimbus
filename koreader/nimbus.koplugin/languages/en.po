@@ -1,0 +1,691 @@
+msgid ""
+msgstr ""
+"Language-Team: English\n"
+"Language: en\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "%s Account"
+msgstr "%s Account"
+
+msgid "%s authentication error: %s"
+msgstr "%s authentication error: %s"
+
+msgid "%s authorization failed: %s"
+msgstr "%s authorization failed: %s"
+
+msgid "%s authorization was denied."
+msgstr "%s authorization was denied."
+
+msgid "0 of %d books"
+msgstr "0 of %d books"
+
+msgid "Account"
+msgstr "Account"
+
+msgid "All Books"
+msgstr "All Books"
+
+msgid "All device books are already synced to Nimbus Cloud."
+msgstr "All device books are already synced to Nimbus Cloud."
+
+msgid "Already in Cloud"
+msgstr "Already in Cloud"
+
+msgid "And enter this code:"
+msgstr "And enter this code:"
+
+msgid "Author: %s"
+msgstr "Author: %s"
+
+msgid "Authorization code expired. Please try again."
+msgstr "Authorization code expired. Please try again."
+
+msgid "Auto"
+msgstr "Auto"
+
+msgid "Auto-Download New Books"
+msgstr "Auto-Download New Books"
+
+msgid "Auto-Jump to Latest Page"
+msgstr "Auto-Jump to Latest Page"
+
+msgid "Automatically download newly added cloud books to this device"
+msgstr "Automatically download newly added cloud books to this device"
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Backup & Restore Auth"
+msgstr "Backup & Restore Auth"
+
+msgid "Binary"
+msgstr "Binary"
+
+msgid "Book"
+msgstr "Book"
+
+msgid "Book Actions"
+msgstr "Book Actions"
+
+msgid "Book Details"
+msgstr "Book Details"
+
+msgid "Book Folder"
+msgstr "Book Folder"
+
+msgid "Book Matching"
+msgstr "Book Matching"
+
+msgid "Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."
+msgstr "Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Canceling..."
+msgstr "Canceling..."
+
+msgid "Clear"
+msgstr "Clear"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Cloud"
+msgstr "Cloud"
+
+msgid "Cloud (%d)"
+msgstr "Cloud (%d)"
+
+msgid "Cloud Only"
+msgstr "Cloud Only"
+
+msgid "Cloud Storage"
+msgstr "Cloud Storage"
+
+msgid "Cloud storage is not connected yet.\n\nTap ⋯ → Nimbus Settings to connect Google Drive, OneDrive, Dropbox, or WebDAV."
+msgstr "Cloud storage is not connected yet.\n\nTap ⋯ → Nimbus Settings to connect Google Drive, OneDrive, Dropbox, or WebDAV."
+
+msgid "Cloud: %s"
+msgstr "Cloud: %s"
+
+msgid "Cloudflare Worker URL or KOSync server:"
+msgstr "Cloudflare Worker URL or KOSync server:"
+
+msgid "Configuration"
+msgstr "Configuration"
+
+msgid "Configure %s..."
+msgstr "Configure %s..."
+
+msgid "Confirm"
+msgstr "Confirm"
+
+msgid "Connect"
+msgstr "Connect"
+
+msgid "Connect %s"
+msgstr "Connect %s"
+
+msgid "Connect %s..."
+msgstr "Connect %s..."
+
+msgid "Connected"
+msgstr "Connected"
+
+msgid "Connected to %s successfully!"
+msgstr "Connected to %s successfully!"
+
+msgid "Connected: %s"
+msgstr "Connected: %s"
+
+msgid "Connecting to cloud storage..."
+msgstr "Connecting to cloud storage..."
+
+msgid "Connection failed: %s"
+msgstr "Connection failed: %s"
+
+msgid "Connection timed out"
+msgstr "Connection timed out"
+
+msgid "Contacting %s..."
+msgstr "Contacting %s..."
+
+msgid "CrossPoint / Sink / KOSync"
+msgstr "CrossPoint / Sink / KOSync"
+
+msgid "Current Book"
+msgstr "Current Book"
+
+msgid "Currently Reading"
+msgstr "Currently Reading"
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete from Cloud"
+msgstr "Delete from Cloud"
+
+msgid "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
+msgstr "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
+
+msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+msgstr "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+
+msgid "Delete this book from Nimbus Cloud? This cannot be undone."
+msgstr "Delete this book from Nimbus Cloud? This cannot be undone."
+
+msgid "Deleted from Nimbus Cloud."
+msgstr "Deleted from Nimbus Cloud."
+
+msgid "Detected Sync Plugins"
+msgstr "Detected Sync Plugins"
+
+msgid "Device & About"
+msgstr "Device & About"
+
+msgid "Device ID"
+msgstr "Device ID"
+
+msgid "Device: %s"
+msgstr "Device: %s"
+
+msgid "Directory path scanned for local books:"
+msgstr "Directory path scanned for local books:"
+
+msgid "Disconnect/Log Out"
+msgstr "Disconnect/Log Out"
+
+msgid "Disconnected from %s."
+msgstr "Disconnected from %s."
+
+msgid "Done"
+msgstr "Done"
+
+msgid "Download"
+msgstr "Download"
+
+msgid "Download & Open"
+msgstr "Download & Open"
+
+msgid "Download failed: "
+msgstr "Download failed: "
+
+msgid "Downloaded"
+msgstr "Downloaded"
+
+msgid "Downloaded %d new book(s) from Nimbus Cloud."
+msgstr "Downloaded %d new book(s) from Nimbus Cloud."
+
+msgid "Downloaded '%s'."
+msgstr "Downloaded '%s'."
+
+msgid "Downloading Book"
+msgstr "Downloading Book"
+
+msgid "Dropbox"
+msgstr "Dropbox"
+
+msgid "Enable CrossPoint/KOSync Bridge"
+msgstr "Enable CrossPoint/KOSync Bridge"
+
+msgid "Enter search term..."
+msgstr "Enter search term..."
+
+msgid "Failed to delete from cloud: "
+msgstr "Failed to delete from cloud: "
+
+msgid "Failed to start %s authorization:\n%s"
+msgstr "Failed to start %s authorization:\n%s"
+
+msgid "Filename"
+msgstr "Filename"
+
+msgid "Filter Books"
+msgstr "Filter Books"
+
+msgid "Filter books by title, author, or series:"
+msgstr "Filter books by title, author, or series:"
+
+msgid "Finalizing %d of %d..."
+msgstr "Finalizing %d of %d..."
+
+msgid "Finalizing catalog…"
+msgstr "Finalizing catalog…"
+
+msgid "Finished"
+msgstr "Finished"
+
+msgid "Folder · %d %s"
+msgstr "Folder · %d %s"
+
+msgid "Format: %s"
+msgstr "Format: %s"
+
+msgid "Google Drive"
+msgstr "Google Drive"
+
+msgid "Home Screen"
+msgstr "Home Screen"
+
+msgid "Import"
+msgstr "Import"
+
+msgid "Imported %s settings!"
+msgstr "Imported %s settings!"
+
+msgid "Imported %s!"
+msgstr "Imported %s!"
+
+msgid "In Cloud"
+msgstr "In Cloud"
+
+msgid "Input"
+msgstr "Input"
+
+msgid "Jump"
+msgstr "Jump"
+
+msgid "Jump automatically when another device is ahead (otherwise ask)"
+msgstr "Jump automatically when another device is ahead (otherwise ask)"
+
+msgid "Jump forward to %.1f%% from %s?"
+msgstr "Jump forward to %.1f%% from %s?"
+
+msgid "Jumped to %.1f%% from %s"
+msgstr "Jumped to %.1f%% from %s"
+
+msgid "KOSync Password"
+msgstr "KOSync Password"
+
+msgid "KOSync Username"
+msgstr "KOSync Username"
+
+msgid "KOSync connected (%s)"
+msgstr "KOSync connected (%s)"
+
+msgid "KOSync failed: %s"
+msgstr "KOSync failed: %s"
+
+msgid "Library & Home Screen"
+msgstr "Library & Home Screen"
+
+msgid "Library Menu"
+msgstr "Library Menu"
+
+msgid "Loading library catalog..."
+msgstr "Loading library catalog..."
+
+msgid "Local"
+msgstr "Local"
+
+msgid "Local Book Folder"
+msgstr "Local Book Folder"
+
+msgid "Local Only"
+msgstr "Local Only"
+
+msgid "Manual"
+msgstr "Manual"
+
+msgid "Merge bookmarks, highlights, and notes across devices"
+msgstr "Merge bookmarks, highlights, and notes across devices"
+
+msgid "Merge reading time and session history across devices"
+msgstr "Merge reading time and session history across devices"
+
+msgid "Merging reading progress..."
+msgstr "Merging reading progress..."
+
+msgid "Microsoft OneDrive"
+msgstr "Microsoft OneDrive"
+
+msgid "Name of root folder on cloud storage:"
+msgstr "Name of root folder on cloud storage:"
+
+msgid "Next ›"
+msgstr "Next ›"
+
+msgid "Nimbus"
+msgstr "Nimbus"
+
+msgid "Nimbus Cloud"
+msgstr "Nimbus Cloud"
+
+msgid "Nimbus Menu"
+msgstr "Nimbus Menu"
+
+msgid "Nimbus Settings"
+msgstr "Nimbus Settings"
+
+msgid "Nimbus Settings..."
+msgstr "Nimbus Settings..."
+
+msgid "Nimbus: Open Cloud Library"
+msgstr "Nimbus: Open Cloud Library"
+
+msgid "Nimbus: Sync Current Book"
+msgstr "Nimbus: Sync Current Book"
+
+msgid "Nimbus: Upload Current Book"
+msgstr "Nimbus: Upload Current Book"
+
+msgid "No books found in this folder.\n\nSet your Book Folder in Settings or open a book in KOReader."
+msgstr "No books found in this folder.\n\nSet your Book Folder in Settings or open a book in KOReader."
+
+msgid "No books in Cloud yet.\n\nSwitch to On Device or tap ⋯ → Upload Books to add books."
+msgstr "No books in Cloud yet.\n\nSwitch to On Device or tap ⋯ → Upload Books to add books."
+
+msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
+msgstr "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
+
+msgid "No cloud provider configured."
+msgstr "No cloud provider configured."
+
+msgid "No saved account found for this provider in backup.koplugin."
+msgstr "No saved account found for this provider in backup.koplugin."
+
+msgid "No saved cloud accounts found in backup.koplugin."
+msgstr "No saved cloud accounts found in backup.koplugin."
+
+msgid "None"
+msgstr "None"
+
+msgid "Not Configured"
+msgstr "Not Configured"
+
+msgid "Not Connected"
+msgstr "Not Connected"
+
+msgid "Not signed in to "
+msgstr "Not signed in to "
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Off"
+msgstr "Off"
+
+msgid "Offload"
+msgstr "Offload"
+
+msgid "Offload Local"
+msgstr "Offload Local"
+
+msgid "Offload Local Book"
+msgstr "Offload Local Book"
+
+msgid "Offloaded from device."
+msgstr "Offloaded from device."
+
+msgid "On"
+msgstr "On"
+
+msgid "On Device (%d)"
+msgstr "On Device (%d)"
+
+msgid "On your phone or computer, open:"
+msgstr "On your phone or computer, open:"
+
+msgid "Open Book"
+msgstr "Open Book"
+
+msgid "Open File Browser"
+msgstr "Open File Browser"
+
+msgid "Operation in Progress"
+msgstr "Operation in Progress"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Password or App Token"
+msgstr "Password or App Token"
+
+msgid "Please connect a cloud storage provider in Settings first."
+msgstr "Please connect a cloud storage provider in Settings first."
+
+msgid "Please wait..."
+msgstr "Please wait..."
+
+msgid "Preparing upload..."
+msgstr "Preparing upload..."
+
+msgid "Preparing upload…"
+msgstr "Preparing upload…"
+
+msgid "Progress: %s"
+msgstr "Progress: %s"
+
+msgid "Pull/push progress automatically when opening or closing a book"
+msgstr "Pull/push progress automatically when opening or closing a book"
+
+msgid "Reading Sync"
+msgstr "Reading Sync"
+
+msgid "Reading sync complete."
+msgstr "Reading sync complete."
+
+msgid "Remote Folder"
+msgstr "Remote Folder"
+
+msgid "Remote Nimbus Folder"
+msgstr "Remote Nimbus Folder"
+
+msgid "Retry"
+msgstr "Retry"
+
+msgid "Run"
+msgstr "Run"
+
+msgid "Save"
+msgstr "Save"
+
+msgid "Scanning local books..."
+msgstr "Scanning local books..."
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Search Library"
+msgstr "Search Library"
+
+msgid "Search library..."
+msgstr "Search library..."
+
+msgid "Select All"
+msgstr "Select All"
+
+msgid "Select Books to Upload"
+msgstr "Select Books to Upload"
+
+msgid "Select Books to Upload... (%d on device)"
+msgstr "Select Books to Upload... (%d on device)"
+
+msgid "Select Cloud Provider"
+msgstr "Select Cloud Provider"
+
+msgid "Series: %s"
+msgstr "Series: %s"
+
+msgid "Server URL"
+msgstr "Server URL"
+
+msgid "Set"
+msgstr "Set"
+
+msgid "Show your library at startup instead of KOReader's file list"
+msgstr "Show your library at startup instead of KOReader's file list"
+
+msgid "Sink / KOSync Server URL"
+msgstr "Sink / KOSync Server URL"
+
+msgid "Stay Here"
+msgstr "Stay Here"
+
+msgid "Storage Provider"
+msgstr "Storage Provider"
+
+msgid "Storage Provider: %s"
+msgstr "Storage Provider: %s"
+
+msgid "Stored locally as MD5 key (compatible with Sink/CrossPoint):"
+msgstr "Stored locally as MD5 key (compatible with Sink/CrossPoint):"
+
+msgid "Sync Highlights & Notes"
+msgstr "Sync Highlights & Notes"
+
+msgid "Sync Now"
+msgstr "Sync Now"
+
+msgid "Sync Reading Statistics"
+msgstr "Sync Reading Statistics"
+
+msgid "Sync complete"
+msgstr "Sync complete"
+
+msgid "Sync error: "
+msgstr "Sync error: "
+
+msgid "Sync on Book Open/Close"
+msgstr "Sync on Book Open/Close"
+
+msgid "Sync reading progress with CrossPoint, Readest, & Sink Worker"
+msgstr "Sync reading progress with CrossPoint, Readest, & Sink Worker"
+
+msgid "Synced"
+msgstr "Synced"
+
+msgid "Syncing Library"
+msgstr "Syncing Library"
+
+msgid "Syncing device progress & stats..."
+msgstr "Syncing device progress & stats..."
+
+msgid "Test"
+msgstr "Test"
+
+msgid "Test Connection"
+msgstr "Test Connection"
+
+msgid "Testing %s connection..."
+msgstr "Testing %s connection..."
+
+msgid "Testing KOSync connection..."
+msgstr "Testing KOSync connection..."
+
+msgid "Testing WebDAV connection..."
+msgstr "Testing WebDAV connection..."
+
+msgid "Testing cloud connection..."
+msgstr "Testing cloud connection..."
+
+msgid "Unknown"
+msgstr "Unknown"
+
+msgid "Unknown error"
+msgstr "Unknown error"
+
+msgid "Unsynced"
+msgstr "Unsynced"
+
+msgid "Untitled"
+msgstr "Untitled"
+
+msgid "Updating cloud catalog..."
+msgstr "Updating cloud catalog..."
+
+msgid "Upload"
+msgstr "Upload"
+
+msgid "Upload (%d)"
+msgstr "Upload (%d)"
+
+msgid "Upload All Unsynced Books (%d)"
+msgstr "Upload All Unsynced Books (%d)"
+
+msgid "Upload All Unsynced Books (0 · All Synced)"
+msgstr "Upload All Unsynced Books (0 · All Synced)"
+
+msgid "Upload Books..."
+msgstr "Upload Books..."
+
+msgid "Upload Current Book"
+msgstr "Upload Current Book"
+
+msgid "Upload canceled (%d uploaded)."
+msgstr "Upload canceled (%d uploaded)."
+
+msgid "Upload failed: "
+msgstr "Upload failed: "
+
+msgid "Upload to Cloud"
+msgstr "Upload to Cloud"
+
+msgid "Upload to Nimbus"
+msgstr "Upload to Nimbus"
+
+msgid "Uploaded %d of %d book(s) to Nimbus Cloud!"
+msgstr "Uploaded %d of %d book(s) to Nimbus Cloud!"
+
+msgid "Uploaded '%s' to Nimbus Cloud!"
+msgstr "Uploaded '%s' to Nimbus Cloud!"
+
+msgid "Uploading %d of %d..."
+msgstr "Uploading %d of %d..."
+
+msgid "Uploading to Nimbus Cloud"
+msgstr "Uploading to Nimbus Cloud"
+
+msgid "Use Nimbus as Home Screen"
+msgstr "Use Nimbus as Home Screen"
+
+msgid "Use as Home Screen"
+msgstr "Use as Home Screen"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Waiting for authorization..."
+msgstr "Waiting for authorization..."
+
+msgid "WebDAV"
+msgstr "WebDAV"
+
+msgid "WebDAV Server Settings"
+msgstr "WebDAV Server Settings"
+
+msgid "WebDAV settings saved."
+msgstr "WebDAV settings saved."
+
+msgid "Zero-self-hosting cloud library, Whispersync progress, highlights, and reading statistics across Google Drive, OneDrive, Dropbox, and WebDAV."
+msgstr "Zero-self-hosting cloud library, Whispersync progress, highlights, and reading statistics across Google Drive, OneDrive, Dropbox, and WebDAV."
+
+msgid "book"
+msgstr "book"
+
+msgid "books"
+msgstr "books"
+
+msgid "item"
+msgstr "item"
+
+msgid "items"
+msgstr "items"
+
+msgid "· Offline"
+msgstr "· Offline"
+
+msgid "· Sync error"
+msgstr "· Sync error"
+
+msgid "· Syncing..."
+msgstr "· Syncing..."
+
+msgid "‹ Prev"
+msgstr "‹ Prev"
+

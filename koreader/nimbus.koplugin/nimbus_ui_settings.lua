@@ -19,7 +19,8 @@ local ok_qr, QRWidget = pcall(require, "ui/widget/qrwidget")
 if not ok_qr or not QRWidget then
     QRWidget = nil
 end
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Constants = require("nimbus_constants")
 local Settings = require("nimbus_settings")
@@ -594,6 +595,18 @@ function UISettings.showSettingsDialog(on_finish_cb)
                         if cfg.use_as_home_screen and _G.G_reader_settings and _G.G_reader_settings.saveSetting then
                             _G.G_reader_settings:saveSetting("start_with", "filemanager")
                         end
+                        reopen()
+                    end
+                ))
+                table.insert(vg, Widgets.createCheckboxRow(
+                    _("Auto-Download New Books"),
+                    _("Automatically download newly added cloud books to this device"),
+                    cfg.auto_download_new_books ~= false,
+                    inner_w,
+                    function()
+                        closeDlg()
+                        cfg.auto_download_new_books = not (cfg.auto_download_new_books ~= false)
+                        Settings.save(cfg)
                         reopen()
                     end
                 ))

@@ -64,4 +64,30 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         assert.are.equal("gdrive", cfg.provider)
         assert.is_true(Cloud.isConfigured())
     end)
+
+    it("serializes and reloads tables containing functions, NaN, and special strings", function()
+        local path = "tests/tmp/settings/nimbus/test_cache.lua"
+        os.remove(path)
+        local payload = {
+            saved_at = 123456,
+            catalog = {
+                books = {
+                    b1 = {
+                        id = "b1",
+                        title = 'Line1\nLine2 "Quoted" \\ Slash',
+                        isbn = function() end,
+                        bad_num = 0 / 0,
+                    },
+                },
+            },
+        }
+        assert.is_true(Settings.writeLuaTable(path, payload))
+        local loaded = Settings.readLuaTable(path)
+        assert.are.equal("table", type(loaded))
+        assert.are.equal(123456, loaded.saved_at)
+        assert.are.equal('Line1\nLine2 "Quoted" \\ Slash', loaded.catalog.books.b1.title)
+        assert.is_nil(loaded.catalog.books.b1.isbn)
+        assert.is_nil(loaded.catalog.books.b1.bad_num)
+        os.remove(path)
+    end)
 end)

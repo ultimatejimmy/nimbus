@@ -343,6 +343,43 @@ function Sync.backfillRelativeDirs(catalog, device_books)
     return changed
 end
 
+--- Marks a book deleted in the cloud catalog, removes its cloud folder, and unlinks any local copy.
+function Sync.deleteCloudBook(book_id, item, cb)
+    if not Cloud.isConfigured() then
+        if cb then cb(false, "Not configured") end
+        return
+    end
+    local target_id = book_id or (item and (item.cloud_id or item.id))
+    if not target_id or target_id == "" then
+        if cb then cb(false, "Missing book ID") end
+        return
+    end
+    Sync.loadCatalog(function(ok_cat, cat_or_err)
+        if not ok_cat or type(cat_or_err) ~= "table" then
+            if cb then cb(false, cat_or_err or "Failed to load catalog") end
+            return
+        end
+        cat_or_err.books = cat_or_err.books or {}
+        local entry = cat_or_err.books[target_id]
+        local folder = (entry and entry.folder) or (item and item.folder)
+        if entry then
+            entry.deleted = true
+            entry.updated_at = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        end
+        Sync.saveCatalog(cat_or_err, function(ok_save, save_err)
+            if not ok_save then
+                if cb then cb(false, save_err) end
+                return
+            end
+            if folder and folder ~= "" then
+                Cloud.deletePath(folder, function() end)
+            end
+            Settings.unlinkBook(target_id, item and item.local_path)
+            if cb then cb(true, cat_or_err) end
+        end)
+    end)
+end
+
 --- Syncs reading statistics for the active month (and optionally imports remote sessions).
 function Sync.syncStats(cb)
     if not Cloud.isConfigured() then
@@ -379,6 +416,135 @@ function Sync.syncStats(cb)
             if cb then cb(ok_up, ok_up and #sessions or err) end
         end)
     end)
+end
+
+function Sync.findNewCloudBooks(prev_cat, new_cat)
+    local prev_books = (type(prev_cat) == "table" and type(prev_cat.books) == "table") and prev_cat.books or {}
+    local new_books = (type(new_cat) == "table" and type(new_cat.books) == "table") and new_cat.books or {}
+    local added = {}
+    for id, entry in pairs(new_books) do
+        if type(entry) == "table" and not entry.deleted and not prev_books[id] then
+            table.insert(added, entry)
+        end
+    end
+    return added
+end
+
+--- Non-blocking background cloud catalog + progress sync via forked subprocess (ffi/util.runInSubProcess).
+function Sync.startBackgroundCatalogSync(on_complete, force)
+    if not Cloud.isConfigured() or Sync._bg_pid then
+        return false
+    end
+    local now = os.time()
+    if not force and Sync._last_bg_sync_ts and (now - Sync._last_bg_sync_ts) < 30 then
+        return false
+    end
+
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if not ok_fu or not ffiUtil or not ffiUtil.runInSubProcess or not ok_ui or not UIManager then
+        return false
+    end
+
+    Sync._last_bg_sync_ts = now
+    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_, child_write_fd)
+        local ok_run, run_err = xpcall(function()
+            local prev_cat, _, prev_saved_at = Sync.loadCachedCatalog()
+            local ok_cat, cat_or_err = false, nil
+            Sync.loadCatalog(function(ok, res)
+                ok_cat = ok
+                cat_or_err = res
+            end)
+            if not ok_cat then
+                if child_write_fd then ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(cat_or_err), true) end
+                return
+            end
+            local merged = {}
+            Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
+                if ok_p then
+                    merged = Merge.mergeProgress(shards)
+                end
+            end)
+
+            local dl_count = 0
+            local cfg = Settings.load()
+            if cfg.auto_download_new_books ~= false and prev_saved_at and prev_saved_at > 0 then
+                local added = Sync.findNewCloudBooks(prev_cat, cat_or_err)
+                if #added > 0 then
+                    local ok_sc, Scanner = pcall(require, "nimbus_scanner")
+                    local dirs = (ok_sc and Scanner and Scanner.getEffectiveBooksDirs) and Scanner.getEffectiveBooksDirs() or {}
+                    local base_dir = (dirs[1] and dirs[1] ~= "") and dirs[1] or cfg.download_dir
+                    local links = Settings.loadBookLinks()
+                    for _, entry in ipairs(added) do
+                        if entry.folder and entry.filename and not links.by_id[entry.id] then
+                            local rel = tostring(entry.relative_dir or ""):gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", "")
+                            local target_dir = (rel ~= "") and (base_dir .. "/" .. rel) or base_dir
+                            if ok_util and util and util.makePath then
+                                util.makePath(target_dir)
+                            end
+                            local dest = target_dir .. "/" .. entry.filename
+                            local existing = io.open(dest, "rb")
+                            if existing then
+                                existing:close()
+                                Settings.linkBook(dest, entry.id)
+                            else
+                                local ok_dl = false
+                                Cloud.downloadFile(entry.folder .. "/" .. entry.filename, dest, function(ok)
+                                    ok_dl = ok
+                                end)
+                                if ok_dl then
+                                    Settings.linkBook(dest, entry.id)
+                                    dl_count = dl_count + 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            Sync.saveCachedCatalog(cat_or_err, merged)
+            if child_write_fd then ffiUtil.writeToFD(child_write_fd, "OK:" .. tostring(dl_count), true) end
+        end, debug.traceback)
+        if not ok_run and child_write_fd then
+            ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(run_err), true)
+        end
+    end, true)
+
+    if not pid then
+        return false
+    end
+    Sync._bg_pid = pid
+
+    local attempts = 0
+    local function poll()
+        if Sync._bg_pid ~= pid then return end
+        attempts = attempts + 1
+        if attempts > 150 then
+            Sync._bg_pid = nil
+            if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+            if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
+            if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+            if on_complete then on_complete(false, "timeout") end
+            return
+        end
+        if ffiUtil.isSubProcessDone(pid) then
+            Sync._bg_pid = nil
+            local msg = ""
+            if parent_read_fd and ffiUtil.readAllFromFD then
+                local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
+                if ok_r and type(raw) == "string" then msg = raw end
+            end
+            local ok_res = msg:sub(1, 3) == "OK:"
+            local dl_n = ok_res and (tonumber(msg:sub(4)) or 0) or 0
+            if on_complete then
+                on_complete(ok_res, ok_res and dl_n or msg)
+            end
+            return
+        end
+        UIManager:scheduleIn(0.4, poll)
+    end
+    UIManager:scheduleIn(0.4, poll)
+    return true
 end
 
 return Sync

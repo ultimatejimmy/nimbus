@@ -149,4 +149,25 @@ describe("nimbus_kosync, Sink auto-import, and catalog cache", function()
         assert.are.equal(100, fw)
         assert.are.equal(150, fh)
     end)
+
+    it("detects newly added cloud books and enables auto_download_new_books by default", function()
+        local cfg = Settings.load()
+        assert.is_true(cfg.auto_download_new_books)
+
+        local prev_cat = {
+            books = {
+                ["b1"] = { id = "b1", title = "Existing" },
+            },
+        }
+        local new_cat = {
+            books = {
+                ["b1"] = { id = "b1", title = "Existing" },
+                ["b2"] = { id = "b2", title = "New Book", folder = "Books/A - New Book [b2]", filename = "new.epub" },
+                ["b3"] = { id = "b3", title = "Deleted Book", deleted = true },
+            },
+        }
+        local added = Sync.findNewCloudBooks(prev_cat, new_cat)
+        assert.are.equal(1, #added)
+        assert.are.equal("b2", added[1].id)
+    end)
 end)

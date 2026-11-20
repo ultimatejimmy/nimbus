@@ -17,3 +17,11 @@ Nimbus uses your own cloud storage (**Google Drive**, **OneDrive**, **Dropbox**,
 - **Microsoft OneDrive** (via Microsoft Graph)
 - **Dropbox** (via Dropbox API v2)
 - **WebDAV** (Nextcloud, Synology, Koofr, etc.)
+
+## Documentation
+
+Full user guides and sync architecture docs are available in the **[Nimbus Wiki](https://github.com/ultimatejimmy/nimbus/wiki)**:
+
+- [Quick Start](https://github.com/ultimatejimmy/nimbus/wiki/Quick-Start) & [Cloud Providers](https://github.com/ultimatejimmy/nimbus/wiki/Cloud-Providers)
+- Client Guides: [KOReader Plugin](https://github.com/ultimatejimmy/nimbus/wiki/KOReader-Plugin) · [Calibre Plugin](https://github.com/ultimatejimmy/nimbus/wiki/Calibre-Plugin) · [Web App (PWA)](https://github.com/ultimatejimmy/nimbus/wiki/Web-App)
+- [How Sync Works](https://github.com/ultimatejimmy/nimbus/wiki/How-Sync-Works) & [FAQ / Troubleshooting](https://github.com/ultimatejimmy/nimbus/wiki/FAQ-and-Troubleshooting)

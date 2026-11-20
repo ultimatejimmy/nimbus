@@ -7,7 +7,8 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
 local Dispatcher = require("dispatcher")
 local Event = require("ui/event")
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Constants = require("nimbus_constants")
 local Settings = require("nimbus_settings")
@@ -143,6 +144,9 @@ end
 function Nimbus:init()
     _live_nimbus_plugin = self
     self._last_sync_ts = 0
+    if ok_loc and Localization and Localization.ensureInit then
+        Localization:ensureInit(self.path)
+    end
     injectIntoToolsMenu()
     local cfg = Settings.load()
     self:onDispatcherRegisterActions()

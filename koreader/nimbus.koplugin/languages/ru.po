@@ -1,0 +1,912 @@
+msgid ""
+msgstr ""
+"Language-Team: Russian\n"
+"Language: ru\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# en-hash: eb15c8258912980aa6eebaf6c597a474
+msgid "%s Account"
+msgstr "Учетная запись %s"
+
+# en-hash: 7b38b9877bc86f04028c230ce2efd977
+msgid "%s authentication error: %s"
+msgstr "Ошибка аутентификации %s: %s"
+
+# en-hash: 9e3ae2e0c077bd9bf189846af064e5f7
+msgid "%s authorization failed: %s"
+msgstr "Ошибка авторизации %s: %s"
+
+# en-hash: 603e471a4bbdaded67979a93938907f9
+msgid "%s authorization was denied."
+msgstr "В авторизации %s было отказано."
+
+# en-hash: a96af5ecb3f39286a79ee3b23e270a8a
+msgid "0 of %d books"
+msgstr "0 из %d книг"
+
+# en-hash: 08bd40c7543007ad06e4fce31618f6ec
+msgid "Account"
+msgstr "Учетная запись"
+
+# en-hash: 71aeed4dbcaef45a2f508e7949c01ba6
+msgid "All Books"
+msgstr "Все книги"
+
+# en-hash: 4e97c2cfec558d03298659697bb381e8
+msgid "All device books are already synced to Nimbus Cloud."
+msgstr "Все книги с устройства уже синхронизированы с Nimbus Cloud."
+
+# en-hash: 76a8ddf1df5330151ef0e59706bf4cf0
+msgid "Already in Cloud"
+msgstr "Уже в облаке"
+
+# en-hash: 336f879eec1bf390db4fa65586734c78
+msgid "And enter this code:"
+msgstr "И введите этот код:"
+
+# en-hash: e5faeb6f171222cac35905b7c3e5a3a6
+msgid "Author: %s"
+msgstr "Автор: %s"
+
+# en-hash: 2ea05e21970520450768ac56d8f3216f
+msgid "Authorization code expired. Please try again."
+msgstr "Срок действия кода авторизации истек. Пожалуйста, попробуйте снова."
+
+# en-hash: 06b9281e396db002010bde1de57262eb
+msgid "Auto"
+msgstr "Авто"
+
+# en-hash: d3dadf97fd30dadf5285df3900c8108b
+msgid "Auto-Download New Books"
+msgstr "Автозагрузка новых книг"
+
+# en-hash: 5eea291bf9eebdf4780610eeb7c21c15
+msgid "Auto-Jump to Latest Page"
+msgstr "Автопереход к последней странице"
+
+# en-hash: 7b96aaf200aeaf7f5a163f37bcb81739
+msgid "Automatically download newly added cloud books to this device"
+msgstr "Автоматически загружать новые книги из облака на это устройство"
+
+# en-hash: 0557fa923dcee4d0f86b1409f5c2167f
+msgid "Back"
+msgstr "Назад"
+
+# en-hash: eb246567736a16525a3d8c167b2dd22e
+msgid "Backup & Restore Auth"
+msgstr "Авторизация резервного копирования"
+
+# en-hash: 6ce976e8f061b2b5cfe4d0c50c3405dd
+msgid "Binary"
+msgstr "Бинарный"
+
+# en-hash: 2b1f94ef23b79bf90eb891cae1df7a90
+msgid "Book"
+msgstr "Книга"
+
+# en-hash: 6eb59f24665c8bfebed95185c71f5bbb
+msgid "Book Actions"
+msgstr "Действия с книгой"
+
+# en-hash: 7c1d71fbd14439db0964ccbe54fb42e4
+msgid "Book Details"
+msgstr "Информация о книге"
+
+# en-hash: 4218206cbb2a32a3f9040ac602063e4f
+msgid "Book Folder"
+msgstr "Папка книг"
+
+# en-hash: 9e6e7d846c2e624e74abbce0d3d85945
+msgid "Book Matching"
+msgstr "Сопоставление книг"
+
+# en-hash: 46294e1575acf6ab95aa82e45c2f5cbc
+msgid "Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."
+msgstr "Книги еще нет в Nimbus Cloud. Используйте «Загрузить текущую книгу в облако»."
+
+# en-hash: ea4788705e6873b424c65e91c2846b19
+msgid "Cancel"
+msgstr "Отмена"
+
+# en-hash: ba9adecf9a948664724f010fe9ffd733
+msgid "Canceling..."
+msgstr "Отмена..."
+
+# en-hash: dc30bc0c7914db5918da4263fce93ad2
+msgid "Clear"
+msgstr "Очистить"
+
+# en-hash: d3d2e617335f08df83599665eef8a418
+msgid "Close"
+msgstr "Закрыть"
+
+# en-hash: c8e2277ecfb1427838c488c217f99466
+msgid "Cloud"
+msgstr "Облако"
+
+# en-hash: 3d734bd30988c511f62a00332319298b
+msgid "Cloud (%d)"
+msgstr "Облако (%d)"
+
+# en-hash: e90f140c8b1e7bf80323108c2cbdf56c
+msgid "Cloud Only"
+msgstr "Только в облаке"
+
+# en-hash: 5928c3e44960a9a5a42f9bc9303998af
+msgid "Cloud Storage"
+msgstr "Облачное хранилище"
+
+# en-hash: 451e121e65fafff63bcbd15002500747
+msgid "Cloud storage is not connected yet.\n\nTap ⋯ → Nimbus Settings to connect Google Drive, OneDrive, Dropbox, or WebDAV."
+msgstr "Облачное хранилище еще не подключено.\n\nНажмите ⋯ → Настройки Nimbus, чтобы подключить Google Drive, OneDrive, Dropbox или WebDAV."
+
+# en-hash: a5fc8d41569b5be0f328aeb466475030
+msgid "Cloud: %s"
+msgstr "Облако: %s"
+
+# en-hash: 442e1ab81971b1c80223c5a8f4d4bd3b
+msgid "Cloudflare Worker URL or KOSync server:"
+msgstr "URL Cloudflare Worker или сервер KOSync:"
+
+# en-hash: 254f642527b45bc260048e30704edb39
+msgid "Configuration"
+msgstr "Конфигурация"
+
+# en-hash: 66fe5475a73859a22a0ae5700bef42bc
+msgid "Configure %s..."
+msgstr "Настроить %s..."
+
+# en-hash: 70d9be9b139893aa6c69b5e77e614311
+msgid "Confirm"
+msgstr "Подтвердить"
+
+# en-hash: 49ab28040dfa07f53544970c6d147e1e
+msgid "Connect"
+msgstr "Подключить"
+
+# en-hash: 211bafda79e78cb41c9603b58bef5a55
+msgid "Connect %s"
+msgstr "Подключить %s"
+
+# en-hash: c3f550ab4e1569992f931ccc143b2036
+msgid "Connect %s..."
+msgstr "Подключить %s..."
+
+# en-hash: 2ec0d16e4ca169baedb9b2d50ec5c6d7
+msgid "Connected"
+msgstr "Подключено"
+
+# en-hash: a0d751dcebdc3dfa81b875be960fb184
+msgid "Connected to %s successfully!"
+msgstr "Успешно подключено к %s!"
+
+# en-hash: 042909a8044ec8e1a97069bfdde2fe58
+msgid "Connected: %s"
+msgstr "Подключено: %s"
+
+# en-hash: d2bf47e31ae1a260acf183052f7e987b
+msgid "Connecting to cloud storage..."
+msgstr "Подключение к облачному хранилищу..."
+
+# en-hash: 78c182952076df476376efd9fb4e0d64
+msgid "Connection failed: %s"
+msgstr "Ошибка подключения: %s"
+
+# en-hash: 0743b27e61f40845e36144152bed8fa1
+msgid "Connection timed out"
+msgstr "Время ожидания подключения истекло"
+
+# en-hash: d85dc02bbb8edecb01965d7dae37da15
+msgid "Contacting %s..."
+msgstr "Связь с %s..."
+
+# en-hash: 31a3e8770e4a14d334c91ebf73ce5b78
+msgid "CrossPoint / Sink / KOSync"
+msgstr "CrossPoint / Sink / KOSync"
+
+# en-hash: 55c7bffa655254694122613edc689df7
+msgid "Current Book"
+msgstr "Текущая книга"
+
+# en-hash: 4fc6fb8d32631b30cd3a0768ae1f0b7e
+msgid "Currently Reading"
+msgstr "Читаю сейчас"
+
+# en-hash: 067c9daf5725fdabb83883ab066a528c
+msgid "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
+msgstr "Удалить локальный файл с этого устройства? Ваша книга, прогресс и заметки останутся в безопасности в облаке Nimbus."
+
+# en-hash: c98b66bb93fd0c039e10bc25614414f8
+msgid "Detected Sync Plugins"
+msgstr "Обнаруженные плагины синхронизации"
+
+# en-hash: 17b54a1c5edcbbc9bea90e5938b82aaf
+msgid "Device & About"
+msgstr "Устройство и о программе"
+
+# en-hash: 2e8f11ede1199f48c85453ec3cd462ec
+msgid "Device ID"
+msgstr "Идентификатор устройства"
+
+# en-hash: d67c7cd7e9db2b19d99bd7b9ea6c58f9
+msgid "Device: %s"
+msgstr "Устройство: %s"
+
+# en-hash: 09ab107441789ea7842f5da3b210359f
+msgid "Directory path scanned for local books:"
+msgstr "Путь к каталогу для поиска локальных книг:"
+
+# en-hash: 8197c58737018556993c2cc6d04615c5
+msgid "Disconnect/Log Out"
+msgstr "Отключиться / Выйти"
+
+# en-hash: b29490bf0f9a9dd9f84439ee1b9e5c74
+msgid "Disconnected from %s."
+msgstr "Отключено от %s."
+
+# en-hash: f92965e2c8a7afb3c1b9a5c09a263636
+msgid "Done"
+msgstr "Готово"
+
+# en-hash: 801ab24683a4a8c433c6eb40c48bcd9d
+msgid "Download"
+msgstr "Скачать"
+
+# en-hash: dea13e20898d712339a66e1049c0ca21
+msgid "Download & Open"
+msgstr "Скачать и открыть"
+
+# en-hash: 59d30102eb8d3c0c8b031e08a28acd28
+msgid "Download failed: "
+msgstr "Ошибка загрузки: "
+
+# en-hash: a6a04307fd90d0c2821b45125e6a0a25
+msgid "Downloaded"
+msgstr "Загружено"
+
+# en-hash: 6c88a6186537f17a8ac6f8762d16bc34
+msgid "Downloaded %d new book(s) from Nimbus Cloud."
+msgstr "Загружено новых книг из облака Nimbus: %d."
+
+# en-hash: d0823558291ef268fed478a0369da5e8
+msgid "Downloaded '%s'."
+msgstr "Загружено: '%s'."
+
+# en-hash: 6f4ae97857f62d9269358fd71663be7c
+msgid "Downloading Book"
+msgstr "Загрузка книги"
+
+# en-hash: f92aa92725095d5531f54b4589d99264
+msgid "Dropbox"
+msgstr "Dropbox"
+
+# en-hash: f755f939257488611a2e2ce699f133cf
+msgid "Enable CrossPoint/KOSync Bridge"
+msgstr "Включить мост CrossPoint/KOSync"
+
+# en-hash: 167a6fa049b82879c03bcd16f4f253b9
+msgid "Enter search term..."
+msgstr "Введите поисковый запрос..."
+
+# en-hash: ad8802154faed7004677d5b3e630cbef
+msgid "Failed to start %s authorization:\n%s"
+msgstr "Не удалось запустить авторизацию %s:\n%s"
+
+# en-hash: 1351017ac6423911223bc19a8cb7c653
+msgid "Filename"
+msgstr "Имя файла"
+
+# en-hash: 4999c788edc6ba2e302be2cc35a5540b
+msgid "Filter Books"
+msgstr "Фильтровать книги"
+
+# en-hash: 166fc1b0c6bd096fa7235863a8bdb0e9
+msgid "Filter books by title, author, or series:"
+msgstr "Фильтрация книг по названию, автору или серии:"
+
+# en-hash: f1f52329b8eac84be605b93a5f1bee4e
+msgid "Finalizing %d of %d..."
+msgstr "Завершение %d из %d..."
+
+# en-hash: f1c4b90a806e78960f1e7f1b4408185a
+msgid "Finalizing catalog…"
+msgstr "Завершение каталога…"
+
+# en-hash: 8f3d10eb21bd36347c258679eba9e92b
+msgid "Finished"
+msgstr "Готово"
+
+# en-hash: 15e30d22eae32fdb46411b88d59480b4
+msgid "Folder · %d %s"
+msgstr "Папка · %d %s"
+
+# en-hash: ce5dc4eed1d7d6ed6c15877ef50f4783
+msgid "Format: %s"
+msgstr "Формат: %s"
+
+# en-hash: e0daf39823ec1a1a7878c9718f063d5f
+msgid "Google Drive"
+msgstr "Google Drive"
+
+# en-hash: ec63674aca1c27c134a3e564563502be
+msgid "Home Screen"
+msgstr "Главный экран"
+
+# en-hash: 72d6d7a1885885bb55a565fd1070581a
+msgid "Import"
+msgstr "Импорт"
+
+# en-hash: 0604c1173fb3b6cccc5527085d251515
+msgid "Imported %s settings!"
+msgstr "Настройки %s импортированы!"
+
+# en-hash: 8f9ce7afe914fca6e9008185b0f3db93
+msgid "Imported %s!"
+msgstr "Импортировано: %s!"
+
+# en-hash: 0831af0fc1b12bdee77b0e186de35754
+msgid "In Cloud"
+msgstr "В облаке"
+
+# en-hash: 324118a6721dd6b8a9b9f4e327df2bf5
+msgid "Input"
+msgstr "Ввод"
+
+# en-hash: 101f693f72287a2819a364f64ca1c0ed
+msgid "Jump"
+msgstr "Перейти"
+
+# en-hash: e13f67f33d23572ce980b5a131c7e2c0
+msgid "Jump automatically when another device is ahead (otherwise ask)"
+msgstr "Переходить автоматически, если другое устройство впереди (иначе спрашивать)"
+
+# en-hash: af500646e97a5178e1bd203a9819ecef
+msgid "Jump forward to %.1f%% from %s?"
+msgstr "Перейти вперед к %.1f%% с устройства %s?"
+
+# en-hash: 77f7f9da21804f265b11e864b0c53f05
+msgid "Jumped to %.1f%% from %s"
+msgstr "Выполнен переход к %.1f%% с устройства %s"
+
+# en-hash: 48d5b6c5faa17ffe5572051786cb2479
+msgid "KOSync Password"
+msgstr "Пароль KOSync"
+
+# en-hash: 34113237728e9807a3d4fa6a62d7332a
+msgid "KOSync Username"
+msgstr "Имя пользователя KOSync"
+
+# en-hash: dc9d3b5ce122584fc9b82b30ef02012c
+msgid "KOSync connected (%s)"
+msgstr "KOSync подключен (%s)"
+
+# en-hash: 833caed98f63b6a28a2ff79def48fc25
+msgid "KOSync failed: %s"
+msgstr "Ошибка KOSync: %s"
+
+# en-hash: 0a248a86c841018a623755f2e08eb0d8
+msgid "Library & Home Screen"
+msgstr "Библиотека и главный экран"
+
+# en-hash: 962720e9fdf82d2d1592c5158351f2b2
+msgid "Library Menu"
+msgstr "Меню библиотеки"
+
+# en-hash: 2e2df25e9e39fd01f00f5d0bbbb29c8e
+msgid "Loading library catalog..."
+msgstr "Загрузка каталога библиотеки..."
+
+# en-hash: 509820290d57f333403f490dde7316f4
+msgid "Local"
+msgstr "Локально"
+
+# en-hash: 8c7b78915d6e1d411445357525846f3e
+msgid "Local Book Folder"
+msgstr "Папка с локальными книгами"
+
+# en-hash: d90baa18ccfcd397dbe0d0b01310f4bb
+msgid "Local Only"
+msgstr "Только локально"
+
+# en-hash: e1ba155a9f2e8c3be94020eef32a0301
+msgid "Manual"
+msgstr "Вручную"
+
+# en-hash: e372d48647a9a1a850c43938ce2e6ae3
+msgid "Merge bookmarks, highlights, and notes across devices"
+msgstr "Объединять закладки, выделения и заметки на разных устройствах"
+
+# en-hash: e5ed16c60bea686866785fd914f93c16
+msgid "Merge reading time and session history across devices"
+msgstr "Объединять время чтения и историю сессий на разных устройствах"
+
+# en-hash: c51da2367ad7f55bbc0b222c8b48b104
+msgid "Merging reading progress..."
+msgstr "Объединение прогресса чтения..."
+
+# en-hash: 6c73f3c18d099f906e1bebe11e3e9ff9
+msgid "Microsoft OneDrive"
+msgstr "Microsoft OneDrive"
+
+# en-hash: e0a027725859449b4131752f798814af
+msgid "Name of root folder on cloud storage:"
+msgstr "Имя корневой папки в облачном хранилище:"
+
+# en-hash: 2d688f4d101a8d1fcb5672e879ffed68
+msgid "Next ›"
+msgstr "Вперед ›"
+
+# en-hash: 9c7f8bae25e1e6455c1ffa40db880b7d
+msgid "Nimbus"
+msgstr "Nimbus"
+
+# en-hash: d4b030c2b768119b8dc84dcc5446bb0f
+msgid "Nimbus Cloud"
+msgstr "Nimbus Cloud"
+
+# en-hash: be28ae769de6bdf2bbc2a73b39a96656
+msgid "Nimbus Menu"
+msgstr "Меню Nimbus"
+
+# en-hash: f2ed8244bed947182d85e10cbe1fe020
+msgid "Nimbus Settings"
+msgstr "Настройки Nimbus"
+
+# en-hash: 60fefc24ac4a0e005b190657a856b285
+msgid "Nimbus Settings..."
+msgstr "Настройки Nimbus..."
+
+# en-hash: f633c08c568147665d4f34af7d330db7
+msgid "Nimbus: Open Cloud Library"
+msgstr "Nimbus: Открыть облачную библиотеку"
+
+# en-hash: 07d5f5665feedd2b1ed4073ea1434cdb
+msgid "Nimbus: Sync Current Book"
+msgstr "Nimbus: Синхронизировать текущую книгу"
+
+# en-hash: befb1c59c77e7b68dee1a85ad87b674f
+msgid "Nimbus: Upload Current Book"
+msgstr "Nimbus: Загрузить текущую книгу"
+
+# en-hash: a78f2bc5ac01ea09fb8f33a079ac4c48
+msgid "No books found in this folder.\n\nSet your Book Folder in Settings or open a book in KOReader."
+msgstr "В этой папке не найдено книг.\n\nУстановите папку с книгами в Настройках или откройте книгу в KOReader."
+
+# en-hash: 65eb55f0b14fb9cb7bb6cb5d37e06cb1
+msgid "No books in Cloud yet.\n\nSwitch to On Device or tap ⋯ → Upload Books to add books."
+msgstr "В облаке пока нет книг.\n\nПереключитесь на «На устройстве» или нажмите ⋯ → «Загрузить книги», чтобы добавить их."
+
+# en-hash: 2000948676d3acb2b4d43f97d2a4955a
+msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
+msgstr "Нет книг, соответствующих вашему поиску или фильтру.\n\nНажмите ✕ в строке поиска или измените фильтр выше."
+
+# en-hash: 72b4ff9b0918412a6c30f00a80d02fc8
+msgid "No cloud provider configured."
+msgstr "Облачный провайдер не настроен."
+
+# en-hash: b1b5db31436fc2fc2caba1c898fbdfbb
+msgid "No saved account found for this provider in backup.koplugin."
+msgstr "Для этого провайдера не найдено сохраненного аккаунта в backup.koplugin."
+
+# en-hash: 1308b53360a6ef623fca1d344d1d6a19
+msgid "No saved cloud accounts found in backup.koplugin."
+msgstr "В backup.koplugin не найдено сохраненных облачных аккаунтов."
+
+# en-hash: 6adf97f83acf6453d4a6a4b1070f3754
+msgid "None"
+msgstr "Нет"
+
+# en-hash: ac10863a89ea5da5d78b29ab7d8d4db9
+msgid "Not Configured"
+msgstr "Не настроено"
+
+# en-hash: b403a9ec06f9d789e61767465af7f210
+msgid "Not Connected"
+msgstr "Не подключено"
+
+# en-hash: 3eaa8bc1bce7130778228b01714853bb
+msgid "Not signed in to "
+msgstr "Не выполнен вход в "
+
+# en-hash: e0aa021e21dddbd6d8cecec71e9cf564
+msgid "OK"
+msgstr "OK"
+
+# en-hash: d15305d7a4e34e02489c74a5ef542f36
+msgid "Off"
+msgstr "Выкл"
+
+# en-hash: 7c6790f71ce936245f553eec1bcd6f40
+msgid "Offload"
+msgstr "Выгрузить"
+
+# en-hash: 0a5f441ddba90508f3532c78bd23e849
+msgid "Offload Local"
+msgstr "Выгрузить локально"
+
+# en-hash: 3bdd4dbebdcd66c873ad9df8f4df7aff
+msgid "Offload Local Book"
+msgstr "Выгрузить локальную книгу"
+
+# en-hash: 55095656af8c3f35dd2aeb6169a3bae3
+msgid "Offloaded from device."
+msgstr "Выгружено с устройства."
+
+# en-hash: 521c36a31c2762741cf0f8890cbe05e3
+msgid "On"
+msgstr "Вкл"
+
+# en-hash: ead869257ebac5c2740cd3956a76b8f8
+msgid "On Device (%d)"
+msgstr "На устройстве (%d)"
+
+# en-hash: 8e3ff64e87266cd4eab00bfd008794bc
+msgid "On your phone or computer, open:"
+msgstr "На телефоне или компьютере откройте:"
+
+# en-hash: f5ac36a6d8af47f34aeedf97baf66fed
+msgid "Open Book"
+msgstr "Открыть книгу"
+
+# en-hash: 056b231b369befb1926062db6b8918e7
+msgid "Open File Browser"
+msgstr "Открыть файловый менеджер"
+
+# en-hash: d11334638cf7c636a72da22cae9d6373
+msgid "Operation in Progress"
+msgstr "Операция выполняется"
+
+# en-hash: dc647eb65e6711e155375218212b3964
+msgid "Password"
+msgstr "Пароль"
+
+# en-hash: 5ba75bed6252ebe2fc1cd59ee5cf6558
+msgid "Password or App Token"
+msgstr "Пароль или токен приложения"
+
+# en-hash: 4df2abeba5ba0d9428ab6154bb47dc1a
+msgid "Please connect a cloud storage provider in Settings first."
+msgstr "Сначала подключите облачное хранилище в настройках."
+
+# en-hash: 25e8f2fd2871c8423bbe4e254066cd98
+msgid "Please wait..."
+msgstr "Пожалуйста, подождите..."
+
+# en-hash: bfed40473d5d0d7334fd0a5394e82b52
+msgid "Preparing upload..."
+msgstr "Подготовка к загрузке..."
+
+# en-hash: 2c8015163365f745c13a4fe3c42f8f6d
+msgid "Preparing upload…"
+msgstr "Подготовка к загрузке…"
+
+# en-hash: ad119286e5e1ca72e8191ae175ab2a79
+msgid "Progress: %s"
+msgstr "Прогресс: %s"
+
+# en-hash: ffb5a681cd47e8a182164bed1e0465a2
+msgid "Pull/push progress automatically when opening or closing a book"
+msgstr "Автоматически синхронизировать прогресс при открытии или закрытии книги"
+
+# en-hash: 026e23401eb9b3c0385409fe50ee5767
+msgid "Reading Sync"
+msgstr "Синхронизация чтения"
+
+# en-hash: af7f69c980573c303441c63bd3fcc4d5
+msgid "Reading sync complete."
+msgstr "Синхронизация чтения завершена."
+
+# en-hash: 836c2187c50a1fc0c378b80c5f6d2db0
+msgid "Remote Folder"
+msgstr "Удаленная папка"
+
+# en-hash: 14e0bd8a97d6c3e0e51c5a5f3a569670
+msgid "Remote Nimbus Folder"
+msgstr "Удаленная папка Nimbus"
+
+# en-hash: 6327b4e59f58137083214a1fec358855
+msgid "Retry"
+msgstr "Повторить"
+
+# en-hash: c5301693c4e792bcd5a479ef38fb8f8d
+msgid "Run"
+msgstr "Запустить"
+
+# en-hash: c9cc8cce247e49bae79f15173ce97354
+msgid "Save"
+msgstr "Сохранить"
+
+# en-hash: 96055f2cf023bc62058fd0ffcb4ff2b7
+msgid "Scanning local books..."
+msgstr "Сканирование локальных книг..."
+
+# en-hash: 13348442cc6a27032d2b4aa28b75a5d3
+msgid "Search"
+msgstr "Поиск"
+
+# en-hash: bb115f26d07fab68174f1503fb61135e
+msgid "Search Library"
+msgstr "Поиск по библиотеке"
+
+# en-hash: 34d9cd3c736a60f1d4a1d1be8142bd17
+msgid "Search library..."
+msgstr "Поиск по библиотеке..."
+
+# en-hash: 45e96c0a422ce8a1a6ec1bd5eb9625c6
+msgid "Select All"
+msgstr "Выбрать все"
+
+# en-hash: 509727ceedc42df08fd636c4f099854b
+msgid "Select Books to Upload"
+msgstr "Выбрать книги для загрузки"
+
+# en-hash: a499411fd442ac4f42c7b42be5133cf2
+msgid "Select Books to Upload... (%d on device)"
+msgstr "Выбрать книги для загрузки... (на устройстве: %d)"
+
+# en-hash: d2ff04fff76be199705af758f3bacf5c
+msgid "Select Cloud Provider"
+msgstr "Выберите облачного провайдера"
+
+# en-hash: f5564925140da7c0fd572d1459befd8d
+msgid "Series: %s"
+msgstr "Серия: %s"
+
+# en-hash: 030e80c4257b877a8a552065d42b21c3
+msgid "Server URL"
+msgstr "URL сервера"
+
+# en-hash: 5d5b78699e57104f2fa03bbdf7b9197b
+msgid "Set"
+msgstr "Задать"
+
+# en-hash: 0990277c2b8fc4e26e601c0f9a98dbee
+msgid "Show your library at startup instead of KOReader's file list"
+msgstr "Показывать библиотеку при запуске вместо списка файлов KOReader"
+
+# en-hash: 52e1b8c7bccf297b773cfb345260eb6c
+msgid "Sink / KOSync Server URL"
+msgstr "URL сервера Sink / KOSync"
+
+# en-hash: 4c178ca3be0e1a7d167b19627d4f92f6
+msgid "Stay Here"
+msgstr "Остаться здесь"
+
+# en-hash: 8e46c7dd86ece88b71f31be142dc7232
+msgid "Storage Provider"
+msgstr "Провайдер хранилища"
+
+# en-hash: 2b6c445ab31410669df98214429beeab
+msgid "Storage Provider: %s"
+msgstr "Провайдер хранилища: %s"
+
+# en-hash: 48aa6a443b0430375e157f8ddd878a42
+msgid "Stored locally as MD5 key (compatible with Sink/CrossPoint):"
+msgstr "Хранится локально как ключ MD5 (совместимо с Sink/CrossPoint):"
+
+# en-hash: 1c9cf71fa83434fe5849300af9fab9d9
+msgid "Sync Highlights & Notes"
+msgstr "Синхронизировать цитаты и заметки"
+
+# en-hash: 82f471dfcbb411d1c20036220106b39b
+msgid "Sync Now"
+msgstr "Синхронизировать сейчас"
+
+# en-hash: 47e91bb42b51a674052daf5b2df2a05a
+msgid "Sync Reading Statistics"
+msgstr "Синхронизировать статистику чтения"
+
+# en-hash: e57f4816285d9b4b90e1e66aecb855b9
+msgid "Sync complete"
+msgstr "Синхронизация завершена"
+
+# en-hash: 29d70df09a61d88c3f2ecaaa5f479848
+msgid "Sync error: "
+msgstr "Ошибка синхронизации: "
+
+# en-hash: a22c1c4f6157fcb89a6fab8de530e257
+msgid "Sync on Book Open/Close"
+msgstr "Синхронизировать при открытии/закрытии книги"
+
+# en-hash: 93c60c13d0e61dd5d36920edcd9104c0
+msgid "Sync reading progress with CrossPoint, Readest, & Sink Worker"
+msgstr "Синхронизация прогресса с CrossPoint, Readest и Sink Worker"
+
+# en-hash: 5befab0dde764b6dd8b24a34dc30afa7
+msgid "Synced"
+msgstr "Синхронизировано"
+
+# en-hash: e1dad21de8d28a6d476fc286396fa76f
+msgid "Syncing Library"
+msgstr "Синхронизация библиотеки"
+
+# en-hash: be633d065af8047fb567a2000cb18275
+msgid "Syncing device progress & stats..."
+msgstr "Синхронизация прогресса и статистики..."
+
+# en-hash: 0cbc6611f5540bd0809a388dc95a615b
+msgid "Test"
+msgstr "Тест"
+
+# en-hash: 49ab5aaeb16e40d2787f6cc6532c99a3
+msgid "Test Connection"
+msgstr "Проверить соединение"
+
+# en-hash: 1657047945cd79b1052a6d3a761e1347
+msgid "Testing %s connection..."
+msgstr "Проверка соединения с %s..."
+
+# en-hash: 0d0912a7d0cd7373f0c1943ad5057ce8
+msgid "Testing KOSync connection..."
+msgstr "Проверка соединения с KOSync..."
+
+# en-hash: 5c716e457ef53b443ff45e4ee00ff757
+msgid "Testing WebDAV connection..."
+msgstr "Проверка соединения с WebDAV..."
+
+# en-hash: 7087abe92c13bbc4e9be44c29abbd193
+msgid "Testing cloud connection..."
+msgstr "Проверка облачного соединения..."
+
+# en-hash: 88183b946cc5f0e8c96b2e66e1c74a7e
+msgid "Unknown"
+msgstr "Неизвестно"
+
+# en-hash: aee9784c03b80d38d3271cde2b252b8d
+msgid "Unknown error"
+msgstr "Неизвестная ошибка"
+
+# en-hash: 50c8f4cd7ff8f69f6db67edb5f89d87d
+msgid "Unsynced"
+msgstr "Не синхронизировано"
+
+# en-hash: 911af7aa209e00b49f3d6fd2afa92564
+msgid "Untitled"
+msgstr "Без названия"
+
+# en-hash: 91412465ea9169dfd901dd5e7c96dd99
+msgid "Upload"
+msgstr "Загрузить"
+
+# en-hash: ba396b54d38e93f55227f300049b023d
+msgid "Upload (%d)"
+msgstr "Загрузить (%d)"
+
+# en-hash: 356a6ca6475bdfc900e3127333e54f0a
+msgid "Upload All Unsynced Books (%d)"
+msgstr "Загрузить все несинхронизированные книги (%d)"
+
+# en-hash: 63b34a1279513a962a78e707d5b033d7
+msgid "Upload All Unsynced Books (0 · All Synced)"
+msgstr "Загрузить все несинхронизированные книги (0 · Все синхр.)"
+
+# en-hash: 88836ec23cd39886639af3180b64827c
+msgid "Upload Books..."
+msgstr "Загрузить книги..."
+
+# en-hash: f194a32a3120a7acd327a4cb9350b76a
+msgid "Upload Current Book"
+msgstr "Загрузить текущую книгу"
+
+# en-hash: 12d33fa04378c460f07d61b804412dcf
+msgid "Upload canceled (%d uploaded)."
+msgstr "Загрузка отменена (загружено: %d)."
+
+# en-hash: 280a19c3441346944253ff6b8de5d1ce
+msgid "Upload failed: "
+msgstr "Ошибка загрузки: "
+
+# en-hash: ab9d8de2743aacb5969419a2e189b84b
+msgid "Upload to Cloud"
+msgstr "Загрузить в облако"
+
+# en-hash: de4a2857b35e3fbad80bcf0346ba52cf
+msgid "Upload to Nimbus"
+msgstr "Загрузить в Nimbus"
+
+# en-hash: f27900404758865e82bbd36e2fb031ee
+msgid "Uploaded %d of %d book(s) to Nimbus Cloud!"
+msgstr "Загружено книг: %d из %d в Nimbus Cloud!"
+
+# en-hash: 005db4de7f03a86536d310a44f60304b
+msgid "Uploaded '%s' to Nimbus Cloud!"
+msgstr "Книга '%s' загружена в Nimbus Cloud!"
+
+# en-hash: 2a57415db14150f740816b3b3ca86b85
+msgid "Uploading %d of %d..."
+msgstr "Загрузка %d из %d..."
+
+# en-hash: ca22621576b1d2a08e0127b60dae0e28
+msgid "Uploading to Nimbus Cloud"
+msgstr "Загрузка в Nimbus Cloud"
+
+# en-hash: 78d639ec11279b706fba724f50d43db9
+msgid "Use Nimbus as Home Screen"
+msgstr "Использовать Nimbus как главный экран"
+
+# en-hash: 0de3c58a3386f3b56dbe4e140d4ba3d1
+msgid "Use as Home Screen"
+msgstr "Использовать как главный экран"
+
+# en-hash: f6039d44b29456b20f8f373155ae4973
+msgid "Username"
+msgstr "Имя пользователя"
+
+# en-hash: 34b6cd75171affba6957e308dcbd92be
+msgid "Version"
+msgstr "Версия"
+
+# en-hash: 4d65b3bed183b9aa051f4042e1036206
+msgid "Waiting for authorization..."
+msgstr "Ожидание авторизации..."
+
+# en-hash: 0976ceed390f26492379670ad7409f5e
+msgid "WebDAV"
+msgstr "WebDAV"
+
+# en-hash: 6f7329f5681a6dcb49b13c6b20c087c4
+msgid "WebDAV Server Settings"
+msgstr "Настройки сервера WebDAV"
+
+# en-hash: f685981e27a29fd49219c05ee1cde8f4
+msgid "WebDAV settings saved."
+msgstr "Настройки WebDAV сохранены."
+
+# en-hash: ba326d9f888727bbfec79bd914b216ac
+msgid "Zero-self-hosting cloud library, Whispersync progress, highlights, and reading statistics across Google Drive, OneDrive, Dropbox, and WebDAV."
+msgstr "Облачная библиотека без необходимости самохостинга, синхронизация прогресса Whispersync, цитаты и статистика чтения через Google Drive, OneDrive, Dropbox и WebDAV."
+
+# en-hash: 821f03288846297c2cf43c34766a38f7
+msgid "book"
+msgstr "книга"
+
+# en-hash: 7d8949bcbf85067fceda9f84a6affb6b
+msgid "books"
+msgstr "книги"
+
+# en-hash: 447b7147e84be512208dcc0995d67ebc
+msgid "item"
+msgstr "элемент"
+
+# en-hash: 691d502cfd0e0626cd3b058e5682ad1c
+msgid "items"
+msgstr "элементы"
+
+# en-hash: 4b7edb48409266950a05418e080ab2c1
+msgid "· Offline"
+msgstr "· Офлайн"
+
+# en-hash: 7507b4c2337968b7fc7cdda1398f36e1
+msgid "· Sync error"
+msgstr "· Ошибка синхронизации"
+
+# en-hash: 2d8ad8668093592f584b2a0f447e2165
+msgid "· Syncing..."
+msgstr "· Синхронизация..."
+
+# en-hash: 57adda7dedc1a318f3bb06fd005867dc
+msgid "‹ Prev"
+msgstr "‹ Назад"
+
+
+msgid "Delete from Cloud"
+msgstr "Удалить из облака"
+
+msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+msgstr "Удалить эту книгу из Nimbus Cloud? Локальная копия на устройстве сохранится."
+
+msgid "Delete this book from Nimbus Cloud? This cannot be undone."
+msgstr "Удалить эту книгу из Nimbus Cloud? Это действие нельзя отменить."
+
+msgid "Deleted from Nimbus Cloud."
+msgstr "Удалено из Nimbus Cloud."
+
+msgid "Failed to delete from cloud: "
+msgstr "Не удалось удалить из облака: "
+
+msgid "Updating cloud catalog..."
+msgstr "Обновление облачного каталога..."
+
+msgid "Delete"
+msgstr "Удалить"

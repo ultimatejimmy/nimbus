@@ -5,7 +5,6 @@ Settings persistence, device slug generation, book link map, and 1-tap backup.ko
 
 local ok_ds, DataStorage = pcall(require, "datastorage")
 local ok_util, util = pcall(require, "util")
-local ok_dump, dump = pcall(require, "dump")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 if not ok_lfs or not lfs then
     ok_lfs, lfs = pcall(require, "lfs")
@@ -44,28 +43,39 @@ local function ensureDir(path)
 end
 
 local function serializeLua(tbl)
-    if ok_dump and type(dump) == "function" then
-        return "return " .. dump(tbl) .. "\n"
-    end
+    local seen = {}
     local function ser(o, indent)
         indent = indent or ""
         local next_indent = indent .. "    "
         local t = type(o)
-        if t == "number" or t == "boolean" then
+        if t == "number" then
+            if o ~= o or o == math.huge or o == -math.huge then
+                return "nil"
+            end
+            return tostring(o)
+        elseif t == "boolean" then
             return tostring(o)
         elseif t == "string" then
             return string.format("%q", o)
         elseif t == "table" then
+            if seen[o] then return "{}" end
+            seen[o] = true
             local lines = { "{\n" }
             for k, v in pairs(o) do
-                local key_str
-                if type(k) == "string" and k:match("^[%a_][%a%d_]*$") then
-                    key_str = k
-                else
-                    key_str = "[" .. ser(k) .. "]"
+                local kt = type(k)
+                local vt = type(v)
+                if (kt == "string" or kt == "number" or kt == "boolean")
+                    and (vt == "string" or vt == "number" or vt == "boolean" or vt == "table") then
+                    local key_str
+                    if kt == "string" and k:match("^[%a_][%a%d_]*$") then
+                        key_str = k
+                    else
+                        key_str = "[" .. ser(k) .. "]"
+                    end
+                    table.insert(lines, string.format("%s%s = %s,\n", next_indent, key_str, ser(v, next_indent)))
                 end
-                table.insert(lines, string.format("%s%s = %s,\n", next_indent, key_str, ser(v, next_indent)))
             end
+            seen[o] = nil
             table.insert(lines, indent .. "}")
             return table.concat(lines)
         end
@@ -131,6 +141,7 @@ Settings.DEFAULTS = {
     library_active_tab = "device",
     custom_books_dirs = nil,
     use_as_home_screen = false,
+    auto_download_new_books = true,
     kosync_enabled = false,
     kosync_server = "https://sync.koreader.rocks",
     kosync_username = "",

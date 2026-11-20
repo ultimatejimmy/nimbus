@@ -17,6 +17,7 @@ import { SettingsView } from './features/settings/SettingsView';
 import { StatsView } from './features/stats/StatsView';
 import { db } from './sync/db';
 import {
+  deleteBookFromCloud,
   pushDeviceAnnotations,
   pushDeviceProgress,
   pushDeviceSession,
@@ -318,6 +319,19 @@ export function App() {
                 n.delete(b.id);
                 return n;
               });
+            }}
+            onDeleteFromCloud={async (b) => {
+              if (!fs) {
+                setShowConnect(true);
+                return;
+              }
+              await deleteBookFromCloud(fs, b, config.deviceId);
+              setOfflineIds((prev) => {
+                const n = new Set(prev);
+                n.delete(b.id);
+                return n;
+              });
+              await loadFromIndexedDB();
             }}
             onUploadFiles={handleUploadFiles}
           />

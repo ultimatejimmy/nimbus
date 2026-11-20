@@ -250,6 +250,40 @@ export async function uploadBookToCloud(
   return entry;
 }
 
+export async function deleteBookFromCloud(
+  fs: RootPrefixedCloudFS,
+  book: BookCatalogEntry,
+  deviceId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const catalog = await loadOrInitCatalog(fs, deviceId);
+  const existing = catalog.books[book.id];
+  const folder = existing?.folder || book.folder;
+  if (existing) {
+    existing.deleted = true;
+    existing.updated_at = now;
+  }
+  catalog.updated_at = now;
+  catalog.updated_by = deviceId;
+  await fs.uploadJson('_sync/catalog.json', catalog);
+
+  if (folder) {
+    try {
+      await fs.deletePath(folder);
+    } catch (err) {
+      if (!(err instanceof CloudNotFoundError)) {
+        console.warn('Cloud folder delete failed for', book.title, err);
+      }
+    }
+  }
+
+  await db.transaction('rw', [db.catalog, db.books, db.covers], async () => {
+    await db.catalog.delete(book.id);
+    await db.books.delete(book.id);
+    await db.covers.delete(book.id);
+  });
+}
+
 export async function syncCoversFromCloud(
   fs: RootPrefixedCloudFS,
   books: BookCatalogEntry[],

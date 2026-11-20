@@ -14,7 +14,8 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local ok_bt, ButtonTable = pcall(require, "ui/widget/buttontable")
 if not ok_bt or not ButtonTable then ButtonTable = nil end

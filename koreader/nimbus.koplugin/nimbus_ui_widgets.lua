@@ -22,7 +22,8 @@ local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 local ok_lfs, lfs = pcall(require, "libs/libkoreader-lfs")
 if not ok_lfs or not lfs then
     ok_lfs, lfs = pcall(require, "lfs")
@@ -526,14 +527,40 @@ function Widgets.showCardDialog(opts)
         table.insert(content_items, VerticalSpan:new{ width = sc(12) })
         local btn_gap = sc(8)
         local n = #opts.buttons
-        local btn_w = math.floor((inner_w - btn_gap * (n - 1)) / n)
+        local avail_btn_w = inner_w - btn_gap * (n - 1)
+        local nat_widths = {}
+        local sum_nat = 0
+        for i, b in ipairs(opts.buttons) do
+            local tw = TextWidget:new{
+                text = b.text or "",
+                face = Font:getFace("cfont", 15),
+                bold = (b.is_primary == true),
+            }
+            local w = tw:getSize().w + sc(20)
+            nat_widths[i] = w
+            sum_nat = sum_nat + w
+        end
+
+        local btn_widths = {}
+        if sum_nat <= avail_btn_w then
+            local extra = math.floor((avail_btn_w - sum_nat) / n)
+            local rem = avail_btn_w - sum_nat - (extra * n)
+            for i = 1, n do
+                btn_widths[i] = nat_widths[i] + extra + (i == 1 and rem or 0)
+            end
+        else
+            local equal_w = math.floor(avail_btn_w / n)
+            for i = 1, n do btn_widths[i] = equal_w end
+        end
+
         local btn_row = {}
         for i, b in ipairs(opts.buttons) do
             if i > 1 then table.insert(btn_row, HorizontalSpan:new{ width = btn_gap }) end
             table.insert(btn_row, Widgets.createButton{
                 text = b.text,
                 is_primary = b.is_primary,
-                width = btn_w,
+                padding_h = sc(8),
+                width = btn_widths[i],
                 callback = function()
                     if not b.keep_open then closeDlg() end
                     if b.callback then b.callback(closeDlg) end

@@ -25,7 +25,8 @@ local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
@@ -201,38 +202,27 @@ function UILibrary.buildView(on_open_book, opts)
 
     local renderShelf
 
-    local function fetchCloudSilently()
+    local function fetchCloudSilently(force)
         if not Cloud.isConfigured() or bg_syncing then return end
-        bg_syncing = true
-        if isAlive() and renderShelf then renderShelf() end
-
-        UIManager:scheduleIn(0.05, function()
-            if not isAlive() then bg_syncing = false; return end
-            local ok_cat, cat_or_err = false, nil
-            Sync.loadCatalog(function(ok, res)
-                ok_cat = ok
-                cat_or_err = res
-            end)
-            if ok_cat then
-                catalog_data = cat_or_err or { books = {} }
-                sync_error = nil
-            else
-                sync_error = tostring(cat_or_err)
-            end
-
-            if not sync_error then
-                Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
-                    if ok_p then
-                        merged_progress = Merge.mergeProgress(shards)
-                    end
-                end)
-                Sync.saveCachedCatalog(catalog_data, merged_progress)
-            end
-
-            refreshLocalBooks()
+        local started = Sync.startBackgroundCatalogSync(function(ok, info)
             bg_syncing = false
+            if ok then
+                catalog_data, merged_progress = Sync.loadCachedCatalog()
+                sync_error = nil
+                local dl_n = tonumber(info) or 0
+                refreshLocalBooks(dl_n > 0)
+                if dl_n > 0 and isAlive() then
+                    Widgets.showToast(string.format(_("Downloaded %d new book(s) from Nimbus Cloud."), dl_n), 3)
+                end
+            else
+                sync_error = tostring(info or "sync_error")
+            end
             if isAlive() and renderShelf then renderShelf() end
-        end)
+        end, force)
+        if started then
+            bg_syncing = true
+            if isAlive() and renderShelf then renderShelf() end
+        end
     end
 
     local function fetchCloudWithBar(run_extra_sync, post_toast_msg)
@@ -773,18 +763,24 @@ function UILibrary.buildView(on_open_book, opts)
         local cur_page_books = pages[current_page] or {}
         local page_content_vg = VerticalGroup:new{ align = "left" }
 
-        local function getBadgeText(item)
-            if item.is_folder then
-                return string.format("%d", item.book_count or 0), false
-            end
+        local function getProgressBadge(item)
+            if item.is_folder then return nil end
             local prog = merged_progress[item.cloud_id or item.id]
             local pct = (prog and prog.percent) or item.percent or 0
             local status = (prog and prog.status) or item.status
             if status == "finished" then
                 return _("Done"), true
             elseif pct > 0 then
-                return string.format("%d%%", math.floor(pct * 100 + 0.5)), item.is_in_cloud
-            elseif item.is_in_cloud and item.local_path then
+                return string.format("%d%%", math.floor(pct * 100 + 0.5)), false
+            end
+            return nil
+        end
+
+        local function getStatusBadge(item)
+            if item.is_folder then
+                return string.format("%d", item.book_count or 0), false
+            end
+            if item.is_in_cloud and item.local_path then
                 return _("Synced"), true
             elseif item.local_path then
                 return _("Local"), false
@@ -830,6 +826,34 @@ function UILibrary.buildView(on_open_book, opts)
                             pcall(os.remove, p)
                         end
                         Settings.unlinkBook(target_cloud_id, target_path)
+                    end)
+                end,
+                on_delete_cloud = function(target_item)
+                    local target_id = target_item.cloud_id or target_item.id
+                    local prog_dlg = NimbusProgress:new{
+                        title = _("Delete from Cloud"),
+                        subtitle = tostring(target_item.title or _("Book")),
+                        detail = _("Updating cloud catalog..."),
+                        progress = 30,
+                    }
+                    prog_dlg:show()
+                    UIManager:nextTick(function()
+                        Sync.deleteCloudBook(target_id, target_item, function(ok, res)
+                            prog_dlg:close()
+                            if ok then
+                                if type(res) == "table" and res.books then
+                                    catalog_data = res
+                                elseif catalog_data and catalog_data.books and catalog_data.books[target_id] then
+                                    catalog_data.books[target_id].deleted = true
+                                end
+                                Sync.saveCachedCatalog(catalog_data, merged_progress)
+                                refreshLocalBooks(false)
+                                if isAlive() then renderShelf() end
+                                Widgets.showToast(_("Deleted from Nimbus Cloud."), 2)
+                            else
+                                Widgets.showToast(_("Failed to delete from cloud: ") .. tostring(res), 4)
+                            end
+                        end)
                     end)
                 end,
                 on_refresh = function()
@@ -894,8 +918,10 @@ function UILibrary.buildView(on_open_book, opts)
             })
         elseif view_mode == "list" then
             for idx, item in ipairs(cur_page_books) do
-                local b_text, b_hl = getBadgeText(item)
-                local badge_w = Widgets.createBadge(b_text, b_hl)
+                local p_text, p_hl = getProgressBadge(item)
+                local prog_w = p_text and Widgets.createBadge(p_text, p_hl) or nil
+                local s_text, s_hl = getStatusBadge(item)
+                local status_w = Widgets.createBadge(s_text, s_hl)
                 local dots_w = (not item.is_folder) and Widgets.createIconButton{
                     icon = "more-vertical.svg",
                     size = sc(18),
@@ -904,7 +930,9 @@ function UILibrary.buildView(on_open_book, opts)
                 } or nil
                 local right_cluster = HorizontalGroup:new{
                     align = "center",
-                    badge_w or HorizontalSpan:new{ width = 0 },
+                    status_w or HorizontalSpan:new{ width = 0 },
+                    (status_w and prog_w) and HorizontalSpan:new{ width = sc(4) } or HorizontalSpan:new{ width = 0 },
+                    prog_w or HorizontalSpan:new{ width = 0 },
                     dots_w and HorizontalSpan:new{ width = sc(4) } or HorizontalSpan:new{ width = 0 },
                     dots_w or HorizontalSpan:new{ width = 0 },
                 }
@@ -1056,21 +1084,36 @@ function UILibrary.buildView(on_open_book, opts)
                     end
                 end
 
-                local b_text, b_hl = getBadgeText(item)
-                local badge_w = Widgets.createBadge(b_text, b_hl)
+                local p_text, p_hl = getProgressBadge(item)
+                local prog_w = p_text and Widgets.createBadge(p_text, p_hl) or nil
+                local s_text, s_hl = getStatusBadge(item)
+                local status_w = Widgets.createBadge(s_text, s_hl)
                 local cover_with_badge = OverlapGroup:new{
                     dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
                     cover_slot,
                 }
-                if badge_w then
+                if status_w then
                     table.insert(cover_with_badge, BottomContainer:new{
                         dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
-                        RightContainer:new{
-                            dimen = Geom:new{ w = cover_slot_w, h = badge_w:getSize().h + sc(8) },
+                        LeftContainer:new{
+                            dimen = Geom:new{ w = cover_slot_w, h = status_w:getSize().h + sc(8) },
                             FrameContainer:new{
                                 padding = sc(4),
                                 bordersize = 0,
-                                badge_w,
+                                status_w,
+                            },
+                        },
+                    })
+                end
+                if prog_w then
+                    table.insert(cover_with_badge, BottomContainer:new{
+                        dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
+                        RightContainer:new{
+                            dimen = Geom:new{ w = cover_slot_w, h = prog_w:getSize().h + sc(8) },
+                            FrameContainer:new{
+                                padding = sc(4),
+                                bordersize = 0,
+                                prog_w,
                             },
                         },
                     })
@@ -1254,8 +1297,12 @@ function UILibrary.buildView(on_open_book, opts)
             end
         end)
     end
-    if Cloud.isConfigured() and (not catalog_saved_at or catalog_saved_at == 0) then
-        UIManager:scheduleIn(0.15, fetchCloudSilently)
+    if Cloud.isConfigured() then
+        UIManager:scheduleIn(0.2, function()
+            if isAlive() then
+                fetchCloudSilently(not catalog_saved_at or catalog_saved_at == 0)
+            end
+        end)
     end
 
     host_container.refreshView = function()

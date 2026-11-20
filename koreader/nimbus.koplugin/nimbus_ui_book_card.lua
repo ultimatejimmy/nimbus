@@ -11,13 +11,16 @@ local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Blitbuffer = require("ffi/blitbuffer")
 local ok_util, util = pcall(require, "util")
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
+local Sync = require("nimbus_sync")
 local Covers = require("nimbus_covers")
 local NimbusProgress = require("nimbus_progress")
 local Widgets = require("nimbus_ui_widgets")
@@ -97,6 +100,32 @@ local function promptOffloadLocal(item, opts)
     }
 end
 
+local function promptDeleteFromCloud(item, opts)
+    local msg = item.local_path
+        and _("Delete this book from Nimbus Cloud? Any local copy on your device will stay.")
+        or _("Delete this book from Nimbus Cloud? This cannot be undone.")
+    Widgets.showConfirmDialog{
+        title = _("Delete from Cloud"),
+        text = msg,
+        ok_text = _("Delete"),
+        cancel_text = _("Cancel"),
+        ok_callback = function()
+            if opts.on_delete_cloud then
+                opts.on_delete_cloud(item)
+            else
+                Sync.deleteCloudBook(item.cloud_id or item.id, item, function(ok, err)
+                    if ok then
+                        if opts.on_refresh then opts.on_refresh() end
+                        Widgets.showToast(_("Deleted from Nimbus Cloud."), 2)
+                    else
+                        Widgets.showToast(_("Failed to delete from cloud: ") .. tostring(err), 4)
+                    end
+                end)
+            end
+        end,
+    }
+end
+
 function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
     opts = opts or {}
     local local_path = item.local_path
@@ -133,6 +162,13 @@ function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
                 table.insert(rows, Widgets.createMenuRow(_("Download"), chevron(), inner_w, function()
                     closeDlg()
                     BookCardMixin.downloadBook(item, false, opts)
+                end))
+            end
+
+            if is_in_cloud then
+                table.insert(rows, Widgets.createMenuRow(_("Delete from Cloud"), chevron(), inner_w, function()
+                    closeDlg()
+                    promptDeleteFromCloud(item, opts)
                 end))
             end
 
@@ -203,7 +239,7 @@ function BookCardMixin.showBookDetailModal(item, merged_prog, opts)
 
     Widgets.showCardDialog{
         title = tostring(item.title or _("Book Details")),
-        body_widget = function(inner_w)
+        body_widget = function(inner_w, closeDlg)
             local cw, ch = sc(84), sc(120)
             local cached = Covers.getCachedCoverPath(item)
             local cover_w = cached and Covers.createCoverImageWidget(cached, cw, ch)
@@ -231,11 +267,27 @@ function BookCardMixin.showBookDetailModal(item, merged_prog, opts)
                     width = meta_w,
                 },
             }
-            return HorizontalGroup:new{
+            local top_row = HorizontalGroup:new{
                 align = "top",
                 cover_frame,
                 HorizontalSpan:new{ width = sc(12) },
                 info_vg,
+            }
+            if not is_in_cloud then
+                return top_row
+            end
+            return VerticalGroup:new{
+                align = "left",
+                top_row,
+                VerticalSpan:new{ width = sc(10) },
+                Widgets.createButton{
+                    text = _("Delete from Cloud"),
+                    width = inner_w,
+                    callback = function()
+                        closeDlg()
+                        promptDeleteFromCloud(item, opts)
+                    end,
+                },
             }
         end,
         buttons = buttons,
