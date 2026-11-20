@@ -72,6 +72,7 @@ export function App() {
   const [activeBook, setActiveBook] = useState<{ book: BookCatalogEntry; blob: Blob } | null>(null);
   const [openingBookTitle, setOpeningBookTitle] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const syncSeqRef = useRef(0);
 
   const saveConfig = (next: NimbusWebConfig) => {
@@ -120,6 +121,7 @@ export function App() {
   const runSync = async () => {
     if (!fs) return;
     const seq = ++syncSeqRef.current;
+    setSyncError(null);
     setSyncing(true);
     try {
       const snap = await syncAllFromCloud(fs, config);
@@ -134,8 +136,11 @@ export function App() {
           return { ...prev, [bookId]: url };
         });
       });
-    } catch (e) {
-      if (seq === syncSeqRef.current) console.error('Sync failed:', e);
+    } catch (e: any) {
+      if (seq === syncSeqRef.current) {
+        console.error('Sync failed:', e);
+        setSyncError(`Sync failed for "/${config.remoteRoot}": ${e?.message || String(e)}`);
+      }
     } finally {
       if (seq === syncSeqRef.current) setSyncing(false);
     }
@@ -298,10 +303,16 @@ export function App() {
             <span>Downloading & opening “{openingBookTitle}”…</span>
           </div>
         )}
-        {openError && (
+        {(openError || syncError) && (
           <div className="mb-4 flex items-center justify-between rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300">
-            <span>{openError}</span>
-            <button onClick={() => setOpenError(null)} className="ml-4 text-xs underline">
+            <span>{openError || syncError}</span>
+            <button
+              onClick={() => {
+                setOpenError(null);
+                setSyncError(null);
+              }}
+              className="ml-4 text-xs underline"
+            >
               Dismiss
             </button>
           </div>
