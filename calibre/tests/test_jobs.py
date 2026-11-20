@@ -79,6 +79,7 @@ def _import_ui_with_qt_stub():
         "QTimer",
         "QToolButton",
         "QVBoxLayout",
+        "QWidget",
         "Qt",
     ):
         setattr(qt_core, name, MagicMock())

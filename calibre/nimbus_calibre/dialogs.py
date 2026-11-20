@@ -27,6 +27,7 @@ try:
         QTimer,
         Qt,
         QVBoxLayout,
+        QWidget,
     )
 except ImportError:  # pragma: no cover
     from PyQt5.QtCore import QTimer, Qt
@@ -50,6 +51,7 @@ except ImportError:  # pragma: no cover
         QTableWidget,
         QTableWidgetItem,
         QVBoxLayout,
+        QWidget,
     )
 
 from .cloud import build_cloud_fs
@@ -124,6 +126,7 @@ class NimbusAccountDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
         form.setFieldGrowthPolicy(_expanding_policy())
+        self._form = form
 
         self.name_edit = QLineEdit(self._account.get("name", ""))
         self.name_edit.setPlaceholderText("e.g. Jimmy, Emma, Leo")
@@ -142,7 +145,9 @@ class NimbusAccountDialog(QDialog):
         self.root_edit = QLineEdit(self._account.get("remote_root", "Nimbus"))
         form.addRow("Remote Root Folder:", self.root_edit)
 
-        oauth_row = QHBoxLayout()
+        self.oauth_row_widget = QWidget()
+        oauth_row = QHBoxLayout(self.oauth_row_widget)
+        oauth_row.setContentsMargins(0, 0, 0, 0)
         self.oauth_btn = QPushButton("Sign In with Browser")
         self.oauth_btn.clicked.connect(self._start_oauth)
         self.oauth_status = QLabel("")
@@ -158,7 +163,7 @@ class NimbusAccountDialog(QDialog):
         oauth_row.addWidget(self.oauth_btn)
         oauth_row.addWidget(self.oauth_status, 1)
         oauth_row.addWidget(self.copy_code_btn)
-        form.addRow("OAuth Sign-In:", oauth_row)
+        form.addRow("OAuth Sign-In:", self.oauth_row_widget)
 
         wd = self._account.get("webdav") or {}
         self.wd_url = QLineEdit(wd.get("url", ""))
@@ -194,14 +199,25 @@ class NimbusAccountDialog(QDialog):
         key = self._account.get("identifier_key") or make_identifier_key(self.name_edit.text(), self._existing_keys)
         self.id_key_label.setText(f"{key}  (searchable as identifiers:{key}:true)")
 
+    def _set_form_row_visible(self, field_widget, visible: bool):
+        field_widget.setVisible(visible)
+        lbl = self._form.labelForField(field_widget)
+        if lbl is not None:
+            lbl.setVisible(visible)
+
     def _on_provider_changed(self):
         p = self.provider_combo.currentData()
         is_oauth = p in ("gdrive", "onedrive", "dropbox")
         is_wd = p == "webdav"
         self.oauth_btn.setEnabled(is_oauth)
+        self._set_form_row_visible(self.oauth_row_widget, is_oauth)
         self.wd_url.setEnabled(is_wd)
         self.wd_user.setEnabled(is_wd)
         self.wd_pass.setEnabled(is_wd)
+        self._set_form_row_visible(self.wd_url, is_wd)
+        self._set_form_row_visible(self.wd_user, is_wd)
+        self._set_form_row_visible(self.wd_pass, is_wd)
+        self.adjustSize()
         self._user_code = ""
         self.copy_code_btn.setVisible(False)
         if is_oauth:
