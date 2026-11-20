@@ -347,6 +347,11 @@ export function App() {
             config={config}
             devices={devices}
             onOpenConnect={() => setShowConnect(true)}
+            onChangeRemoteRoot={async (nextRoot) => {
+              await db.covers.clear();
+              setCoverUrls({});
+              saveConfig({ ...config, remoteRoot: nextRoot });
+            }}
             onSyncNow={runSync}
             onClearCache={async () => {
               await db.books.clear();

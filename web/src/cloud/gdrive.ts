@@ -14,6 +14,7 @@ function escapeQuery(s: string): string {
 
 export class GDriveWebDriver implements CloudDriver {
   private folderCache = new Map<string, string>();
+  private dirLocks = new Map<string, Promise<string | null>>();
 
   constructor(private tm: WebTokenManager) {}
 
@@ -27,49 +28,60 @@ export class GDriveWebDriver implements CloudDriver {
     if (isDir === true) mimeClause = " and mimeType = 'application/vnd.google-apps.folder'";
     if (isDir === false) mimeClause = " and mimeType != 'application/vnd.google-apps.folder'";
     const q = `name = '${escapeQuery(name)}' and '${escapeQuery(parentId)}' in parents and trashed = false${mimeClause}`;
-    const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=5`;
+    const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&orderBy=modifiedTime desc&pageSize=5`;
     const resp = await fetch(url, { headers: await this.headers() });
-    if (!resp.ok) return null;
+    if (!resp.ok) throw new Error(`Google Drive query failed (${resp.status})`);
     const data = await resp.json();
     return data.files?.[0] || null;
   }
 
-  private async resolveDirId(remoteDir: string, create: boolean): Promise<string | null> {
+  private resolveDirId(remoteDir: string, create: boolean): Promise<string | null> {
     const norm = normalizePath(remoteDir);
-    if (!norm) return 'root';
-    if (this.folderCache.has(norm)) return this.folderCache.get(norm)!;
+    if (!norm) return Promise.resolve('root');
+    if (this.folderCache.has(norm)) return Promise.resolve(this.folderCache.get(norm)!);
 
-    let parentId = 'root';
-    let acc = '';
-    for (const part of norm.split('/')) {
-      acc = acc ? `${acc}/${part}` : part;
-      if (this.folderCache.has(acc)) {
-        parentId = this.folderCache.get(acc)!;
-        continue;
+    const lockKey = `${create ? '1' : '0'}:${norm}`;
+    const pending = this.dirLocks.get(lockKey);
+    if (pending) return pending;
+
+    const task = (async () => {
+      let parentId = 'root';
+      let acc = '';
+      for (const part of norm.split('/')) {
+        acc = acc ? `${acc}/${part}` : part;
+        if (this.folderCache.has(acc)) {
+          parentId = this.folderCache.get(acc)!;
+          continue;
+        }
+        const existing = await this.findInParent(parentId, part, true);
+        if (existing?.id) {
+          parentId = existing.id;
+          this.folderCache.set(acc, parentId);
+        } else if (create) {
+          const resp = await fetch(`${DRIVE_API}/files?fields=id`, {
+            method: 'POST',
+            headers: await this.headers({ 'Content-Type': 'application/json; charset=UTF-8' }),
+            body: JSON.stringify({
+              name: part,
+              mimeType: 'application/vnd.google-apps.folder',
+              parents: [parentId],
+            }),
+          });
+          if (!resp.ok) throw new Error(`Failed to create folder '${acc}' (${resp.status})`);
+          const created = await resp.json();
+          parentId = created.id;
+          this.folderCache.set(acc, parentId);
+        } else {
+          return null;
+        }
       }
-      const existing = await this.findInParent(parentId, part, true);
-      if (existing?.id) {
-        parentId = existing.id;
-        this.folderCache.set(acc, parentId);
-      } else if (create) {
-        const resp = await fetch(`${DRIVE_API}/files?fields=id`, {
-          method: 'POST',
-          headers: await this.headers({ 'Content-Type': 'application/json; charset=UTF-8' }),
-          body: JSON.stringify({
-            name: part,
-            mimeType: 'application/vnd.google-apps.folder',
-            parents: [parentId],
-          }),
-        });
-        if (!resp.ok) throw new Error(`Failed to create folder '${acc}' (${resp.status})`);
-        const created = await resp.json();
-        parentId = created.id;
-        this.folderCache.set(acc, parentId);
-      } else {
-        return null;
-      }
-    }
-    return parentId;
+      return parentId;
+    })().finally(() => {
+      this.dirLocks.delete(lockKey);
+    });
+
+    this.dirLocks.set(lockKey, task);
+    return task;
   }
 
   private async resolveItem(remotePath: string): Promise<any | null> {
@@ -144,19 +156,24 @@ export class GDriveWebDriver implements CloudDriver {
     if (!parentId) return [];
 
     const entries: CloudEntry[] = [];
+    const seen = new Set<string>();
     let pageToken: string | undefined;
     do {
       const q = `'${escapeQuery(parentId)}' in parents and trashed = false`;
-      let url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime)&pageSize=200`;
+      let url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime)&orderBy=modifiedTime desc&pageSize=200`;
       if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
       const resp = await fetch(url, { headers: await this.headers() });
       if (!resp.ok) throw new Error(`Google Drive list failed (${resp.status})`);
       const data = await resp.json();
       for (const f of data.files || []) {
+        const isDir = f.mimeType === 'application/vnd.google-apps.folder';
+        const dedupeKey = `${isDir ? 'd' : 'f'}:${f.name}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
         entries.push({
           name: f.name,
           path: norm ? `${norm}/${f.name}` : f.name,
-          is_dir: f.mimeType === 'application/vnd.google-apps.folder',
+          is_dir: isDir,
           size: Number(f.size || 0),
           mtime: f.modifiedTime,
           file_id: f.id,

@@ -228,14 +228,37 @@ export const ConnectModal: React.FC<Props> = ({ config, onSaveConfig, onClose })
                   </a>
                 </div>
               ) : (
-                <button
-                  disabled={busy}
-                  onClick={startOAuth}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
-                >
-                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Sign In with {provider === 'gdrive' ? 'Google Drive' : provider === 'onedrive' ? 'OneDrive' : 'Dropbox'}
-                </button>
+                <div className="space-y-2">
+                  {provider !== 'none' && config.oauthTokens?.[provider]?.access_token && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSaveConfig({
+                          ...config,
+                          provider,
+                          remoteRoot: remoteRoot.trim().replace(/^\/+|\/+$/g, '') || 'Nimbus',
+                        });
+                        onClose();
+                      }}
+                      className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400"
+                    >
+                      Save & Use Existing Sign-In
+                    </button>
+                  )}
+                  <button
+                    disabled={busy}
+                    onClick={startOAuth}
+                    className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition disabled:opacity-50 ${
+                      provider !== 'none' && config.oauthTokens?.[provider]?.access_token
+                        ? 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                        : 'bg-emerald-600 text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400'
+                    }`}
+                  >
+                    {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {provider !== 'none' && config.oauthTokens?.[provider]?.access_token ? 'Re-authorize with ' : 'Sign In with '}
+                    {provider === 'gdrive' ? 'Google Drive' : provider === 'onedrive' ? 'OneDrive' : 'Dropbox'}
+                  </button>
+                </div>
               )}
             </div>
           )}

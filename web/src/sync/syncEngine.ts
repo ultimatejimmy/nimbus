@@ -40,7 +40,7 @@ export async function syncAllFromCloud(fs: RootPrefixedCloudFS, cfg: NimbusWebCo
   await flushPendingQueue(fs);
   const catalog = await loadOrInitCatalog(fs, cfg.deviceId);
   const devEntries = await fs.listDir('_sync/devices');
-  const devices = devEntries.filter((e) => e.is_dir).map((e) => e.name);
+  const devices = Array.from(new Set(devEntries.filter((e) => e.is_dir).map((e) => e.name)));
 
   const progShards: ProgressShard[] = [];
   const annShards: AnnotationsShard[] = [];
