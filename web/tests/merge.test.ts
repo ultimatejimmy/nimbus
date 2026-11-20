@@ -48,4 +48,11 @@ describe('merge engine against spec/fixtures', () => {
       expect(merged[idx].duration_sec).toBe(exp.duration_sec);
     });
   });
+
+  it('ignores non-array sessions such as Lua empty object {}', () => {
+    const merged = mergeSessions([
+      { version: 1, device_id: 'Kobo', updated_at: '', sessions: {} as any },
+    ]);
+    expect(merged).toEqual([]);
+  });
 });

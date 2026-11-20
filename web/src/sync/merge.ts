@@ -105,7 +105,8 @@ export function mergeSessions(shards: SessionsShard[]): ReadingSession[] {
   const dedup = new Map<string, ReadingSession>();
   for (const shard of shards || []) {
     const devId = shard.device_id || '';
-    for (const s of shard.sessions || []) {
+    if (!Array.isArray(shard.sessions)) continue;
+    for (const s of shard.sessions) {
       if (!s?.book_id || s.start_time == null) continue;
       const key = `${devId}|${s.book_id}|${s.start_time}`;
       const cur = dedup.get(key);
