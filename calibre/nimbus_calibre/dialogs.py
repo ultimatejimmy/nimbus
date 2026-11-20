@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 try:
     from qt.core import (
+        QApplication,
         QComboBox,
         QDialog,
         QDialogButtonBox,
@@ -16,11 +17,13 @@ try:
         QMessageBox,
         QPushButton,
         QTimer,
+        Qt,
         QVBoxLayout,
     )
 except ImportError:  # pragma: no cover
-    from PyQt5.QtCore import QTimer
+    from PyQt5.QtCore import QTimer, Qt
     from PyQt5.QtWidgets import (
+        QApplication,
         QComboBox,
         QDialog,
         QDialogButtonBox,
@@ -43,10 +46,11 @@ class NimbusConfigDialog(QDialog):
     def __init__(self, parent, custom_columns: Dict[str, Dict[str, Any]]):
         super().__init__(parent)
         self.setWindowTitle("Nimbus Cloud Configuration")
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(580)
         self.custom_columns = custom_columns or {}
         self._poll_timer = None
         self._device_code = None
+        self._user_code = ""
         self._oauth_provider = None
 
         layout = QVBoxLayout(self)
@@ -54,6 +58,12 @@ class NimbusConfigDialog(QDialog):
         # Provider group
         prov_group = QGroupBox("Cloud Storage Provider")
         prov_form = QFormLayout(prov_group)
+        expanding = (
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+            if hasattr(QFormLayout, "FieldGrowthPolicy")
+            else QFormLayout.ExpandingFieldsGrow
+        )
+        prov_form.setFieldGrowthPolicy(expanding)
 
         self.provider_combo = QComboBox()
         self.provider_combo.addItem("Not Configured", "none")
@@ -75,8 +85,18 @@ class NimbusConfigDialog(QDialog):
         self.oauth_btn = QPushButton("Sign In with Browser")
         self.oauth_btn.clicked.connect(self._start_oauth)
         self.oauth_status = QLabel("")
+        self.oauth_status.setWordWrap(True)
+        self.oauth_status.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            if hasattr(Qt, "TextInteractionFlag")
+            else Qt.TextSelectableByMouse
+        )
+        self.copy_code_btn = QPushButton("Copy Code")
+        self.copy_code_btn.setVisible(False)
+        self.copy_code_btn.clicked.connect(self._copy_user_code)
         oauth_row.addWidget(self.oauth_btn)
         oauth_row.addWidget(self.oauth_status, 1)
+        oauth_row.addWidget(self.copy_code_btn)
         prov_form.addRow("OAuth Sign-In:", oauth_row)
 
         # WebDAV fields
@@ -96,6 +116,7 @@ class NimbusConfigDialog(QDialog):
         # Column mapping group
         col_group = QGroupBox("Calibre Custom Column Mapping (Optional)")
         col_form = QFormLayout(col_group)
+        col_form.setFieldGrowthPolicy(expanding)
         self.col_combos: Dict[str, QComboBox] = {}
         for key, label in (
             ("col_percent", "Reading Progress (%):"),
@@ -139,11 +160,22 @@ class NimbusConfigDialog(QDialog):
         self.wd_url.setEnabled(is_wd)
         self.wd_user.setEnabled(is_wd)
         self.wd_pass.setEnabled(is_wd)
+        self._user_code = ""
+        self.copy_code_btn.setVisible(False)
         if is_oauth:
             tok = (prefs.get("oauth_tokens") or {}).get(p)
             self.oauth_status.setText("Signed in ✓" if (tok and tok.get("access_token")) else "Not signed in")
         else:
             self.oauth_status.setText("")
+
+    def _copy_user_code(self):
+        if not self._user_code:
+            return
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self._user_code)
+            self.copy_code_btn.setText("Copied ✓")
+            QTimer.singleShot(2000, lambda: self.copy_code_btn.setText("Copy Code"))
 
     def _start_oauth(self):
         p = self.provider_combo.currentData()
@@ -157,7 +189,13 @@ class NimbusConfigDialog(QDialog):
 
         self._oauth_provider = p
         self._device_code = info["device_code"]
-        self.oauth_status.setText(f"Code: {info['user_code']} (waiting…)")
+        self._user_code = info["user_code"]
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self._user_code)
+        self.copy_code_btn.setText("Copy Code")
+        self.copy_code_btn.setVisible(True)
+        self.oauth_status.setText(f"Code: {self._user_code} (waiting…)")
         if info.get("verification_url"):
             webbrowser.open(info["verification_url"])
 
@@ -177,10 +215,14 @@ class NimbusConfigDialog(QDialog):
                 all_toks = dict(prefs.get("oauth_tokens") or {})
                 all_toks[self._oauth_provider] = tok
                 prefs["oauth_tokens"] = all_toks
+                self._user_code = ""
+                self.copy_code_btn.setVisible(False)
                 self.oauth_status.setText("Signed in ✓")
                 QMessageBox.information(self, "Nimbus OAuth", "Successfully connected!")
         except Exception as e:
             self._poll_timer.stop()
+            self._user_code = ""
+            self.copy_code_btn.setVisible(False)
             self.oauth_status.setText("Error")
             QMessageBox.warning(self, "Nimbus OAuth", str(e))
 

@@ -21,6 +21,7 @@ class TestCalibreBundle(unittest.TestCase):
             names = set(zf.namelist())
         self.assertIn("__init__.py", names)
         self.assertIn("ui.py", names)
+        self.assertIn("images/icon.png", names)
         self.assertIn(marker, names)
 
 
