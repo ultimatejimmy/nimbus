@@ -55,6 +55,50 @@ class TestAccountsConfig(unittest.TestCase):
         config.save_accounts([saved[1]], default_account_id="acc_1")
         self.assertEqual(config.get_default_account()["id"], "acc_2")
 
+    def test_shared_login_resolution_and_parent_removal_promotion(self):
+        parent = {
+            "id": "acc_jimmy",
+            "name": "Jimmy",
+            "provider": "gdrive",
+            "remote_root": "Nimbus",
+            "oauth_tokens": {"access_token": "tok_shared", "refresh_token": "ref_shared"},
+            "identity": "jimmy@example.com",
+        }
+        emma = {
+            "id": "acc_emma",
+            "name": "Emma",
+            "auth_source_id": "acc_jimmy",
+            "remote_root": "Nimbus-Emma",
+            "tag": "Nimbus: Emma",
+        }
+        leo = {
+            "id": "acc_leo",
+            "name": "Leo",
+            "auth_source_id": "acc_jimmy",
+            "remote_root": "Nimbus/Leo",
+            "tag": "Nimbus: Leo",
+        }
+        saved = config.save_accounts([parent, emma, leo], default_account_id="acc_jimmy")
+
+        resolved_emma = config.resolve_account_for_cloud(saved[1], saved)
+        self.assertEqual(resolved_emma["provider"], "gdrive")
+        self.assertEqual(resolved_emma["remote_root"], "Nimbus-Emma")
+        self.assertEqual(resolved_emma["oauth_tokens"]["access_token"], "tok_shared")
+        self.assertEqual(resolved_emma["token_owner_id"], "acc_jimmy")
+        self.assertEqual(resolved_emma["identifier_key"], "nimbus_emma")
+
+        # Removing parent promotes Emma to own the credentials and repoints Leo to Emma
+        after_remove = config.promote_credentials_on_remove(saved, saved[0])
+        self.assertEqual(len(after_remove), 2)
+        new_emma, new_leo = after_remove
+        self.assertEqual(new_emma["auth_source_id"], "")
+        self.assertEqual(new_emma["provider"], "gdrive")
+        self.assertEqual(new_emma["oauth_tokens"]["access_token"], "tok_shared")
+        self.assertEqual(new_leo["auth_source_id"], "acc_emma")
+        resolved_leo = config.resolve_account_for_cloud(new_leo, after_remove)
+        self.assertEqual(resolved_leo["token_owner_id"], "acc_emma")
+        self.assertEqual(resolved_leo["oauth_tokens"]["access_token"], "tok_shared")
+
 
 if __name__ == "__main__":
     unittest.main()

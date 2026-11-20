@@ -61,7 +61,10 @@ from .config import (
     get_accounts,
     make_identifier_key,
     new_account_id,
+    normalize_remote_root,
     prefs,
+    promote_credentials_on_remove,
+    resolve_account_for_cloud,
     save_accounts,
 )
 
@@ -100,6 +103,7 @@ class NimbusAccountDialog(QDialog):
         parent,
         account: Optional[Dict[str, Any]] = None,
         existing_identifier_keys: Optional[Set[str]] = None,
+        all_accounts: Optional[List[Dict[str, Any]]] = None,
     ):
         super().__init__(parent)
         self._is_new = account is None
@@ -107,6 +111,7 @@ class NimbusAccountDialog(QDialog):
             "id": new_account_id(),
             "name": "",
             "provider": "gdrive",
+            "auth_source_id": "",
             "remote_root": "Nimbus",
             "identifier_key": "",
             "tag": "",
@@ -115,6 +120,12 @@ class NimbusAccountDialog(QDialog):
             "identity": "",
         }
         self._existing_keys = set(existing_identifier_keys or set())
+        self._all_accounts = copy.deepcopy(all_accounts or [])
+        self._auth_sources = [
+            a
+            for a in self._all_accounts
+            if a.get("id") != self._account.get("id") and not a.get("auth_source_id")
+        ]
         self._poll_timer = None
         self._device_code = None
         self._user_code = ""
@@ -133,6 +144,20 @@ class NimbusAccountDialog(QDialog):
         self.name_edit.textChanged.connect(self._update_identifier_preview)
         form.addRow("Account Name:", self.name_edit)
 
+        self.auth_source_combo = QComboBox()
+        self.auth_source_combo.addItem("Sign in with separate credentials", "")
+        for src in self._auth_sources:
+            pname = PROVIDER_LABELS.get(src.get("provider", "none"), src.get("provider", ""))
+            ident = f" — {src['identity']}" if src.get("identity") else ""
+            self.auth_source_combo.addItem(f"Reuse login from {src['name']} ({pname}{ident})", src["id"])
+        src_idx = self.auth_source_combo.findData(self._account.get("auth_source_id", ""))
+        if src_idx >= 0:
+            self.auth_source_combo.setCurrentIndex(src_idx)
+        self.auth_source_combo.currentIndexChanged.connect(self._on_provider_changed)
+        form.addRow("Cloud Login:", self.auth_source_combo)
+        if not self._auth_sources:
+            self._set_form_row_visible(self.auth_source_combo, False)
+
         self.provider_combo = QComboBox()
         for code in ("gdrive", "onedrive", "dropbox", "webdav"):
             self.provider_combo.addItem(PROVIDER_LABELS[code], code)
@@ -143,7 +168,15 @@ class NimbusAccountDialog(QDialog):
         form.addRow("Provider:", self.provider_combo)
 
         self.root_edit = QLineEdit(self._account.get("remote_root", "Nimbus"))
+        self.root_edit.setPlaceholderText("e.g. Nimbus, Nimbus-Emma, or Nimbus/Emma")
+        self.root_edit.textChanged.connect(self._update_folder_warning)
         form.addRow("Remote Root Folder:", self.root_edit)
+
+        self.folder_warning_label = QLabel("")
+        self.folder_warning_label.setWordWrap(True)
+        self.folder_warning_label.setStyleSheet("color: #b45309;")
+        self.folder_warning_label.setVisible(False)
+        form.addRow("", self.folder_warning_label)
 
         self.oauth_row_widget = QWidget()
         oauth_row = QHBoxLayout(self.oauth_row_widget)
@@ -205,10 +238,44 @@ class NimbusAccountDialog(QDialog):
         if lbl is not None:
             lbl.setVisible(visible)
 
+    def _selected_auth_source(self) -> Optional[Dict[str, Any]]:
+        src_id = self.auth_source_combo.currentData() or ""
+        if not src_id:
+            return None
+        return next((a for a in self._auth_sources if a["id"] == src_id), None)
+
+    def _find_folder_collision(self) -> Optional[Dict[str, Any]]:
+        src = self._selected_auth_source()
+        owner_id = src["id"] if src else self._account.get("id")
+        norm_root = normalize_remote_root(self.root_edit.text().strip() or "Nimbus")
+        for other in self._all_accounts:
+            if other.get("id") == self._account.get("id"):
+                continue
+            other_owner = other.get("auth_source_id") or other.get("id")
+            if other_owner == owner_id and normalize_remote_root(other.get("remote_root", "Nimbus")) == norm_root:
+                return other
+        return None
+
+    def _update_folder_warning(self):
+        collision = self._find_folder_collision()
+        if collision:
+            self.folder_warning_label.setText(
+                f"⚠ Same cloud login & folder as '{collision['name']}'. "
+                f"Use a distinct folder (e.g. Nimbus-{self.name_edit.text().strip() or 'Kids'}) so catalogs don't overwrite each other."
+            )
+            self._set_form_row_visible(self.folder_warning_label, True)
+        else:
+            self.folder_warning_label.setText("")
+            self._set_form_row_visible(self.folder_warning_label, False)
+
     def _on_provider_changed(self):
-        p = self.provider_combo.currentData()
-        is_oauth = p in ("gdrive", "onedrive", "dropbox")
-        is_wd = p == "webdav"
+        src = self._selected_auth_source()
+        reusing = src is not None
+        p = src.get("provider", "none") if reusing else self.provider_combo.currentData()
+        is_oauth = (not reusing) and p in ("gdrive", "onedrive", "dropbox")
+        is_wd = (not reusing) and p == "webdav"
+
+        self._set_form_row_visible(self.provider_combo, not reusing)
         self.oauth_btn.setEnabled(is_oauth)
         self._set_form_row_visible(self.oauth_row_widget, is_oauth)
         self.wd_url.setEnabled(is_wd)
@@ -217,6 +284,7 @@ class NimbusAccountDialog(QDialog):
         self._set_form_row_visible(self.wd_url, is_wd)
         self._set_form_row_visible(self.wd_user, is_wd)
         self._set_form_row_visible(self.wd_pass, is_wd)
+        self._update_folder_warning()
         self.adjustSize()
         self._user_code = ""
         self.copy_code_btn.setVisible(False)
@@ -289,6 +357,13 @@ class NimbusAccountDialog(QDialog):
             QMessageBox.warning(self, "Nimbus OAuth", str(e))
 
     def _collect_temp_config(self) -> Dict[str, Any]:
+        src = self._selected_auth_source()
+        if src is not None:
+            resolved = resolve_account_for_cloud(
+                {**self._account, "auth_source_id": src["id"], "remote_root": self.root_edit.text().strip() or "Nimbus"},
+                self._all_accounts,
+            )
+            return resolved
         provider = self.provider_combo.currentData()
         tokens = dict(self._account.get("oauth_tokens") or {}) if provider == self._account.get("provider") else {}
         return {
@@ -306,28 +381,51 @@ class NimbusAccountDialog(QDialog):
         try:
             fs = build_cloud_fs(self._collect_temp_config())
             identity = fs.test_connection()
-            self._account["identity"] = str(identity or "").strip()
-            if self.provider_combo.currentData() != "webdav":
-                self.oauth_status.setText(f"Signed in ✓ ({self._account['identity']})" if self._account["identity"] else "Signed in ✓")
+            if self._selected_auth_source() is None:
+                self._account["identity"] = str(identity or "").strip()
+                if self.provider_combo.currentData() != "webdav":
+                    self.oauth_status.setText(f"Signed in ✓ ({self._account['identity']})" if self._account["identity"] else "Signed in ✓")
             QMessageBox.information(self, "Nimbus Cloud", f"Connected successfully:\n{identity}")
         except Exception as e:
             QMessageBox.warning(self, "Nimbus Cloud", f"Connection failed:\n{e}")
 
     def _save_and_accept(self):
-        provider = self.provider_combo.currentData()
-        name = self.name_edit.text().strip() or PROVIDER_LABELS.get(provider, "Nimbus Cloud")
-        if provider != self._account.get("provider"):
+        collision = self._find_folder_collision()
+        if collision:
+            QMessageBox.warning(
+                self,
+                "Duplicate Cloud Folder",
+                f"This destination uses the same cloud login and Remote Root Folder ('{self.root_edit.text().strip() or 'Nimbus'}') "
+                f"as '{collision['name']}'.\n\nPlease choose a different Remote Root Folder (for example, 'Nimbus-Kids' or 'Nimbus/Emma').",
+            )
+            return
+
+        src = self._selected_auth_source()
+        if src is not None:
+            provider = src.get("provider", "none")
+            name = self.name_edit.text().strip() or f"{src['name']} ({self.root_edit.text().strip() or 'Nimbus'})"
+            self._account["auth_source_id"] = src["id"]
+            self._account["provider"] = provider
             self._account["oauth_tokens"] = {}
+            self._account["webdav"] = {"url": "", "username": "", "password": ""}
             self._account["identity"] = ""
+        else:
+            provider = self.provider_combo.currentData()
+            name = self.name_edit.text().strip() or PROVIDER_LABELS.get(provider, "Nimbus Cloud")
+            if provider != self._account.get("provider"):
+                self._account["oauth_tokens"] = {}
+                self._account["identity"] = ""
+            self._account["auth_source_id"] = ""
+            self._account["provider"] = provider
+            self._account["webdav"] = {
+                "url": self.wd_url.text().strip(),
+                "username": self.wd_user.text().strip(),
+                "password": self.wd_pass.text(),
+            }
+
         self._account["name"] = name
-        self._account["provider"] = provider
         self._account["remote_root"] = self.root_edit.text().strip() or "Nimbus"
         self._account["tag"] = self.tag_edit.text().strip()
-        self._account["webdav"] = {
-            "url": self.wd_url.text().strip(),
-            "username": self.wd_user.text().strip(),
-            "password": self.wd_pass.text(),
-        }
         if not self._account.get("identifier_key"):
             self._account["identifier_key"] = make_identifier_key(name, self._existing_keys)
         self.accept()
@@ -446,6 +544,11 @@ class NimbusConfigDialog(QDialog):
         return cb
 
     def _account_status_text(self, acc: Dict[str, Any]) -> str:
+        src_id = acc.get("auth_source_id") or ""
+        if src_id:
+            parent = next((a for a in self._accounts if a["id"] == src_id), None)
+            if parent:
+                return f"Shared login: {parent['name']}"
         p = acc.get("provider", "none")
         if p == "webdav":
             url = (acc.get("webdav") or {}).get("url", "")
@@ -460,9 +563,10 @@ class NimbusConfigDialog(QDialog):
         for row, acc in enumerate(self._accounts):
             self.acc_table.insertRow(row)
             is_def = acc["id"] == self._default_id
+            resolved = resolve_account_for_cloud(acc, self._accounts)
             vals = [
                 acc.get("name", ""),
-                PROVIDER_LABELS.get(acc.get("provider", "none"), acc.get("provider", "")),
+                PROVIDER_LABELS.get(resolved.get("provider", "none"), resolved.get("provider", "")),
                 acc.get("remote_root", "Nimbus"),
                 self._account_status_text(acc),
                 acc.get("tag", "") or "—",
@@ -484,7 +588,12 @@ class NimbusConfigDialog(QDialog):
 
     def _add_account(self):
         existing_keys = {a.get("identifier_key") for a in self._accounts if a.get("identifier_key")}
-        dlg = NimbusAccountDialog(self, account=None, existing_identifier_keys=existing_keys)
+        dlg = NimbusAccountDialog(
+            self,
+            account=None,
+            existing_identifier_keys=existing_keys,
+            all_accounts=self._accounts,
+        )
         if dlg.exec():
             new_acc = dlg.get_account()
             self._accounts.append(new_acc)
@@ -501,7 +610,12 @@ class NimbusConfigDialog(QDialog):
             for i, a in enumerate(self._accounts)
             if i != idx and a.get("identifier_key")
         }
-        dlg = NimbusAccountDialog(self, account=self._accounts[idx], existing_identifier_keys=existing_keys)
+        dlg = NimbusAccountDialog(
+            self,
+            account=self._accounts[idx],
+            existing_identifier_keys=existing_keys,
+            all_accounts=self._accounts,
+        )
         if dlg.exec():
             self._accounts[idx] = dlg.get_account()
             self._refresh_table()
@@ -510,7 +624,8 @@ class NimbusConfigDialog(QDialog):
         idx = self._selected_index()
         if idx < 0:
             return
-        removed = self._accounts.pop(idx)
+        removed = self._accounts[idx]
+        self._accounts = promote_credentials_on_remove(self._accounts, removed)
         if removed["id"] == self._default_id:
             self._default_id = self._accounts[0]["id"] if self._accounts else ""
         self._refresh_table()

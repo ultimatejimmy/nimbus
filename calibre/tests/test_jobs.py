@@ -297,6 +297,53 @@ class TestCalibreJobs(unittest.TestCase):
             config.prefs.clear()
             config.prefs.update(orig_prefs)
 
+    def test_push_books_worker_shares_refreshed_token_across_shared_login_folders(self):
+        ui = _import_ui_with_qt_stub()
+        tmpdir = tempfile.mkdtemp(prefix="nimbus_test_shared_")
+        epub = Path(tmpdir) / "1.epub"
+        epub.write_bytes(b"EPUBDATA" * 50)
+
+        tasks = [(1, {"title": "Book", "format": "epub"}, str(epub), None, {})]
+        accounts = [
+            {
+                "id": "acc_jimmy",
+                "token_owner_id": "acc_jimmy",
+                "name": "Jimmy",
+                "provider": "gdrive",
+                "remote_root": "Nimbus",
+                "identifier_key": "nimbus",
+                "tag": "",
+                "oauth_tokens": {"access_token": "old_tok"},
+            },
+            {
+                "id": "acc_emma",
+                "token_owner_id": "acc_jimmy",
+                "name": "Emma",
+                "provider": "gdrive",
+                "remote_root": "Nimbus-Emma",
+                "identifier_key": "nimbus_emma",
+                "tag": "Nimbus: Emma",
+                "oauth_tokens": {"access_token": "old_tok"},
+            },
+        ]
+        seen_tokens = []
+
+        def fake_build_fs(acc_cfg, on_save_tokens=None):
+            seen_tokens.append((acc_cfg["name"], acc_cfg["oauth_tokens"]["access_token"]))
+            if acc_cfg["name"] == "Jimmy" and on_save_tokens:
+                on_save_tokens("gdrive", {"access_token": "fresh_tok"})
+            return MagicMock()
+
+        state = {"pushed": [], "refreshed_tokens": {}}
+        with patch.object(ui, "build_cloud_fs", side_effect=fake_build_fs), patch.object(
+            ui, "push_book", side_effect=[("b1", {}, {"books": {}}), ("b2", {}, {"books": {}})]
+        ):
+            res = ui._push_books_worker(tasks, accounts, "Calibre-Test", tmpdir, state)
+
+        # Second folder destination (Emma) sees the refreshed token from Jimmy in the same job
+        self.assertEqual(seen_tokens, [("Jimmy", "old_tok"), ("Emma", "fresh_tok")])
+        self.assertEqual(res["refreshed_tokens"], {"acc_jimmy": {"access_token": "fresh_tok"}})
+
 
 if __name__ == "__main__":
     unittest.main()

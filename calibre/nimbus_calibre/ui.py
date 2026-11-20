@@ -34,6 +34,7 @@ from .config import (
     get_default_account,
     get_device_id,
     prefs,
+    resolve_account_for_cloud,
     update_account_tokens,
 )
 from .dialogs import NimbusConfigDialog, SelectAccountsDialog
@@ -53,19 +54,25 @@ def _push_books_worker(tasks, account_configs, device_id, tmpdir, state, abort=N
     try:
         total_ops = max(1, len(tasks) * len(account_configs))
         done_ops = 0
+        live_tokens_by_owner: Dict[str, Dict[str, Any]] = {}
         for acc in account_configs:
             if abort is not None and abort.is_set():
                 _log("Upload aborted by user.")
                 break
 
             acc_id = acc["id"]
+            token_owner_id = acc.get("token_owner_id") or acc_id
             acc_name = acc.get("name") or acc_id
             id_key = acc.get("identifier_key") or "nimbus"
             acc_tag = (acc.get("tag") or "").strip()
 
-            def _on_tokens(provider, new_tokens, _aid=acc_id, _acc=acc):
-                state["refreshed_tokens"][_aid] = new_tokens
-                _acc["oauth_tokens"] = new_tokens
+            if token_owner_id in live_tokens_by_owner:
+                acc["oauth_tokens"] = dict(live_tokens_by_owner[token_owner_id])
+
+            def _on_tokens(provider, new_tokens, _owner=token_owner_id, _acc=acc):
+                live_tokens_by_owner[_owner] = dict(new_tokens)
+                state["refreshed_tokens"][_owner] = dict(new_tokens)
+                _acc["oauth_tokens"] = dict(new_tokens)
 
             fs = build_cloud_fs(acc, on_save_tokens=_on_tokens)
             catalog = None
@@ -101,11 +108,11 @@ def _pull_sync_worker(account_config, device_id, state, abort=None, log=None, no
         if notifications is not None:
             notifications.put((frac, msg))
 
-    acc_id = account_config["id"]
+    token_owner_id = account_config.get("token_owner_id") or account_config["id"]
 
     def _on_tokens(provider, new_tokens):
-        state["refreshed_tokens"][acc_id] = new_tokens
-        account_config["oauth_tokens"] = new_tokens
+        state["refreshed_tokens"][token_owner_id] = dict(new_tokens)
+        account_config["oauth_tokens"] = dict(new_tokens)
 
     _notify(0.1, f"Fetching Nimbus Cloud catalog ({account_config.get('name', 'Default')})…")
     _log(f"Fetching catalog and device sync shards from {account_config.get('name', 'Default')}…")
@@ -174,10 +181,12 @@ class NimbusAction(InterfaceAction):
 
         send_sub = QMenu("Send to account", menu)
         for acc in accounts:
-            pname = PROVIDER_LABELS.get(acc.get("provider", "none"), acc.get("provider", ""))
+            resolved = resolve_account_for_cloud(acc, accounts)
+            pname = PROVIDER_LABELS.get(resolved.get("provider", "none"), resolved.get("provider", ""))
             star = " ★" if acc["id"] == default_acc["id"] else ""
+            folder_hint = f" / {acc['remote_root']}" if acc.get("auth_source_id") else ""
             send_sub.addAction(
-                f"{acc['name']} ({pname}){star}",
+                f"{acc['name']} ({pname}{folder_hint}){star}",
                 lambda checked=False, aid=acc["id"]: self.push_selected_books([aid]),
             )
         if len(accounts) >= 2:
@@ -291,16 +300,21 @@ class NimbusAction(InterfaceAction):
         self.push_selected_books(selected_ids)
 
     def push_selected_books(self, account_ids: Optional[List[str]] = None):
+        all_accounts = get_accounts()
         target_accounts: List[Dict[str, Any]] = []
         if account_ids:
             for aid in account_ids:
                 acc = get_account_by_id(aid)
-                if acc and acc.get("provider") != "none":
-                    target_accounts.append(copy.deepcopy(acc))
+                if acc:
+                    resolved = resolve_account_for_cloud(acc, all_accounts)
+                    if resolved.get("provider") != "none":
+                        target_accounts.append(resolved)
         else:
             default_acc = get_default_account()
-            if default_acc and default_acc.get("provider") != "none":
-                target_accounts.append(copy.deepcopy(default_acc))
+            if default_acc:
+                resolved = resolve_account_for_cloud(default_acc, all_accounts)
+                if resolved.get("provider") != "none":
+                    target_accounts.append(resolved)
 
         if not target_accounts:
             self.open_config()
@@ -412,8 +426,13 @@ class NimbusAction(InterfaceAction):
         self._show_status(f"Nimbus Cloud: uploaded {len(pushed)} item(s).")
 
     def pull_from_cloud(self):
+        all_accounts = get_accounts()
         default_acc = get_default_account()
-        if not default_acc or default_acc.get("provider") == "none":
+        if not default_acc:
+            self.open_config()
+            return
+        resolved_default = resolve_account_for_cloud(default_acc, all_accounts)
+        if resolved_default.get("provider") == "none":
             self.open_config()
             return
 
@@ -436,7 +455,7 @@ class NimbusAction(InterfaceAction):
             return
 
         state = {"refreshed_tokens": {}, "merged_prog": {}, "merged_ann": {}, "linked_books": linked_books}
-        acc_snapshot = copy.deepcopy(default_acc)
+        acc_snapshot = copy.deepcopy(resolved_default)
         device_id = get_device_id()
 
         job = ThreadedJob(
