@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, BookOpen, CloudLightning, Highlighter, Moon, RefreshCw, Settings, Sun } from 'lucide-react';
 import { buildWebCloudFS, NimbusWebConfig } from './cloud';
 import { OAuthProvider } from './cloud/oauth';
@@ -72,6 +72,7 @@ export function App() {
   const [activeBook, setActiveBook] = useState<{ book: BookCatalogEntry; blob: Blob } | null>(null);
   const [openingBookTitle, setOpeningBookTitle] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const syncSeqRef = useRef(0);
 
   const saveConfig = (next: NimbusWebConfig) => {
     setConfig(next);
@@ -118,12 +119,15 @@ export function App() {
 
   const runSync = async () => {
     if (!fs) return;
+    const seq = ++syncSeqRef.current;
     setSyncing(true);
     try {
       const snap = await syncAllFromCloud(fs, config);
+      if (seq !== syncSeqRef.current) return;
       setDevices(snap.devices);
       await loadFromIndexedDB();
       void syncCoversFromCloud(fs, Object.values(snap.catalog.books || {}), (bookId, blob) => {
+        if (seq !== syncSeqRef.current) return;
         const url = URL.createObjectURL(blob);
         setCoverUrls((prev) => {
           if (prev[bookId]) URL.revokeObjectURL(prev[bookId]);
@@ -131,9 +135,9 @@ export function App() {
         });
       });
     } catch (e) {
-      console.error('Sync failed:', e);
+      if (seq === syncSeqRef.current) console.error('Sync failed:', e);
     } finally {
-      setSyncing(false);
+      if (seq === syncSeqRef.current) setSyncing(false);
     }
   };
 
