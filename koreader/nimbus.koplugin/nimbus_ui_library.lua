@@ -329,10 +329,10 @@ function UILibrary.buildView(on_open_book, opts)
 
         if use_folders then
             if active_tab == "device" then
-                folder_info = Scanner.listFolderContents(current_folder, device_books)
+                folder_info = Scanner.listFolderContents(current_folder, device_books, nil, merged_progress)
                 current_folder = folder_info.current_dir
             else
-                folder_info = Scanner.listCloudFolderContents(current_cloud_dir, cloud_books)
+                folder_info = Scanner.listCloudFolderContents(current_cloud_dir, cloud_books, merged_progress)
                 current_cloud_dir = folder_info.current_dir
             end
             for _, entry in ipairs(folder_info.items or {}) do
@@ -357,14 +357,7 @@ function UILibrary.buildView(on_open_book, opts)
                 end
             end
 
-            table.sort(display_books, function(a, b)
-                local pa = merged_progress[a.cloud_id or a.id]
-                local pb = merged_progress[b.cloud_id or b.id]
-                local ta = (pa and tonumber(pa.updated_at)) or 0
-                local tb = (pb and tonumber(pb.updated_at)) or 0
-                if ta ~= tb then return ta > tb end
-                return tostring(a.title or ""):lower() < tostring(b.title or ""):lower()
-            end)
+            Scanner.sortItems(display_books, merged_progress)
         end
 
         local function showMoreMenu()

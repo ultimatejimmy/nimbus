@@ -256,4 +256,37 @@ describe("nimbus_scanner", function()
         assert.are.equal(1, #sub_cloud.books)
         assert.are.equal("Gone Girl", sub_cloud.books[1].title)
     end)
+
+    it("sorts by KOReader collate = access (last read date) including merged_progress and reverse_collate", function()
+        _G.G_reader_settings = {
+            readSetting = function(_, key)
+                if key == "collate" then return "access" end
+                return nil
+            end,
+            isTrue = function(_, key)
+                return key == "collate_mixed"
+            end,
+        }
+        local items = {
+            { id = "a", title = "Alpha", last_read_ts = 100 },
+            { id = "b", title = "Beta", last_read_ts = 50 },
+            { id = "c", title = "Gamma", last_read_ts = 10 },
+        }
+        local merged = {
+            b = { updated_at = 500 },
+        }
+        Scanner.sortItems(items, merged)
+        assert.are.equal("Beta", items[1].title)
+        assert.are.equal("Alpha", items[2].title)
+        assert.are.equal("Gamma", items[3].title)
+
+        _G.G_reader_settings.isTrue = function(_, key)
+            return key == "collate_mixed" or key == "reverse_collate"
+        end
+        Scanner.sortItems(items, merged)
+        assert.are.equal("Gamma", items[1].title)
+        assert.are.equal("Alpha", items[2].title)
+        assert.are.equal("Beta", items[3].title)
+        _G.G_reader_settings = nil
+    end)
 end)

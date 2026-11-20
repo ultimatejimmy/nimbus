@@ -504,6 +504,7 @@ function Nimbus:onCloseDocument()
             if item.local_path == filepath then
                 item.percent = local_prog.percent
                 item.status = local_prog.status
+                item.last_read_ts = local_prog.updated_at or os.time()
                 break
             end
         end

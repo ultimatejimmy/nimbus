@@ -94,6 +94,7 @@ function Scanner.readSidecarMeta(book_path)
         if type(data) == "table" then
             local dp = data.doc_props or {}
             local summary = data.summary or {}
+            local sidecar_mtime = (lfs and lfs.attributes and lfs.attributes(p, "modification")) or 0
             return {
                 title = dp.title,
                 authors = dp.authors,
@@ -104,6 +105,7 @@ function Scanner.readSidecarMeta(book_path)
                 percent = tonumber(data.percent_finished) or 0,
                 status = summary.status or ((tonumber(data.percent_finished) or 0) >= 0.99 and "finished" or "reading"),
                 partial_md5 = data.partial_md5_checksum,
+                sidecar_mtime = sidecar_mtime,
             }
         end
     end
@@ -226,6 +228,11 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
             end
         end
 
+        local f_size = (lfs and lfs.attributes and lfs.attributes(filepath, "size")) or 0
+        local f_mtime = (lfs and lfs.attributes and lfs.attributes(filepath, "modification")) or 0
+        local f_access = (lfs and lfs.attributes and lfs.attributes(filepath, "access")) or 0
+        local last_read_ts = math.max(sdr.sidecar_mtime or 0, f_access)
+
         local item = {
             id = cloud_id or filepath,
             cloud_id = cloud_id,
@@ -234,6 +241,9 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
             all_local_paths = { filepath },
             filename = filename,
             format = ext,
+            size_bytes = f_size,
+            mtime = f_mtime,
+            last_read_ts = last_read_ts,
             title = (title and title ~= "") and title or fallback_title,
             authors = authors or "",
             series = sdr.series or (cat_entry and cat_entry.series),
@@ -348,16 +358,156 @@ function Scanner.getRelativeDir(filepath, root_dirs)
     return ""
 end
 
-local function buildFolderItems(folder_buckets, books)
+function Scanner.getKOReaderSortSettings()
+    local collate = "strcoll"
+    local reverse_collate = false
+    local collate_mixed = false
+    if _G.G_reader_settings then
+        if _G.G_reader_settings.readSetting then
+            collate = _G.G_reader_settings:readSetting("collate") or "strcoll"
+        end
+        if _G.G_reader_settings.isTrue then
+            reverse_collate = _G.G_reader_settings:isTrue("reverse_collate")
+            collate_mixed = _G.G_reader_settings:isTrue("collate_mixed")
+        end
+    end
+    return {
+        collate = collate,
+        reverse = reverse_collate,
+        mixed = collate_mixed,
+    }
+end
+
+local function parseIsoTimestamp(iso)
+    if type(iso) ~= "string" then return 0 end
+    local y, m, d, hh, mm, ss = iso:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
+    if not y then return 0 end
+    return os.time({
+        year = tonumber(y),
+        month = tonumber(m),
+        day = tonumber(d),
+        hour = tonumber(hh),
+        min = tonumber(mm),
+        sec = tonumber(ss),
+    }) or 0
+end
+
+local function getItemLastRead(item, merged_progress)
+    local mp = merged_progress and merged_progress[item.cloud_id or item.id]
+    local mp_ts = (mp and tonumber(mp.updated_at)) or 0
+    return math.max(tonumber(item.last_read_ts) or 0, mp_ts)
+end
+
+local function getItemModTime(item)
+    return math.max(tonumber(item.mtime) or 0, parseIsoTimestamp(item.updated_at or item.added_at))
+end
+
+local function getItemPercent(item, merged_progress)
+    local mp = merged_progress and merged_progress[item.cloud_id or item.id]
+    return (mp and tonumber(mp.percent)) or tonumber(item.percent) or 0
+end
+
+local function getItemAuthors(item)
+    if type(item.authors) == "table" then
+        return table.concat(item.authors, ", "):lower()
+    end
+    return tostring(item.authors or ""):lower()
+end
+
+function Scanner.compareItems(a, b, merged_progress, sort_opts)
+    sort_opts = sort_opts or Scanner.getKOReaderSortSettings()
+    local collate = sort_opts.collate or "strcoll"
+    local reverse = sort_opts.reverse == true
+
+    local ta = tostring(a.title or a.name or ""):lower()
+    local tb = tostring(b.title or b.name or ""):lower()
+
+    local cmp_res = nil
+    if collate == "access" then
+        local va = getItemLastRead(a, merged_progress)
+        local vb = getItemLastRead(b, merged_progress)
+        if va ~= vb then cmp_res = va > vb end
+    elseif collate == "date" then
+        local va = getItemModTime(a)
+        local vb = getItemModTime(b)
+        if va ~= vb then cmp_res = va > vb end
+    elseif collate == "size" then
+        local va = tonumber(a.size_bytes) or 0
+        local vb = tonumber(b.size_bytes) or 0
+        if va ~= vb then cmp_res = va > vb end
+    elseif collate == "type" then
+        local fa = tostring(a.format or ""):lower()
+        local fb = tostring(b.format or ""):lower()
+        if fa ~= fb then cmp_res = fa < fb end
+    elseif collate == "percent_unopened_first" then
+        local pa = getItemPercent(a, merged_progress)
+        local pb = getItemPercent(b, merged_progress)
+        local ua = (pa <= 0) and 1 or 0
+        local ub = (pb <= 0) and 1 or 0
+        if ua ~= ub then
+            cmp_res = ua > ub
+        elseif pa ~= pb then
+            cmp_res = pa > pb
+        end
+    elseif collate == "percent_unopened_last" or collate == "percent_natural" then
+        local pa = getItemPercent(a, merged_progress)
+        local pb = getItemPercent(b, merged_progress)
+        if pa ~= pb then cmp_res = pa > pb end
+    elseif collate == "authors" then
+        local aa = getItemAuthors(a)
+        local ab = getItemAuthors(b)
+        if aa ~= ab then cmp_res = aa < ab end
+    elseif collate == "series" then
+        local sa = tostring(a.series or ""):lower()
+        local sb = tostring(b.series or ""):lower()
+        if sa ~= sb then
+            if sa == "" then cmp_res = false
+            elseif sb == "" then cmp_res = true
+            else cmp_res = sa < sb end
+        else
+            local ia = tonumber(a.series_index) or 0
+            local ib = tonumber(b.series_index) or 0
+            if ia ~= ib then cmp_res = ia < ib end
+        end
+    end
+
+    if cmp_res == nil then
+        if ta ~= tb then
+            cmp_res = ta < tb
+        else
+            return false
+        end
+    end
+
+    if reverse then return not cmp_res end
+    return cmp_res
+end
+
+function Scanner.sortItems(items, merged_progress, sort_opts)
+    sort_opts = sort_opts or Scanner.getKOReaderSortSettings()
+    table.sort(items, function(a, b)
+        return Scanner.compareItems(a, b, merged_progress, sort_opts)
+    end)
+    return items
+end
+
+local function buildFolderItems(folder_buckets, books, merged_progress)
+    local sort_opts = Scanner.getKOReaderSortSettings()
     local folders = {}
     for sub_path, list in pairs(folder_buckets) do
         local name = sub_path:match("([^/]+)$") or sub_path
-        table.sort(list, function(a, b)
-            return tostring(a.title or ""):lower() < tostring(b.title or ""):lower()
-        end)
+        Scanner.sortItems(list, merged_progress, sort_opts)
         local sample_books = {}
         for i = 1, math.min(4, #list) do
             table.insert(sample_books, list[i])
+        end
+        local max_last_read, max_mtime, sum_size = 0, 0, 0
+        for _, child in ipairs(list) do
+            local lr = getItemLastRead(child, merged_progress)
+            if lr > max_last_read then max_last_read = lr end
+            local mt = getItemModTime(child)
+            if mt > max_mtime then max_mtime = mt end
+            sum_size = sum_size + (tonumber(child.size_bytes) or 0)
         end
         table.insert(folders, {
             is_folder = true,
@@ -366,37 +516,26 @@ local function buildFolderItems(folder_buckets, books)
             path = sub_path,
             book_count = #list,
             sample_books = sample_books,
+            last_read_ts = max_last_read,
+            mtime = max_mtime,
+            size_bytes = sum_size,
         })
     end
 
-    local collate_mixed = false
-    local reverse_collate = false
-    if _G.G_reader_settings and _G.G_reader_settings.isTrue then
-        collate_mixed = _G.G_reader_settings:isTrue("collate_mixed")
-        reverse_collate = _G.G_reader_settings:isTrue("reverse_collate")
-    end
-
-    local function cmp(a, b)
-        local ta = tostring(a.title or a.name or ""):lower()
-        local tb = tostring(b.title or b.name or ""):lower()
-        if reverse_collate then return ta > tb end
-        return ta < tb
-    end
-
-    table.sort(folders, cmp)
-    table.sort(books, cmp)
+    Scanner.sortItems(folders, merged_progress, sort_opts)
+    Scanner.sortItems(books, merged_progress, sort_opts)
 
     local items = {}
     for _, f in ipairs(folders) do table.insert(items, f) end
     for _, b in ipairs(books) do table.insert(items, b) end
-    if collate_mixed then
-        table.sort(items, cmp)
+    if sort_opts.mixed then
+        Scanner.sortItems(items, merged_progress, sort_opts)
     end
     return folders, books, items
 end
 
 --- Lists folders (containing supported books) and books directly inside `dir_path` (or root_dirs).
-function Scanner.listFolderContents(dir_path, device_books, root_dirs)
+function Scanner.listFolderContents(dir_path, device_books, root_dirs, merged_progress)
     root_dirs = root_dirs or Scanner.getEffectiveBooksDirs()
     if not dir_path or dir_path == "" then
         dir_path = root_dirs[1]
@@ -425,7 +564,7 @@ function Scanner.listFolderContents(dir_path, device_books, root_dirs)
         end
     end
 
-    local folders, sorted_books, items = buildFolderItems(folder_buckets, books)
+    local folders, sorted_books, items = buildFolderItems(folder_buckets, books, merged_progress)
 
     local is_root = false
     for _, r in ipairs(root_dirs) do
@@ -449,7 +588,7 @@ function Scanner.listFolderContents(dir_path, device_books, root_dirs)
 end
 
 --- Lists virtual cloud folders (from `entry.relative_dir`) and books inside `rel_dir` ("" = root).
-function Scanner.listCloudFolderContents(rel_dir, cloud_books)
+function Scanner.listCloudFolderContents(rel_dir, cloud_books, merged_progress)
     local norm_cur = tostring(rel_dir or ""):gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", "")
     local books = {}
     local folder_buckets = {}
@@ -470,7 +609,7 @@ function Scanner.listCloudFolderContents(rel_dir, cloud_books)
         end
     end
 
-    local folders, sorted_books, items = buildFolderItems(folder_buckets, books)
+    local folders, sorted_books, items = buildFolderItems(folder_buckets, books, merged_progress)
     local can_go_up = (norm_cur ~= "")
     local parent_dir = can_go_up and (norm_cur:match("^(.*)/[^/]+$") or "") or nil
 
