@@ -12,8 +12,8 @@ class NimbusCalibrePlugin(InterfaceActionBase):
     description = "Sync books, reading progress, and highlights with Nimbus Cloud (GDrive, OneDrive, Dropbox, WebDAV)."
     supported_platforms = ["windows", "osx", "linux"]
     author = "Nimbus"
-    version = (2026, 11, 19)
-    minimum_calibre_version = (5, 0, 0)
+    version = (26, 11, 20)
+    minimum_calibre_version = (26, 11, 20)
     actual_plugin = "calibre_plugins.nimbus_calibre.ui:NimbusAction"
 
     def is_customizable(self):
