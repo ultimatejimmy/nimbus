@@ -190,6 +190,9 @@ function UILibrary.buildView(on_open_book, opts)
         if target then
             UIManager:setDirty(target, "ui")
         end
+        if isAlive() then
+            UIManager:setDirty("all", "ui")
+        end
     end
 
     local function refreshLocalBooks(force_rescan)
@@ -203,7 +206,9 @@ function UILibrary.buildView(on_open_book, opts)
     local renderShelf
 
     local function fetchCloudSilently(force)
-        if not Cloud.isConfigured() or bg_syncing then return end
+        if not Cloud.isConfigured() then return end
+        if bg_syncing and not force then return end
+        bg_syncing = false
         local started = Sync.startBackgroundCatalogSync(function(ok, info)
             bg_syncing = false
             if ok then
@@ -386,9 +391,28 @@ function UILibrary.buildView(on_open_book, opts)
                         end),
                         Widgets.createMenuRow(_("Nimbus Settings..."), chevron(), inner_w, function()
                             closeDlg()
+                            local before_cfg = Settings.load()
+                            local prev_root = before_cfg.remote_root or ""
+                            local prev_prov = before_cfg.provider or ""
+                            local prev_dl = before_cfg.download_dir or ""
+                            local prev_scan = table.concat(before_cfg.scan_dirs or {}, "\0")
                             UISettings.showSettingsDialog(function()
-                                refreshLocalBooks(true)
-                                if isAlive() then renderShelf() end
+                                local after_cfg = Settings.load()
+                                local local_dirs_changed = (after_cfg.download_dir or "") ~= prev_dl
+                                    or table.concat(after_cfg.scan_dirs or {}, "\0") ~= prev_scan
+                                local cloud_changed = (after_cfg.remote_root or "") ~= prev_root
+                                    or (after_cfg.provider or "") ~= prev_prov
+                                refreshLocalBooks(local_dirs_changed)
+                                if cloud_changed then
+                                    catalog_data = { books = {} }
+                                    merged_progress = {}
+                                    sync_error = nil
+                                    current_cloud_dir = ""
+                                    if isAlive() then renderShelf() end
+                                    fetchCloudSilently(true)
+                                else
+                                    if isAlive() then renderShelf() end
+                                end
                             end)
                         end),
                     }

@@ -6,6 +6,7 @@ Unified CloudFS dispatcher, root path prefixing, credential management, and
 
 local _ = require("gettext")
 local Constants = require("nimbus_constants")
+local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
 local OAuth = require("nimbus_cloud_oauth")
 local GDrive = require("nimbus_cloud_gdrive")
@@ -94,6 +95,7 @@ function Cloud.importFromBackupPlugin(provider)
     cfg.provider = target
     cfg.provider_user_selected = true
     Settings.save(cfg)
+    Logger.action("Imported cloud credentials from backup.koplugin for provider: " .. tostring(target))
     return true, target
 end
 
@@ -133,8 +135,20 @@ end
 
 function Cloud.testConnection(cb)
     local driver, creds, err = getActive()
-    if not driver then return cb(false, err) end
-    driver.testConnection(creds, cb)
+    if not driver then
+        Logger.warn("Cloud testConnection aborted: " .. tostring(err))
+        return cb(false, err)
+    end
+    local provider = Settings.load().provider
+    Logger.action("Testing cloud connection for provider: " .. tostring(provider))
+    driver.testConnection(creds, function(ok, msg)
+        if ok then
+            Logger.info("Cloud connection succeeded (" .. tostring(provider) .. "): " .. tostring(msg))
+        else
+            Logger.warn("Cloud connection failed (" .. tostring(provider) .. "): " .. tostring(msg))
+        end
+        if cb then cb(ok, msg) end
+    end)
 end
 
 function Cloud.uploadString(rel_path, content_str, content_type, cb)

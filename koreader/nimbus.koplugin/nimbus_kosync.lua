@@ -5,6 +5,7 @@ CrossPoint e-readers, Readest, and stock KOSync servers.
 --]]
 
 local Settings = require("nimbus_settings")
+local Logger = require("nimbus_logger")
 local Http = require("nimbus_http")
 local Hash = require("nimbus_hash")
 
@@ -61,10 +62,12 @@ function KOSync.testConnection(server, username, userkey, cb)
         total_timeout = 12,
     }
     if code == 200 then
+        Logger.info("KOSync connection succeeded for user: " .. tostring(username))
         return cb(true, username)
     end
     local decoded = Http.jsonDecode(body)
     local err_msg = (decoded and (decoded.message or decoded.error)) or status or tostring(code)
+    Logger.warn("KOSync connection failed (" .. Logger.sanitizeUrl(base) .. "): " .. tostring(err_msg))
     return cb(false, err_msg)
 end
 
@@ -105,12 +108,15 @@ function KOSync.pullProgress(filepath, doc_props, cb)
         total_timeout = 10,
     }
     if code ~= 200 then
+        Logger.warn("KOSync pullProgress failed (HTTP " .. tostring(code) .. "): " .. tostring(status))
         return cb(false, status or tostring(code))
     end
     local data = Http.jsonDecode(body)
     if type(data) ~= "table" or not data.percentage then
+        Logger.debug("KOSync pullProgress returned empty progress for key: " .. tostring(doc_key))
         return cb(false, "empty")
     end
+    Logger.debug(string.format("KOSync pullProgress succeeded (%.1f%%)", (tonumber(data.percentage) or 0) * 100))
     cb(true, {
         percent = tonumber(data.percentage) or 0,
         xpointer = data.progress,
@@ -153,8 +159,14 @@ function KOSync.pushProgress(filepath, doc_props, prog_state, cb)
         block_timeout = 5,
         total_timeout = 10,
     }
+    local ok_push = (code == 200 or code == 201)
+    if ok_push then
+        Logger.debug(string.format("KOSync pushProgress succeeded (%.1f%%)", (tonumber(prog_state.percent) or 0) * 100))
+    else
+        Logger.warn("KOSync pushProgress failed (HTTP " .. tostring(code) .. "): " .. tostring(status))
+    end
     if cb then
-        cb(code == 200 or code == 201, status or tostring(code))
+        cb(ok_push, status or tostring(code))
     end
 end
 

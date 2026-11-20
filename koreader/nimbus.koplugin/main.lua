@@ -11,6 +11,7 @@ local ok_loc, Localization = pcall(require, "localization_nimbus")
 local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Constants = require("nimbus_constants")
+local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
 local Hash = require("nimbus_hash")
@@ -106,10 +107,7 @@ local function embedIntoFileManager(fm_self)
         fm_self[1][1] = view
     end)
     if not ok_err then
-        local ok_log, logger = pcall(require, "logger")
-        if ok_log and logger and logger.warn then
-            logger.warn("Nimbus: failed to embed into FileManager, falling back:", tostring(err))
-        end
+        Logger.warn("Failed to embed into FileManager, falling back: " .. tostring(err))
         if fm_self._nimbus_orig_fc then
             fm_self[1][1] = fm_self._nimbus_orig_fc
         end
@@ -144,6 +142,8 @@ end
 function Nimbus:init()
     _live_nimbus_plugin = self
     self._last_sync_ts = 0
+    Logger.init(self.path)
+    Logger.startSession(Constants.VERSION)
     if ok_loc and Localization and Localization.ensureInit then
         Localization:ensureInit(self.path)
     end
@@ -313,6 +313,7 @@ function Nimbus:uploadCurrentBook(on_done)
         return
     end
     local filename = filepath:match("([^/\\]+)$") or filepath
+    Logger.action("Uploading current book: " .. filename)
     local prog_dlg = NimbusProgress:new{
         title = _("Uploading to Nimbus Cloud"),
         subtitle = _("Preparing upload…"),
@@ -324,9 +325,13 @@ function Nimbus:uploadCurrentBook(on_done)
     Sync.uploadBook(filepath, props, nil, function(ok, res)
         prog_dlg:close()
         if ok then
+            Logger.info("Uploaded book to Nimbus Cloud: " .. tostring(res.title))
             Widgets.showToast(string.format(_("Uploaded '%s' to Nimbus Cloud!"), tostring(res.title)), 3)
         elseif res ~= "canceled" then
+            Logger.err("Upload failed for " .. filename .. ": " .. tostring(res))
             Widgets.showToast(_("Upload failed: ") .. tostring(res), 4)
+        else
+            Logger.info("Upload canceled by user: " .. filename)
         end
         if on_done then on_done(ok) end
     end, {
@@ -365,6 +370,7 @@ function Nimbus:syncCurrentBook(interactive)
         local local_pct = tonumber(local_prog.percent) or 0
 
         if remote_ts > local_ts and remote_pct > (local_pct + Constants.WHISPERSYNC_FORWARD_THRESHOLD) then
+            Logger.info(string.format("Remote progress ahead (%.1f%% vs %.1f%%) from %s", remote_pct * 100, local_pct * 100, tostring(remote.device_id)))
             if cfg.whispersync_auto_jump then
                 self:jumpToRemotePosition(remote)
                 Widgets.showToast(string.format(_("Jumped to %.1f%% from %s"), remote_pct * 100, tostring(remote.device_id)), 4)
@@ -380,63 +386,101 @@ function Nimbus:syncCurrentBook(interactive)
         end
     end
 
-    local best_remote = nil
     local local_prog = self:getCurrentProgressState(pmd5, pmd5)
 
-    if cloud_ok then
-        Sync.loadCatalog(function(ok_cat, catalog)
+    Sync.runInBackground(function()
+        local best_remote = nil
+        local sync_err = nil
+        local not_in_cloud = false
+
+        if cloud_ok then
+            local ok_cat, catalog = false, nil
+            Sync.loadCatalog(function(ok, res)
+                ok_cat = ok
+                catalog = res
+            end)
             if not ok_cat then
-                if interactive then
-                    Widgets.showToast(_("Sync error: ") .. tostring(catalog), 3)
-                end
-                return
-            end
-
-            local book_id = Matcher.resolve(filepath, catalog, props)
-            if book_id then
-                local_prog = self:getCurrentProgressState(book_id, pmd5)
-                Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
-                    if ok_p then
-                        local merged = Merge.mergeProgress(shards)
-                        best_remote = merged[book_id]
+                sync_err = tostring(catalog)
+            else
+                local book_id = Matcher.resolve(filepath, catalog, props)
+                if book_id then
+                    local merged = nil
+                    Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
+                        if ok_p then
+                            merged = Merge.mergeProgress(shards)
+                            best_remote = merged[book_id]
+                        end
+                    end)
+                    if merged then
+                        Sync.saveCachedCatalog(catalog, merged)
                     end
-                end)
-
-                if local_prog then
-                    local st = Sync.loadLocalState()
-                    st.progress[book_id] = local_prog
-                    Sync.saveLocalState(st)
-                    Sync.uploadDeviceProgress(st.progress)
+                    if local_prog then
+                        local lp = {}
+                        for k, v in pairs(local_prog) do lp[k] = v end
+                        lp.book_id = book_id
+                        local st = Sync.loadLocalState()
+                        st.progress[book_id] = lp
+                        Sync.saveLocalState(st)
+                        Sync.uploadDeviceProgress(st.progress)
+                    end
+                elseif not kosync_ok then
+                    not_in_cloud = true
                 end
-            elseif interactive and not kosync_ok then
+            end
+        end
+
+        if kosync_ok then
+            KOSync.pullProgress(filepath, props, function(ok_k, k_remote)
+                if ok_k and k_remote then
+                    if not best_remote or (tonumber(k_remote.percent) or 0) > (tonumber(best_remote.percent) or 0) then
+                        best_remote = k_remote
+                    end
+                end
+            end)
+            if local_prog then
+                KOSync.pushProgress(filepath, props, local_prog)
+            end
+        end
+
+        return {
+            best_remote = best_remote,
+            sync_err = sync_err,
+            not_in_cloud = not_in_cloud,
+        }
+    end, function(ok_bg, res)
+        if not ok_bg or type(res) ~= "table" then
+            Logger.warn("Sync current book failed: " .. tostring(res))
+            if interactive then
+                Widgets.showToast(_("Sync error: ") .. tostring(res), 3)
+            end
+            return
+        end
+        if res.sync_err then
+            Logger.warn("Sync current book cloud error: " .. tostring(res.sync_err))
+            if interactive then
+                Widgets.showToast(_("Sync error: ") .. tostring(res.sync_err), 3)
+            end
+            return
+        end
+        if res.not_in_cloud then
+            if interactive then
                 Widgets.showToast(_("Book is not in Nimbus Cloud yet. Use 'Upload Current Book to Cloud'."), 3)
             end
-        end)
-    end
-
-    if kosync_ok then
-        KOSync.pullProgress(filepath, props, function(ok_k, k_remote)
-            if ok_k and k_remote then
-                if not best_remote or (tonumber(k_remote.percent) or 0) > (tonumber(best_remote.percent) or 0) then
-                    best_remote = k_remote
-                end
-            end
-        end)
-        if local_prog then
-            KOSync.pushProgress(filepath, props, local_prog)
+            return
         end
-    end
-
-    applyRemoteCandidate(best_remote, local_prog)
-
-    if interactive then
-        Widgets.showToast(_("Reading sync complete."), 2)
-    end
+        if self.ui and self.ui.document and res.best_remote then
+            applyRemoteCandidate(res.best_remote, local_prog)
+        end
+        if interactive then
+            Widgets.showToast(_("Reading sync complete."), 2)
+        end
+    end)
 end
 
 function Nimbus:onReaderReady()
     local cfg = Settings.load()
     if cfg.auto_sync_open then
+        Logger.debug("onReaderReady: scheduling auto-sync")
         UIManager:scheduleIn(1, function()
             self:syncCurrentBook(false)
         end)
@@ -465,37 +509,50 @@ function Nimbus:onCloseDocument()
         end
     end
 
-    -- Defer blocking HTTPS uploads until after Home Screen has painted
-    UIManager:scheduleIn(0.6, function()
-        if Cloud.isConfigured() then
-            local cached_cat = Sync.loadCachedCatalog()
-            local book_id = Matcher.resolve(filepath, cached_cat, props)
-            if book_id then
-                local_prog.book_id = book_id
-                local st = Sync.loadLocalState()
-                st.progress[book_id] = local_prog
-                Sync.saveLocalState(st)
-                Sync.uploadDeviceProgress(st.progress)
+    -- Save local progress immediately, then push to cloud in a non-blocking background subprocess
+    local cloud_ok = Cloud.isConfigured()
+    local kosync_ok = KOSync.isConfigured()
+    local upload_progress = nil
+    if cloud_ok then
+        local cached_cat = Sync.loadCachedCatalog()
+        local book_id = Matcher.resolve(filepath, cached_cat, props)
+        if book_id then
+            local_prog.book_id = book_id
+            local st = Sync.loadLocalState()
+            st.progress[book_id] = local_prog
+            Sync.saveLocalState(st)
+            upload_progress = st.progress
+        end
+    end
+
+    UIManager:scheduleIn(0.4, function()
+        Sync.runInBackground(function()
+            if upload_progress then
+                Sync.uploadDeviceProgress(upload_progress)
             end
-        end
-        if KOSync.isConfigured() then
-            KOSync.pushProgress(filepath, props, local_prog)
-        end
-        if cfg.sync_stats and Cloud.isConfigured() then
-            Sync.syncStats()
-        end
+            if kosync_ok then
+                KOSync.pushProgress(filepath, props, local_prog)
+            end
+            if cfg.sync_stats and cloud_ok then
+                Sync.syncStats()
+            end
+        end)
     end)
 end
 
 function Nimbus:onSuspend()
     local cfg = Settings.load()
     if cfg.auto_sync_close and self.ui and self.ui.document then
+        Logger.debug("onSuspend: triggering auto-sync")
         self:syncCurrentBook(false)
     end
 end
 
 function Nimbus:onNetworkConnected()
-    Sync.flushQueue()
+    Logger.debug("onNetworkConnected: flushing offline queue")
+    Sync.runInBackground(function()
+        Sync.flushQueue()
+    end)
 end
 
 return Nimbus

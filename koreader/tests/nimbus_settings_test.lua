@@ -90,4 +90,31 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         assert.is_nil(loaded.catalog.books.b1.bad_num)
         os.remove(path)
     end)
+
+    it("detects and auto-imports Sink sink_sync from settings.reader.lua", function()
+        os.remove("tests/tmp/settings.reader.lua")
+        os.remove("tests/tmp/settings/sink_settings.lua")
+        os.remove("tests/tmp/settings/kosync.lua")
+        Settings.writeLuaTable("tests/tmp/settings.reader.lua", {
+            sink_sync = {
+                server_url = "https://sink.example.workers.dev/",
+                username = "primary_reader",
+                userkey = "sink_key_123",
+            },
+        })
+        Settings.writeLuaTable("tests/tmp/settings/nimbus/settings.lua", {
+            kosync_user_configured = true,
+            kosync_enabled = true,
+            kosync_username = "",
+            kosync_userkey = "",
+        })
+
+        local cfg = Settings.load()
+        assert.is_true(cfg.kosync_enabled)
+        assert.are.equal("sink", cfg.kosync_source)
+        assert.are.equal("https://sink.example.workers.dev", cfg.kosync_server)
+        assert.are.equal("primary_reader", cfg.kosync_username)
+        assert.are.equal("sink_key_123", cfg.kosync_userkey)
+        os.remove("tests/tmp/settings.reader.lua")
+    end)
 end)

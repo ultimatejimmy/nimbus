@@ -23,6 +23,7 @@ local ok_loc, Localization = pcall(require, "localization_nimbus")
 local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Constants = require("nimbus_constants")
+local Sync = require("nimbus_sync")
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
 local OAuth = require("nimbus_cloud_oauth")
@@ -536,8 +537,12 @@ function UISettings.showSettingsDialog(on_finish_cb)
                                 on_cancel = reopen,
                                 on_submit = function(v)
                                     if v and v ~= "" then
-                                        cfg.remote_root = v:gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", "")
-                                        Settings.save(cfg)
+                                        local next_root = v:gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", "")
+                                        if next_root ~= (cfg.remote_root or Constants.DEFAULT_REMOTE_ROOT) then
+                                            cfg.remote_root = next_root
+                                            Settings.save(cfg)
+                                            Sync.clearCachedCatalog()
+                                        end
                                     end
                                     reopen()
                                 end,

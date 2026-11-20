@@ -14,6 +14,7 @@ end
 local ok_util, util = pcall(require, "util")
 
 local Constants = require("nimbus_constants")
+local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
 local Http = require("nimbus_http")
 local Cloud = require("nimbus_cloud")
@@ -78,6 +79,11 @@ function Sync.saveCachedCatalog(catalog, merged_progress)
     })
 end
 
+function Sync.clearCachedCatalog()
+    Sync._last_bg_sync_ts = nil
+    pcall(os.remove, getCatalogCachePath())
+end
+
 function Sync.loadCatalog(cb)
     Cloud.downloadString("_sync/catalog.json", function(ok, body_or_err)
         if not ok then
@@ -91,10 +97,12 @@ function Sync.loadCatalog(cb)
                 Sync.saveCachedCatalog(empty_cat, nil)
                 return cb(true, empty_cat)
             end
+            Logger.warn("Failed to download catalog.json: " .. tostring(body_or_err))
             return cb(false, body_or_err)
         end
         local data = Http.jsonDecode(body_or_err)
         if not data or type(data.books) ~= "table" then
+            Logger.err("Invalid catalog.json format")
             return cb(false, "Invalid catalog.json format")
         end
         local _, prev_prog = Sync.loadCachedCatalog()
@@ -202,6 +210,9 @@ function Sync.flushQueue(cb)
         end
     end
     Sync.saveQueue(remaining)
+    if flushed > 0 or #remaining > 0 then
+        Logger.info(string.format("Offline queue flush: %d sent, %d remaining", flushed, #remaining))
+    end
     if cb then cb(#remaining == 0, flushed) end
 end
 
@@ -256,7 +267,10 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
             ok_up = ok
             up_err = err
         end, opts)
-        if not ok_up then return cb(false, up_err) end
+        if not ok_up then
+            Logger.warn("uploadBook failed for " .. tostring(filename) .. ": " .. tostring(up_err))
+            return cb(false, up_err)
+        end
 
         local has_cover = false
         local resolved_cover = cover_path
@@ -315,8 +329,12 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
         Cloud.uploadString(folder .. "/metadata.json", Http.jsonEncode(entry), "application/json", function() end)
         catalog.books[book_id] = entry
         Sync.saveCatalog(catalog, function(ok_save, save_err)
-            if not ok_save then return cb(false, save_err) end
+            if not ok_save then
+                Logger.err("uploadBook failed to save catalog for " .. tostring(book_id) .. ": " .. tostring(save_err))
+                return cb(false, save_err)
+            end
             Settings.linkBook(filepath, book_id)
+            Logger.info("uploadBook complete: " .. tostring(title) .. " [" .. tostring(book_id) .. "]")
             cb(true, entry)
         end)
     end)
@@ -368,6 +386,7 @@ function Sync.deleteCloudBook(book_id, item, cb)
         end
         Sync.saveCatalog(cat_or_err, function(ok_save, save_err)
             if not ok_save then
+                Logger.err("deleteCloudBook failed to save catalog for " .. tostring(target_id) .. ": " .. tostring(save_err))
                 if cb then cb(false, save_err) end
                 return
             end
@@ -375,6 +394,7 @@ function Sync.deleteCloudBook(book_id, item, cb)
                 Cloud.deletePath(folder, function() end)
             end
             Settings.unlinkBook(target_id, item and item.local_path)
+            Logger.action("Deleted cloud book: " .. tostring(target_id))
             if cb then cb(true, cat_or_err) end
         end)
     end)
@@ -506,11 +526,13 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
             if child_write_fd then ffiUtil.writeToFD(child_write_fd, "OK:" .. tostring(dl_count), true) end
         end, debug.traceback)
         if not ok_run and child_write_fd then
+            Logger.err("Background catalog sync error: " .. tostring(run_err))
             ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(run_err), true)
         end
     end, true)
 
     if not pid then
+        Logger.err("Background catalog sync fork failed")
         return false
     end
     Sync._bg_pid = pid
@@ -521,6 +543,7 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
         attempts = attempts + 1
         if attempts > 150 then
             Sync._bg_pid = nil
+            Logger.warn("Background catalog sync timed out")
             if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
             if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
             if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
@@ -544,6 +567,68 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
         UIManager:scheduleIn(0.4, poll)
     end
     UIManager:scheduleIn(0.4, poll)
+    return true
+end
+
+--- Runs a blocking sync function in a background subprocess and delivers its JSON result on the UI thread.
+function Sync.runInBackground(worker_fn, on_complete)
+    if type(worker_fn) ~= "function" then return false end
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if not ok_fu or not ffiUtil or not ffiUtil.runInSubProcess or not ok_ui or not UIManager then
+        local ok_w, res = xpcall(worker_fn, debug.traceback)
+        if on_complete then on_complete(ok_w, res) end
+        return true
+    end
+
+    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_, child_write_fd)
+        local ok_run, res = xpcall(worker_fn, debug.traceback)
+        if not ok_run then
+            Logger.err("Background worker exception: " .. tostring(res))
+        end
+        if child_write_fd then
+            local payload = Http.jsonEncode({
+                ok = ok_run,
+                res = ok_run and res or tostring(res),
+            })
+            ffiUtil.writeToFD(child_write_fd, payload, true)
+        end
+    end, true)
+
+    if not pid then
+        Logger.err("Sync.runInBackground fork failed")
+        if on_complete then on_complete(false, "fork_failed") end
+        return false
+    end
+
+    local attempts = 0
+    local function poll()
+        attempts = attempts + 1
+        if attempts > 180 then
+            Logger.warn("Sync.runInBackground timed out")
+            if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+            if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
+            if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+            if on_complete then on_complete(false, "timeout") end
+            return
+        end
+        if ffiUtil.isSubProcessDone(pid) then
+            local msg = ""
+            if parent_read_fd and ffiUtil.readAllFromFD then
+                local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
+                if ok_r and type(raw) == "string" then msg = raw end
+            end
+            local ok_dec, decoded = pcall(Http.jsonDecode, msg)
+            if ok_dec and type(decoded) == "table" then
+                if on_complete then on_complete(decoded.ok == true, decoded.res) end
+            else
+                if on_complete then on_complete(false, msg ~= "" and msg or "empty_response") end
+            end
+            return
+        end
+        UIManager:scheduleIn(0.3, poll)
+    end
+    UIManager:scheduleIn(0.3, poll)
     return true
 end
 

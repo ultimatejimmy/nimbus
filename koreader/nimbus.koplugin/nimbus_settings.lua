@@ -248,8 +248,21 @@ local SYNC_PLUGIN_ADAPTERS = {
         id = "sink",
         label = "Sink",
         detect = function(data_dir)
-            local raw = Settings.readLuaTable(data_dir .. "/settings/sink_settings.lua")
-            local sink_cfg = (type(raw) == "table" and type(raw.sink_sync) == "table") and raw.sink_sync or raw
+            local sink_cfg
+            if _G.G_reader_settings and _G.G_reader_settings.readSetting then
+                local from_mem = _G.G_reader_settings:readSetting("sink_sync")
+                if type(from_mem) == "table" then sink_cfg = from_mem end
+            end
+            if not sink_cfg then
+                local reader_raw = Settings.readLuaTable(data_dir .. "/settings.reader.lua")
+                if type(reader_raw) == "table" and type(reader_raw.sink_sync) == "table" then
+                    sink_cfg = reader_raw.sink_sync
+                end
+            end
+            if not sink_cfg then
+                local raw = Settings.readLuaTable(data_dir .. "/settings/sink_settings.lua")
+                sink_cfg = (type(raw) == "table" and type(raw.sink_sync) == "table") and raw.sink_sync or raw
+            end
             if type(sink_cfg) == "table"
                 and type(sink_cfg.server_url) == "string" and sink_cfg.server_url ~= ""
                 and type(sink_cfg.username) == "string" and sink_cfg.username ~= ""
@@ -321,7 +334,9 @@ end
 function Settings.autoImportSyncPlugin(merged, force, source_id)
     local found = Settings.detectSyncPlugins()
     if #found == 0 then return false end
-    if not force and (merged.kosync_user_configured or (merged.kosync_username and merged.kosync_username ~= "")) then
+    local has_creds = (type(merged.kosync_username) == "string" and merged.kosync_username ~= "")
+        and (type(merged.kosync_userkey) == "string" and merged.kosync_userkey ~= "")
+    if not force and (has_creds or (merged.kosync_user_configured and merged.kosync_enabled == false)) then
         return false
     end
     local chosen = found[1]

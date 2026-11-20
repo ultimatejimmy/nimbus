@@ -11,6 +11,15 @@ local ok_json, json = pcall(require, "json")
 if not ok_json or not json then
     ok_json, json = pcall(require, "dkjson")
 end
+local ok_log, Logger = pcall(require, "nimbus_logger")
+if not ok_log or not Logger then
+    Logger = {
+        debug = function() end,
+        warn = function() end,
+        err = function() end,
+        sanitizeUrl = function(u) return tostring(u or "") end,
+    }
+end
 
 local Http = {}
 
@@ -114,15 +123,19 @@ end
 
 function Http.request(req)
     if not ok_ltn or not ltn12 then
+        Logger.err("HTTP request failed: ltn12 not available")
         return nil, "ltn12 not available", nil, nil, ""
     end
     local url = req.url or ""
+    local method = req.method or "GET"
     local is_ssl = url:match("^https://")
     local client = is_ssl and https or http
     if is_ssl and not ok_https then
+        Logger.err("HTTP request failed: ssl.https not available")
         return nil, "ssl.https not available", nil, nil, ""
     end
     if not is_ssl and not ok_http then
+        Logger.err("HTTP request failed: socket.http not available")
         return nil, "socket.http not available", nil, nil, ""
     end
 
@@ -171,7 +184,14 @@ function Http.request(req)
     end
 
     if not ok_call then
+        Logger.err(string.format("HTTP %s %s exception: %s", method, Logger.sanitizeUrl(url), tostring(r)))
         return nil, tostring(r), nil, nil, ""
+    end
+
+    if not r then
+        Logger.warn(string.format("HTTP %s %s network error: %s", method, Logger.sanitizeUrl(url), tostring(code)))
+    else
+        Logger.debug(string.format("HTTP %s %s -> %s", method, Logger.sanitizeUrl(url), tostring(code)))
     end
 
     local body_str = req.sink and "" or table.concat(resp_body)

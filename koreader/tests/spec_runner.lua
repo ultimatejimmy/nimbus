@@ -146,6 +146,7 @@ _G.assert = setmetatable({
 require("spec_helper")
 
 local test_files = {
+    "tests/nimbus_logger_test.lua",
     "tests/nimbus_merge_test.lua",
     "tests/nimbus_hash_test.lua",
     "tests/nimbus_matcher_test.lua",
