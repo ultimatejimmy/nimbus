@@ -8,6 +8,7 @@ CALIBRE_DIR = Path(__file__).resolve().parents[1]
 if str(CALIBRE_DIR) not in sys.path:
     sys.path.insert(0, str(CALIBRE_DIR))
 
+from nimbus_calibre.cloud import build_cloud_fs
 from nimbus_calibre.cloud.dropbox import DropboxDriver
 from nimbus_calibre.cloud.gdrive import GDriveDriver
 from nimbus_calibre.cloud.oauth import TokenManager
@@ -76,6 +77,21 @@ class TestCloudDrivers(unittest.TestCase):
             self.assertTrue(entries[0].is_dir)
             self.assertEqual(entries[1].name, "catalog.json")
             self.assertEqual(entries[1].size, 42)
+
+    def test_build_cloud_fs_supports_per_account_and_legacy_tokens(self):
+        fs_flat = build_cloud_fs({
+            "provider": "gdrive",
+            "remote_root": "Kids",
+            "oauth_tokens": {"access_token": "flat_tok", "expires_at": 9999999999},
+        })
+        self.assertEqual(fs_flat.driver.tm.get_access_token(), "flat_tok")
+
+        fs_legacy = build_cloud_fs({
+            "provider": "gdrive",
+            "remote_root": "Nimbus",
+            "oauth_tokens": {"gdrive": {"access_token": "leg_tok", "expires_at": 9999999999}},
+        })
+        self.assertEqual(fs_legacy.driver.tm.get_access_token(), "leg_tok")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,11 @@ def build_cloud_fs(
         return RootPrefixedFS(driver, root)
 
     if provider in ("gdrive", "onedrive", "dropbox"):
-        tokens = ((config or {}).get("oauth_tokens") or {}).get(provider) or {}
+        raw_toks = (config or {}).get("oauth_tokens") or {}
+        if "access_token" in raw_toks or "refresh_token" in raw_toks:
+            tokens = raw_toks
+        else:
+            tokens = raw_toks.get(provider) or {}
         tm = TokenManager(
             provider,
             tokens,

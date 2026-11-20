@@ -5,6 +5,7 @@ import datetime
 import os
 import shutil
 import tempfile
+from typing import Any, Dict, List, Optional
 
 try:
     from qt.core import QIcon, QMenu, QPixmap, QToolButton
@@ -26,13 +27,21 @@ except ImportError:  # pragma: no cover
         pass
 
 from .cloud import build_cloud_fs
-from .config import get_device_id, prefs
-from .dialogs import NimbusConfigDialog
+from .config import (
+    PROVIDER_LABELS,
+    get_account_by_id,
+    get_accounts,
+    get_default_account,
+    get_device_id,
+    prefs,
+    update_account_tokens,
+)
+from .dialogs import NimbusConfigDialog, SelectAccountsDialog
 from .sync_engine import PREFERRED_FORMATS, format_highlights_html, pull_merged_state, push_book
 
 
-def _push_books_worker(tasks, prefs_snapshot, device_id, tmpdir, state, abort=None, log=None, notifications=None):
-    """Background ThreadedJob worker to upload staged books to Nimbus Cloud."""
+def _push_books_worker(tasks, account_configs, device_id, tmpdir, state, abort=None, log=None, notifications=None):
+    """Background ThreadedJob worker to upload staged books to one or more Nimbus Cloud accounts."""
     def _log(msg):
         if log is not None:
             log(msg)
@@ -41,32 +50,49 @@ def _push_books_worker(tasks, prefs_snapshot, device_id, tmpdir, state, abort=No
         if notifications is not None:
             notifications.put((frac, msg))
 
-    def _on_tokens(provider, new_tokens):
-        state["refreshed_tokens"][provider] = new_tokens
-        prefs_snapshot.setdefault("oauth_tokens", {})[provider] = new_tokens
-
     try:
-        fs = build_cloud_fs(prefs_snapshot, on_save_tokens=_on_tokens)
-        catalog = None
-        total = max(1, len(tasks))
-        for idx, (cid, meta, dest, cover_bytes, identifiers) in enumerate(tasks):
+        total_ops = max(1, len(tasks) * len(account_configs))
+        done_ops = 0
+        for acc in account_configs:
             if abort is not None and abort.is_set():
                 _log("Upload aborted by user.")
                 break
-            title = meta.get("title") or f"Book {cid}"
-            _notify(idx / total, f"Uploading {title}…")
-            _log(f"Uploading {title} ({meta.get('format')})…")
-            bid, _, catalog = push_book(fs, device_id, meta, dest, cover_bytes, catalog=catalog)
-            state["pushed"].append((cid, bid, identifiers))
-            _log(f"Uploaded {title} -> nimbus:{bid}")
-        _notify(1.0, f"Uploaded {len(state['pushed'])} book(s) to Nimbus Cloud")
+
+            acc_id = acc["id"]
+            acc_name = acc.get("name") or acc_id
+            id_key = acc.get("identifier_key") or "nimbus"
+            acc_tag = (acc.get("tag") or "").strip()
+
+            def _on_tokens(provider, new_tokens, _aid=acc_id, _acc=acc):
+                state["refreshed_tokens"][_aid] = new_tokens
+                _acc["oauth_tokens"] = new_tokens
+
+            fs = build_cloud_fs(acc, on_save_tokens=_on_tokens)
+            catalog = None
+
+            for cid, meta, dest, cover_bytes, identifiers in tasks:
+                if abort is not None and abort.is_set():
+                    _log("Upload aborted by user.")
+                    break
+                title = meta.get("title") or f"Book {cid}"
+                _notify(done_ops / total_ops, f"Uploading {title} to {acc_name}…")
+                _log(f"Uploading {title} ({meta.get('format')}) to {acc_name}…")
+
+                book_meta = dict(meta)
+                book_meta["nimbus_id"] = identifiers.get(id_key)
+                bid, _, catalog = push_book(fs, device_id, book_meta, dest, cover_bytes, catalog=catalog)
+                state["pushed"].append((cid, id_key, bid, acc_tag))
+                _log(f"Uploaded {title} -> {acc_name} ({id_key}:{bid})")
+                done_ops += 1
+
+        _notify(1.0, f"Uploaded {len(state['pushed'])} item(s) to Nimbus Cloud")
         return state
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def _pull_sync_worker(prefs_snapshot, device_id, state, abort=None, log=None, notifications=None):
-    """Background ThreadedJob worker to download merged progress & highlights."""
+def _pull_sync_worker(account_config, device_id, state, abort=None, log=None, notifications=None):
+    """Background ThreadedJob worker to download merged progress & highlights from the default account."""
     def _log(msg):
         if log is not None:
             log(msg)
@@ -75,15 +101,17 @@ def _pull_sync_worker(prefs_snapshot, device_id, state, abort=None, log=None, no
         if notifications is not None:
             notifications.put((frac, msg))
 
-    def _on_tokens(provider, new_tokens):
-        state["refreshed_tokens"][provider] = new_tokens
-        prefs_snapshot.setdefault("oauth_tokens", {})[provider] = new_tokens
+    acc_id = account_config["id"]
 
-    _notify(0.1, "Fetching Nimbus Cloud catalog and device shards…")
-    _log("Fetching catalog and device sync shards from Nimbus Cloud…")
+    def _on_tokens(provider, new_tokens):
+        state["refreshed_tokens"][acc_id] = new_tokens
+        account_config["oauth_tokens"] = new_tokens
+
+    _notify(0.1, f"Fetching Nimbus Cloud catalog ({account_config.get('name', 'Default')})…")
+    _log(f"Fetching catalog and device sync shards from {account_config.get('name', 'Default')}…")
     if abort is not None and abort.is_set():
         return state
-    fs = build_cloud_fs(prefs_snapshot, on_save_tokens=_on_tokens)
+    fs = build_cloud_fs(account_config, on_save_tokens=_on_tokens)
     catalog, merged_prog, merged_ann = pull_merged_state(fs, device_id)
     state["catalog"] = catalog
     state["merged_prog"] = merged_prog
@@ -98,42 +126,136 @@ class NimbusAction(InterfaceAction):
     action_spec = (
         "Send to Nimbus Cloud",
         None,
-        "Send selected books to Nimbus Cloud (click arrow for Sync & Settings)",
+        "Send selected books to Nimbus Cloud (click arrow for accounts, Sync & Settings)",
         None,
     )
     popup_type = QToolButton.ToolButtonPopupMode.MenuButtonPopup if hasattr(QToolButton, "ToolButtonPopupMode") else QToolButton.MenuButtonPopup
     action_type = "current"
 
     def genesis(self):
+        self._icon = QIcon()
         resources = self.load_resources(["images/icon.png"])
         if "images/icon.png" in resources:
             pixmap = QPixmap()
             pixmap.loadFromData(resources["images/icon.png"])
-            self.qaction.setIcon(QIcon(pixmap))
+            self._icon = QIcon(pixmap)
+            self.qaction.setIcon(self._icon)
 
         self.menu = QMenu(self.gui)
         self.qaction.setMenu(self.menu)
         self.qaction.triggered.connect(self._on_primary_action)
+        self._connect_share_actions: List[Any] = []
+        self._context_menu_actions: List[Any] = []
+        self._rebuild_menus()
 
-        self.menu.addAction("Send Selected Books to Nimbus Cloud", self.push_selected_books)
-        self.menu.addAction("Sync Progress & Highlights from Cloud", self.pull_from_cloud)
-        self.menu.addSeparator()
-        self.menu.addAction("Configure Nimbus Cloud…", self.open_config)
+    def initialization_complete(self):
+        self._rebuild_menus()
 
     def _on_primary_action(self):
-        if (prefs.get("provider") or "none") == "none":
+        default_acc = get_default_account()
+        if not default_acc or default_acc.get("provider") == "none":
             self.open_config()
             return
-        self.push_selected_books()
+        self.push_selected_books([default_acc["id"]])
 
-    def _save_tokens(self, provider: str, new_tokens: dict):
-        all_toks = dict(prefs.get("oauth_tokens") or {})
-        all_toks[provider] = new_tokens
-        prefs["oauth_tokens"] = all_toks
+    def _populate_nimbus_menu(self, menu, include_sync: bool = True, include_manage: bool = True):
+        accounts = get_accounts()
+        default_acc = get_default_account()
 
-    def _persist_refreshed_tokens(self, refreshed_tokens: dict):
-        for provider, tok in (refreshed_tokens or {}).items():
-            self._save_tokens(provider, tok)
+        if not accounts or not default_acc:
+            menu.addAction(self._icon, "Setup Nimbus Cloud account…", self.open_config)
+            return
+
+        menu.addAction(
+            self._icon,
+            f"Send to {default_acc['name']}",
+            lambda checked=False, aid=default_acc["id"]: self.push_selected_books([aid]),
+        )
+
+        send_sub = QMenu("Send to account", menu)
+        for acc in accounts:
+            pname = PROVIDER_LABELS.get(acc.get("provider", "none"), acc.get("provider", ""))
+            star = " ★" if acc["id"] == default_acc["id"] else ""
+            send_sub.addAction(
+                f"{acc['name']} ({pname}){star}",
+                lambda checked=False, aid=acc["id"]: self.push_selected_books([aid]),
+            )
+        if len(accounts) >= 2:
+            send_sub.addSeparator()
+            send_sub.addAction("Select accounts…", self.push_to_selected_accounts)
+        menu.addMenu(send_sub)
+
+        if include_sync:
+            menu.addAction(
+                f"Sync Progress & Highlights ({default_acc['name']})",
+                self.pull_from_cloud,
+            )
+
+        if include_manage:
+            menu.addSeparator()
+            menu.addAction("Manage Nimbus Cloud accounts…", self.open_config)
+
+    def _sync_connect_share_menu(self):
+        iactions = getattr(self.gui, "iactions", None) or {}
+        cs_action = iactions.get("Connect Share")
+        cs_menu = cs_action.qaction.menu() if cs_action and getattr(cs_action, "qaction", None) else None
+        if cs_menu is None:
+            return
+
+        for ac in self._connect_share_actions:
+            cs_menu.removeAction(ac)
+        self._connect_share_actions = []
+
+        if not prefs.get("integrate_connect_share", True):
+            return
+
+        before = set(cs_menu.actions())
+        cs_menu.addSeparator()
+        self._populate_nimbus_menu(cs_menu, include_sync=True, include_manage=True)
+        self._connect_share_actions = [ac for ac in cs_menu.actions() if ac not in before]
+
+    def _sync_context_menu(self):
+        lv = getattr(self.gui, "library_view", None)
+        ctx_menu = getattr(lv, "context_menu", None) if lv is not None else None
+        if ctx_menu is None:
+            return
+
+        for ac in self._context_menu_actions:
+            ctx_menu.removeAction(ac)
+        self._context_menu_actions = []
+
+        if not prefs.get("integrate_context_menu", True):
+            return
+        if self.qaction in ctx_menu.actions():
+            return
+
+        before = set(ctx_menu.actions())
+        ctx_menu.addSeparator()
+        sub = QMenu("Nimbus Cloud", ctx_menu)
+        sub.setIcon(self._icon)
+        self._populate_nimbus_menu(sub, include_sync=False, include_manage=False)
+        ctx_menu.addMenu(sub)
+        self._context_menu_actions = [ac for ac in ctx_menu.actions() if ac not in before]
+
+    def _rebuild_menus(self):
+        default_acc = get_default_account()
+        if default_acc:
+            self.qaction.setText(f"Send to Nimbus ({default_acc['name']})")
+            self.qaction.setToolTip(
+                f"Send selected books to {default_acc['name']} (click arrow for all accounts, Sync & Settings)"
+            )
+        else:
+            self.qaction.setText("Send to Nimbus Cloud")
+            self.qaction.setToolTip("Configure Nimbus Cloud accounts")
+
+        self.menu.clear()
+        self._populate_nimbus_menu(self.menu, include_sync=True, include_manage=True)
+        self._sync_connect_share_menu()
+        self._sync_context_menu()
+
+    def _persist_refreshed_tokens(self, refreshed_tokens: Dict[str, Dict[str, Any]]):
+        for account_id, tok in (refreshed_tokens or {}).items():
+            update_account_tokens(account_id, tok)
 
     def _show_status(self, message: str):
         sb = getattr(self.gui, "status_bar", None)
@@ -150,10 +272,37 @@ class NimbusAction(InterfaceAction):
         db = self.gui.current_db.new_api
         cols = db.field_metadata.custom_field_metadata()
         dlg = NimbusConfigDialog(self.gui, cols)
-        dlg.exec()
+        if dlg.exec():
+            self._rebuild_menus()
 
-    def push_selected_books(self):
-        if (prefs.get("provider") or "none") == "none":
+    def push_to_selected_accounts(self):
+        accounts = get_accounts()
+        if not accounts:
+            self.open_config()
+            return
+        default_acc = get_default_account()
+        dlg = SelectAccountsDialog(self.gui, accounts, default_id=default_acc["id"] if default_acc else "")
+        if not dlg.exec():
+            return
+        selected_ids = dlg.selected_account_ids()
+        if not selected_ids:
+            info_dialog(self.gui, "Nimbus Cloud", "Select at least one cloud account.", show=True)
+            return
+        self.push_selected_books(selected_ids)
+
+    def push_selected_books(self, account_ids: Optional[List[str]] = None):
+        target_accounts: List[Dict[str, Any]] = []
+        if account_ids:
+            for aid in account_ids:
+                acc = get_account_by_id(aid)
+                if acc and acc.get("provider") != "none":
+                    target_accounts.append(copy.deepcopy(acc))
+        else:
+            default_acc = get_default_account()
+            if default_acc and default_acc.get("provider") != "none":
+                target_accounts.append(copy.deepcopy(default_acc))
+
+        if not target_accounts:
             self.open_config()
             return
 
@@ -178,7 +327,6 @@ class NimbusAction(InterfaceAction):
                 cover_bytes = db.cover(cid)
                 identifiers = dict(mi.get_identifiers() or {})
                 meta = {
-                    "nimbus_id": identifiers.get("nimbus"),
                     "title": mi.title,
                     "authors": mi.authors,
                     "series": mi.series,
@@ -201,33 +349,55 @@ class NimbusAction(InterfaceAction):
             return
 
         state = {"pushed": [], "refreshed_tokens": {}}
-        prefs_snapshot = copy.deepcopy(dict(prefs))
         device_id = get_device_id()
+        target_names = ", ".join(a["name"] for a in target_accounts)
+        desc = f"Send {len(tasks)} book(s) to Nimbus ({target_names})"
 
         job = ThreadedJob(
             "nimbus_push_books",
-            f"Send {len(tasks)} book(s) to Nimbus Cloud",
+            desc,
             _push_books_worker,
-            (tasks, prefs_snapshot, device_id, tmpdir, state),
+            (tasks, target_accounts, device_id, tmpdir, state),
             {},
             Dispatcher(lambda j, st=state: self._on_push_job_done(j, st), parent=self.gui),
             max_concurrent_count=1,
             killable=True,
         )
         self.gui.job_manager.run_threaded_job(job)
-        self._show_status(f"Sending {len(tasks)} book(s) to Nimbus Cloud…")
+        self._show_status(f"{desc}…")
 
     def _on_push_job_done(self, job, state):
         self._persist_refreshed_tokens(state.get("refreshed_tokens"))
         pushed = state.get("pushed") or []
         if pushed:
             db = self.gui.current_db.new_api
-            id_updates = {}
-            for cid, bid, identifiers in pushed:
-                updated_ids = dict(identifiers)
-                updated_ids["nimbus"] = bid
-                id_updates[cid] = updated_ids
-            db.set_field("identifiers", id_updates)
+            id_updates: Dict[int, Dict[str, str]] = {}
+            tag_additions: Dict[int, List[str]] = {}
+            for cid, id_key, bid, acc_tag in pushed:
+                if cid not in id_updates:
+                    id_updates[cid] = dict(db.field_for("identifiers", cid) or {})
+                id_updates[cid][id_key] = bid
+                if acc_tag:
+                    tag_additions.setdefault(cid, []).append(acc_tag)
+
+            if id_updates:
+                db.set_field("identifiers", id_updates)
+
+            if tag_additions:
+                tag_updates: Dict[int, List[str]] = {}
+                for cid, new_tags in tag_additions.items():
+                    existing = list(db.field_for("tags", cid) or [])
+                    lower_set = {t.lower() for t in existing}
+                    changed = False
+                    for t in new_tags:
+                        if t.lower() not in lower_set:
+                            existing.append(t)
+                            lower_set.add(t.lower())
+                            changed = True
+                    if changed:
+                        tag_updates[cid] = existing
+                if tag_updates:
+                    db.set_field("tags", tag_updates)
 
         if getattr(job, "failed", False):
             error_dialog(
@@ -239,18 +409,20 @@ class NimbusAction(InterfaceAction):
             )
             return
 
-        self._show_status(f"Nimbus Cloud: uploaded {len(pushed)} book(s).")
+        self._show_status(f"Nimbus Cloud: uploaded {len(pushed)} item(s).")
 
     def pull_from_cloud(self):
-        if (prefs.get("provider") or "none") == "none":
+        default_acc = get_default_account()
+        if not default_acc or default_acc.get("provider") == "none":
             self.open_config()
             return
 
+        id_key = default_acc.get("identifier_key") or "nimbus"
         db = self.gui.current_db.new_api
         linked_books = []
         for cid in db.all_book_ids():
             identifiers = db.field_for("identifiers", cid) or {}
-            bid = identifiers.get("nimbus")
+            bid = identifiers.get(id_key)
             if bid:
                 linked_books.append((cid, bid))
 
@@ -258,27 +430,27 @@ class NimbusAction(InterfaceAction):
             info_dialog(
                 self.gui,
                 "Nimbus Cloud",
-                "No books in this library are linked to Nimbus Cloud yet. Send books first.",
+                f"No books in this library are linked to {default_acc['name']} ({id_key}) yet. Send books first.",
                 show=True,
             )
             return
 
         state = {"refreshed_tokens": {}, "merged_prog": {}, "merged_ann": {}, "linked_books": linked_books}
-        prefs_snapshot = copy.deepcopy(dict(prefs))
+        acc_snapshot = copy.deepcopy(default_acc)
         device_id = get_device_id()
 
         job = ThreadedJob(
             "nimbus_pull_sync",
-            "Sync progress & highlights from Nimbus Cloud",
+            f"Sync progress & highlights from {default_acc['name']}",
             _pull_sync_worker,
-            (prefs_snapshot, device_id, state),
+            (acc_snapshot, device_id, state),
             {},
             Dispatcher(lambda j, st=state: self._on_pull_job_done(j, st), parent=self.gui),
             max_concurrent_count=1,
             killable=True,
         )
         self.gui.job_manager.run_threaded_job(job)
-        self._show_status("Syncing progress & highlights from Nimbus Cloud…")
+        self._show_status(f"Syncing progress & highlights from {default_acc['name']}…")
 
     def _on_pull_job_done(self, job, state):
         self._persist_refreshed_tokens(state.get("refreshed_tokens"))
