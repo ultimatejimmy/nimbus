@@ -211,6 +211,11 @@ export const ReaderView: React.FC<Props> = ({
           setToc(view.book.toc.map((t: any) => ({ label: t.label, href: t.href })));
         }
 
+        view.addEventListener('load', (e: any) => {
+          const doc = e.detail?.doc as Document | undefined;
+          if (doc) doc.addEventListener('keydown', handleKeyDownRef.current);
+        });
+
         view.addEventListener('relocate', (e: any) => {
           const detail = e.detail || {};
           const frac = Number(detail.fraction ?? 0);
@@ -310,6 +315,37 @@ export const ReaderView: React.FC<Props> = ({
       viewRef.current?.next();
     }
   };
+
+  const goPrevRef = useRef(goPrev);
+  const goNextRef = useRef(goNext);
+  goPrevRef.current = goPrev;
+  goNextRef.current = goNext;
+
+  const handleKeyDownRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  handleKeyDownRef.current = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    const tag = target?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return;
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goNextRef.current();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goPrevRef.current();
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      if (e.shiftKey) goPrevRef.current();
+      else goNextRef.current();
+    }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => handleKeyDownRef.current(e);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const quickHighlight = async () => {
     const sel = window.getSelection()?.toString().trim();
