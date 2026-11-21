@@ -113,6 +113,20 @@ local function embedIntoFileManager(fm_self)
         })
         fm_self._nimbus_embedded_view = view
         slot[1] = view
+        if not fm_self._nimbus_key_patched then
+            fm_self._nimbus_key_patched = true
+            local orig_onKeyPress = fm_self.onKeyPress
+            fm_self.onKeyPress = function(self_fm, key)
+                local cur_slot = getEmbedSlot(self_fm)
+                if self_fm._nimbus_embedded_view and cur_slot and cur_slot[1] == self_fm._nimbus_embedded_view
+                    and not self_fm._nimbus_browsing_files then
+                    if self_fm._nimbus_embedded_view.onKeyPress and self_fm._nimbus_embedded_view:onKeyPress(key) then
+                        return true
+                    end
+                end
+                return orig_onKeyPress(self_fm, key)
+            end
+        end
     end)
     if not ok_err then
         Logger.warn("Failed to embed into FileManager, falling back: " .. tostring(err))
@@ -553,8 +567,20 @@ function Nimbus:onCloseDocument()
             if cfg.sync_stats and cloud_ok then
                 Sync.syncStats()
             end
-        end)
+        end, nil, { priority = "interactive_bg" })
     end)
+end
+
+function Nimbus:onMemoryReclaim(level)
+    if level == "critical" then
+        local ok_sc, Scanner = pcall(require, "nimbus_scanner")
+        if ok_sc and Scanner then Scanner._mem_cache = nil end
+        local ok_cov, Covers = pcall(require, "nimbus_covers")
+        if ok_cov and Covers and Covers.clearMemoryCache then
+            Covers.clearMemoryCache()
+        end
+    end
+    return false
 end
 
 function Nimbus:onSuspend()

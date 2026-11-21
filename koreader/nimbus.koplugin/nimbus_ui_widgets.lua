@@ -763,6 +763,13 @@ function Widgets.showCardDialog(opts)
         container_widget,
     }
     overlay.key_events = overlay.key_events or {}
+    overlay.key_events.FocusUp = overlay.key_events.FocusUp or { { "Up" }, event = "FocusMove", args = { 0, -1 } }
+    overlay.key_events.FocusDown = overlay.key_events.FocusDown or { { "Down" }, event = "FocusMove", args = { 0, 1 } }
+    overlay.key_events.FocusLeft = overlay.key_events.FocusLeft or { { "Left" }, event = "FocusMove", args = { -1, 0 } }
+    overlay.key_events.FocusRight = overlay.key_events.FocusRight or { { "Right" }, event = "FocusMove", args = { 1, 0 } }
+    overlay.key_events.Press = overlay.key_events.Press or { { "Press" }, event = "Press" }
+    table.insert(overlay.key_events.Press, { "Return" })
+    table.insert(overlay.key_events.Press, { "KP_Enter" })
     overlay.key_events.Close = { { "Back" }, { "Escape" } }
     if Device and Device.input and Device.input.group and Device.input.group.Back then
         table.insert(overlay.key_events.Close, { Device.input.group.Back })

@@ -1304,13 +1304,27 @@ function UILibrary.buildView(on_open_book, opts)
         end
         host_container[1] = shelf_bg
         host_container.layout = Widgets.collectFocusableLayout(shelf_bg)
-        if host_container.resetLayout then
-            pcall(function() host_container:resetLayout() end)
+        if #host_container.layout > 0 then
+            local sel = host_container.selected or { x = 1, y = 1 }
+            local y = math.max(1, math.min(sel.y or 1, #host_container.layout))
+            local row = host_container.layout[y]
+            local x = math.max(1, math.min(sel.x or 1, #row))
+            host_container.selected = { x = x, y = y }
+            if row[x] and row[x].onFocus then
+                row[x]:onFocus()
+            end
         end
         dirtyHost()
     end
 
     host_container.key_events = host_container.key_events or {}
+    host_container.key_events.FocusUp = host_container.key_events.FocusUp or { { "Up" }, event = "FocusMove", args = { 0, -1 } }
+    host_container.key_events.FocusDown = host_container.key_events.FocusDown or { { "Down" }, event = "FocusMove", args = { 0, 1 } }
+    host_container.key_events.FocusLeft = host_container.key_events.FocusLeft or { { "Left" }, event = "FocusMove", args = { -1, 0 } }
+    host_container.key_events.FocusRight = host_container.key_events.FocusRight or { { "Right" }, event = "FocusMove", args = { 1, 0 } }
+    host_container.key_events.Press = host_container.key_events.Press or { { "Press" }, event = "Press" }
+    table.insert(host_container.key_events.Press, { "Return" })
+    table.insert(host_container.key_events.Press, { "KP_Enter" })
     host_container.key_events.PrevPage = { { "PgUp" }, { "Prev" }, { "LPgBack" }, { "RPgBack" } }
     host_container.key_events.NextPage = { { "PgDn" }, { "Next" }, { "LPgFwd" }, { "RPgFwd" } }
     host_container.key_events.OpenMenu = { { "Menu" } }

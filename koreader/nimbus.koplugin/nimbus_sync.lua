@@ -704,8 +704,17 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
     return true
 end
 
+local function runConducted(opts)
+    local ok, Conductor = pcall(require, "storefront_conductor")
+    if ok and Conductor and Conductor.requestSlot then
+        return Conductor.requestSlot(opts)
+    end
+    opts.run(function() end)
+    return nil
+end
+
 --- Runs a blocking sync function in a background subprocess and delivers its JSON result on the UI thread.
-function Sync.runInBackground(worker_fn, on_complete)
+function Sync.runInBackground(worker_fn, on_complete, opts)
     if type(worker_fn) ~= "function" then return false end
     local ok_fu, ffiUtil = pcall(require, "ffi/util")
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
@@ -715,64 +724,98 @@ function Sync.runInBackground(worker_fn, on_complete)
         return true, function() end
     end
 
-    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_pid, child_write_fd)
-        local ok_run, res = xpcall(worker_fn, debug.traceback)
-        if not ok_run then
-            Logger.err("Background worker exception: " .. tostring(res))
-        end
-        if child_write_fd then
-            local payload = Http.jsonEncode({
-                ok = ok_run,
-                res = ok_run and res or tostring(res),
-            })
-            ffiUtil.writeToFD(child_write_fd, payload, true)
-        end
-    end, true)
-
-    if not pid then
-        Logger.err("Sync.runInBackground fork failed")
-        if on_complete then on_complete(false, "fork_failed") end
-        return false
-    end
-
     local canceled = false
+    local active_cancel = nil
     local function cancel()
         if canceled then return end
         canceled = true
-        if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
-        if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
-        if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+        if active_cancel then active_cancel() end
     end
 
-    local attempts = 0
-    local function poll()
-        if canceled then return end
-        attempts = attempts + 1
-        if attempts > 180 then
-            Logger.warn("Sync.runInBackground timed out")
-            if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
-            if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
-            if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
-            if on_complete then on_complete(false, "timeout") end
-            return
-        end
-        if ffiUtil.isSubProcessDone(pid) then
-            local msg = ""
-            if parent_read_fd and ffiUtil.readAllFromFD then
-                local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
-                if ok_r and type(raw) == "string" then msg = raw end
+    runConducted({
+        plugin = "nimbus",
+        task = "bg_sync",
+        priority = (opts and opts.priority) or "idle_bg",
+        subprocess = true,
+        cancel = cancel,
+        run = function(done)
+            local done_called = false
+            local function finish_slot()
+                if not done_called then
+                    done_called = true
+                    done()
+                end
             end
-            local ok_dec, decoded = pcall(Http.jsonDecode, msg)
-            if ok_dec and type(decoded) == "table" then
-                if on_complete then on_complete(decoded.ok == true, decoded.res) end
-            else
-                if on_complete then on_complete(false, msg ~= "" and msg or "empty_response") end
+            if canceled then
+                finish_slot()
+                return
             end
-            return
-        end
-        UIManager:scheduleIn(0.3, poll)
-    end
-    UIManager:scheduleIn(0.3, poll)
+
+            local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_pid, child_write_fd)
+                local ok_run, res = xpcall(worker_fn, debug.traceback)
+                if not ok_run then
+                    Logger.err("Background worker exception: " .. tostring(res))
+                end
+                if child_write_fd then
+                    local payload = Http.jsonEncode({
+                        ok = ok_run,
+                        res = ok_run and res or tostring(res),
+                    })
+                    ffiUtil.writeToFD(child_write_fd, payload, true)
+                end
+            end, true)
+
+            if not pid then
+                Logger.err("Sync.runInBackground fork failed")
+                finish_slot()
+                if on_complete then on_complete(false, "fork_failed") end
+                return
+            end
+
+            active_cancel = function()
+                if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+                if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
+                if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+                finish_slot()
+            end
+
+            local attempts = 0
+            local function poll()
+                if canceled then
+                    finish_slot()
+                    return
+                end
+                attempts = attempts + 1
+                if attempts > 180 then
+                    Logger.warn("Sync.runInBackground timed out")
+                    if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+                    if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
+                    if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+                    finish_slot()
+                    if on_complete then on_complete(false, "timeout") end
+                    return
+                end
+                if ffiUtil.isSubProcessDone(pid) then
+                    local msg = ""
+                    if parent_read_fd and ffiUtil.readAllFromFD then
+                        local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
+                        if ok_r and type(raw) == "string" then msg = raw end
+                    end
+                    finish_slot()
+                    local ok_dec, decoded = pcall(Http.jsonDecode, msg)
+                    if ok_dec and type(decoded) == "table" then
+                        if on_complete then on_complete(decoded.ok == true, decoded.res) end
+                    else
+                        if on_complete then on_complete(false, msg ~= "" and msg or "empty_response") end
+                    end
+                    return
+                end
+                UIManager:scheduleIn(0.3, poll)
+            end
+            UIManager:scheduleIn(0.3, poll)
+        end,
+    })
+
     return true, cancel
 end
 
