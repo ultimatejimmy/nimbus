@@ -43,12 +43,13 @@ local function refreshMenuState(refresh_cb, touch_menu)
     end
 end
 
-local function rightChevron(text, bold_black)
+local function rightChevron(text, bold_black, max_w)
     return TextWidget:new{
         text = text .. " ›",
         face = Font:getFace("cfont", 14),
         bold = bold_black,
         fgcolor = bold_black and Blitbuffer.COLOR_BLACK or theme.color_label_dim,
+        max_width = max_w,
     }
 end
 
@@ -542,7 +543,7 @@ end
 function UISettings.getSyncSettingsSubmenu(refresh_cb)
     return {
         {
-            text = _("Use Nimbus as Home Screen"),
+            text = _("Use Nimbus as Library"),
             keep_menu_open = true,
             checked_func = function() return Settings.load().use_as_home_screen == true end,
             callback = function(touch_menu)
@@ -669,7 +670,7 @@ function UISettings.showSettingsDialog(on_finish_cb)
             body_widget = function(inner_w, closeDlg)
                 local vg = VerticalGroup:new{ align = "left" }
                 table.insert(vg, Widgets.createSettingRow(_("Storage Provider"),
-                    rightChevron(Cloud.getProviderLabel(cur_p), true), inner_w, function()
+                    rightChevron(Cloud.getProviderShortLabel(cur_p), true, math.floor(inner_w * 0.56)), inner_w, function()
                         closeDlg()
                         showProviderPicker(reopen)
                     end))
@@ -732,13 +733,13 @@ function UISettings.showSettingsDialog(on_finish_cb)
         local reopen = function() UIManager:nextTick(showLibraryHomeMenu) end
 
         Widgets.showCardDialog{
-            title = _("Library & Home Screen"),
+            title = _("Library"),
             on_close = function() UIManager:nextTick(openRootDialog) end,
             body_widget = function(inner_w, closeDlg)
                 local vg = VerticalGroup:new{ align = "left" }
                 table.insert(vg, Widgets.createCheckboxRow(
-                    _("Use as Home Screen"),
-                    _("Show your library at startup instead of KOReader's file list"),
+                    _("Use Nimbus as Library"),
+                    _("Show Nimbus library instead of KOReader's file list"),
                     cfg.use_as_home_screen == true,
                     inner_w,
                     function()
@@ -766,14 +767,15 @@ function UISettings.showSettingsDialog(on_finish_cb)
                 table.insert(vg, Widgets.createSettingRow(_("Book Folder"),
                     rightChevron(book_dir_label, false), inner_w, function()
                         closeDlg()
-                        Widgets.showInputDialog{
-                            title = _("Local Book Folder"),
-                            description = _("Directory path scanned for local books:"),
-                            input = dirs[1] or "",
+                        local FolderPicker = require("nimbus_folder_picker")
+                        FolderPicker.show{
+                            title = _("Select Book Folder"),
+                            initial_path = dirs[1] or cfg.download_dir,
                             on_cancel = reopen,
-                            on_submit = function(v)
-                                if v and v ~= "" then
-                                    cfg.custom_books_dirs = { v }
+                            on_select = function(selected_path)
+                                if selected_path and selected_path ~= "" then
+                                    cfg.custom_books_dirs = { selected_path }
+                                    cfg.download_dir = selected_path
                                     Settings.save(cfg)
                                 end
                                 reopen()
@@ -1009,9 +1011,9 @@ function UISettings.showSettingsDialog(on_finish_cb)
         local cfg = Settings.load()
         local cur_p = cfg.provider or Constants.CLOUD_PROVIDERS.NONE
         local cloud_summary = Cloud.isConfigured(cur_p)
-            and Cloud.getProviderLabel(cur_p)
+            and Cloud.getProviderShortLabel(cur_p)
             or _("Not Connected")
-        local home_summary = cfg.use_as_home_screen and _("Home Screen") or _("Book Folder")
+        local home_summary = cfg.use_as_home_screen and _("Nimbus Library") or _("File Browser")
         local sync_summary = (cfg.auto_sync_open and _("Auto") or _("Manual"))
             .. (KOSync.isConfigured(cfg) and " + KOSync" or "")
 
@@ -1025,11 +1027,11 @@ function UISettings.showSettingsDialog(on_finish_cb)
                 table.insert(vg, VerticalSpan:new{ width = sc(4) })
                 table.insert(vg, Widgets.createMenuList({
                     Widgets.createMenuRow(_("Cloud Storage"),
-                        rightChevron(cloud_summary, Cloud.isConfigured(cur_p)), inner_w, function()
+                        rightChevron(cloud_summary, Cloud.isConfigured(cur_p), math.floor(inner_w * 0.56)), inner_w, function()
                             closeDlg()
                             showCloudStorageMenu()
                         end),
-                    Widgets.createMenuRow(_("Library & Home Screen"),
+                    Widgets.createMenuRow(_("Library"),
                         rightChevron(home_summary, false), inner_w, function()
                             closeDlg()
                             showLibraryHomeMenu()

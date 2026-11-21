@@ -931,3 +931,66 @@ msgstr "Desconectar de %s? As credenciais salvas serão removidas do Nimbus. Seu
 
 msgid "Edit Server Settings"
 msgstr "Editar configurações do servidor"
+
+msgid "Background"
+msgstr "Segundo plano"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Enviando %d livro(s) em segundo plano..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Enviando (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Explorador de arquivos"
+
+msgid "Library"
+msgstr "Biblioteca"
+
+msgid "Nimbus Library"
+msgstr "Biblioteca Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Mostrar a biblioteca Nimbus em vez da lista de arquivos do KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Usar o Nimbus como biblioteca"
+
+msgid "%d %s in this folder"
+msgstr "%d %s nesta pasta"
+
+msgid "+ New"
+msgstr "+ Nova"
+
+msgid "Create"
+msgstr "Criar"
+
+msgid "Create Folder"
+msgstr "Criar pasta"
+
+msgid "Created '%s'."
+msgstr "'%s' criada."
+
+msgid "Failed to create folder."
+msgstr "Falha ao criar pasta."
+
+msgid "Folder name:"
+msgstr "Nome da pasta:"
+
+msgid "No subfolders"
+msgstr "Sem subpastas"
+
+msgid "Page %d of %d"
+msgstr "Página %d de %d"
+
+msgid "Parent Folder"
+msgstr "Pasta superior"
+
+msgid "Select Book Folder"
+msgstr "Selecionar pasta de livros"
+
+msgid "Select Folder"
+msgstr "Selecionar pasta"
+
+msgid "%s (Backup)"
+msgstr "%s (Backup)"

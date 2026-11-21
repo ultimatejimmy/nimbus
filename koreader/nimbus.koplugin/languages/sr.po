@@ -931,3 +931,66 @@ msgstr "Искључити се са %s? Сачувани акредитиви �
 
 msgid "Edit Server Settings"
 msgstr "Измени подешавања сервера"
+
+msgid "Background"
+msgstr "У позадини"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Отпремање %d књиге/а у позадини..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Отпремање (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Прегледач фајлова"
+
+msgid "Library"
+msgstr "Библиотека"
+
+msgid "Nimbus Library"
+msgstr "Nimbus библиотека"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Прикажи Nimbus библиотеку уместо KOReader листе фајлова"
+
+msgid "Use Nimbus as Library"
+msgstr "Користи Nimbus као библиотеку"
+
+msgid "%d %s in this folder"
+msgstr "%d %s у овој фасцикли"
+
+msgid "+ New"
+msgstr "+ Нова"
+
+msgid "Create"
+msgstr "Направи"
+
+msgid "Create Folder"
+msgstr "Направи фасциклу"
+
+msgid "Created '%s'."
+msgstr "Направљено '%s'."
+
+msgid "Failed to create folder."
+msgstr "Прављење фасцикле није успело."
+
+msgid "Folder name:"
+msgstr "Име фасцикле:"
+
+msgid "No subfolders"
+msgstr "Нема подфасцикли"
+
+msgid "Page %d of %d"
+msgstr "Страна %d од %d"
+
+msgid "Parent Folder"
+msgstr "Родитељска фасцикла"
+
+msgid "Select Book Folder"
+msgstr "Изабери фасциклу књига"
+
+msgid "Select Folder"
+msgstr "Изабери фасциклу"
+
+msgid "%s (Backup)"
+msgstr "%s (Резервна копија)"

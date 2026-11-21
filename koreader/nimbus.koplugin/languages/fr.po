@@ -931,3 +931,66 @@ msgstr "Se déconnecter de %s ? Les identifiants enregistrés seront supprimés 
 
 msgid "Edit Server Settings"
 msgstr "Modifier les paramètres du serveur"
+
+msgid "Background"
+msgstr "Arrière-plan"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Envoi de %d livre(s) en arrière-plan..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Envoi (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Explorateur de fichiers"
+
+msgid "Library"
+msgstr "Bibliothèque"
+
+msgid "Nimbus Library"
+msgstr "Bibliothèque Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Afficher la bibliothèque Nimbus à la place de la liste des fichiers de KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Utiliser Nimbus comme bibliothèque"
+
+msgid "%d %s in this folder"
+msgstr "%d %s dans ce dossier"
+
+msgid "+ New"
+msgstr "+ Nouveau"
+
+msgid "Create"
+msgstr "Créer"
+
+msgid "Create Folder"
+msgstr "Créer un dossier"
+
+msgid "Created '%s'."
+msgstr "« %s » créé."
+
+msgid "Failed to create folder."
+msgstr "Échec de la création du dossier."
+
+msgid "Folder name:"
+msgstr "Nom du dossier :"
+
+msgid "No subfolders"
+msgstr "Aucun sous-dossier"
+
+msgid "Page %d of %d"
+msgstr "Page %d sur %d"
+
+msgid "Parent Folder"
+msgstr "Dossier parent"
+
+msgid "Select Book Folder"
+msgstr "Sélectionner le dossier de livres"
+
+msgid "Select Folder"
+msgstr "Sélectionner un dossier"
+
+msgid "%s (Backup)"
+msgstr "%s (Sauvegarde)"

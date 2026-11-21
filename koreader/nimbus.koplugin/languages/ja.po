@@ -931,3 +931,66 @@ msgstr "%s から切断しますか？保存された認証情報は Nimbus か�
 
 msgid "Edit Server Settings"
 msgstr "サーバー設定を編集"
+
+msgid "Background"
+msgstr "バックグラウンド"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "%d 冊をバックグラウンドでアップロード中..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· アップロード中 (%d/%d)..."
+
+msgid "File Browser"
+msgstr "ファイルブラウザ"
+
+msgid "Library"
+msgstr "ライブラリ"
+
+msgid "Nimbus Library"
+msgstr "Nimbus ライブラリ"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "KOReader のファイル一覧の代わりに Nimbus ライブラリを表示する"
+
+msgid "Use Nimbus as Library"
+msgstr "Nimbus をライブラリとして使用"
+
+msgid "%d %s in this folder"
+msgstr "このフォルダ内に %d %s"
+
+msgid "+ New"
+msgstr "+ 新規"
+
+msgid "Create"
+msgstr "作成"
+
+msgid "Create Folder"
+msgstr "フォルダを作成"
+
+msgid "Created '%s'."
+msgstr "「%s」を作成しました。"
+
+msgid "Failed to create folder."
+msgstr "フォルダの作成に失敗しました。"
+
+msgid "Folder name:"
+msgstr "フォルダ名:"
+
+msgid "No subfolders"
+msgstr "サブフォルダはありません"
+
+msgid "Page %d of %d"
+msgstr "%d / %d ページ"
+
+msgid "Parent Folder"
+msgstr "親フォルダ"
+
+msgid "Select Book Folder"
+msgstr "本のフォルダを選択"
+
+msgid "Select Folder"
+msgstr "フォルダを選択"
+
+msgid "%s (Backup)"
+msgstr "%s（バックアップ）"

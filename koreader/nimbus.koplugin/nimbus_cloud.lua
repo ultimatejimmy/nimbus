@@ -50,6 +50,20 @@ function Cloud.getProviderLabel(provider)
     return base_label
 end
 
+function Cloud.getProviderShortLabel(provider)
+    local base, is_backup = Cloud.parseProvider(provider)
+    local base_label
+    if base == Constants.CLOUD_PROVIDERS.GDRIVE then base_label = _("Google Drive")
+    elseif base == Constants.CLOUD_PROVIDERS.ONEDRIVE then base_label = _("Microsoft OneDrive")
+    elseif base == Constants.CLOUD_PROVIDERS.DROPBOX then base_label = _("Dropbox")
+    elseif base == Constants.CLOUD_PROVIDERS.WEBDAV then base_label = _("WebDAV")
+    else return _("Not Configured") end
+    if is_backup then
+        return string.format(_("%s (Backup)"), base_label)
+    end
+    return base_label
+end
+
 function Cloud.loadCredentials(provider)
     local base, is_backup = Cloud.parseProvider(provider)
     if is_backup then

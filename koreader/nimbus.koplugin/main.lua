@@ -80,13 +80,21 @@ local Nimbus = WidgetContainer:extend{
 
 local _live_nimbus_plugin = nil
 
+local function getEmbedSlot(fm_self)
+    if fm_self and fm_self._navbar_inner and fm_self._navbar_inner[1] then
+        return fm_self._navbar_inner
+    end
+    return fm_self and fm_self[1]
+end
+
 local function embedIntoFileManager(fm_self)
-    if not fm_self or not fm_self[1] or not fm_self[1][1] then return end
+    local slot = getEmbedSlot(fm_self)
+    if not fm_self or not slot or not slot[1] then return end
     if not Settings.load().use_as_home_screen or fm_self._nimbus_browsing_files then return end
-    if fm_self._nimbus_embedded_view and fm_self[1][1] == fm_self._nimbus_embedded_view then return end
+    if fm_self._nimbus_embedded_view and slot[1] == fm_self._nimbus_embedded_view then return end
 
     local ok_err, err = pcall(function()
-        fm_self._nimbus_orig_fc = fm_self._nimbus_orig_fc or fm_self[1][1]
+        fm_self._nimbus_orig_fc = fm_self._nimbus_orig_fc or slot[1]
         local view = UILibrary.buildView(function(filepath)
             if _live_nimbus_plugin then
                 _live_nimbus_plugin:openBookFile(filepath)
@@ -104,12 +112,12 @@ local function embedIntoFileManager(fm_self)
             end,
         })
         fm_self._nimbus_embedded_view = view
-        fm_self[1][1] = view
+        slot[1] = view
     end)
     if not ok_err then
         Logger.warn("Failed to embed into FileManager, falling back: " .. tostring(err))
         if fm_self._nimbus_orig_fc then
-            fm_self[1][1] = fm_self._nimbus_orig_fc
+            slot[1] = fm_self._nimbus_orig_fc
         end
     end
 end
@@ -158,8 +166,16 @@ function Nimbus:init()
         if _G.G_reader_settings and _G.G_reader_settings.saveSetting then
             _G.G_reader_settings:saveSetting("start_with", "filemanager")
         end
-        if self.ui and not self.ui.document and self.ui[1] then
+        if self.ui and not self.ui.document and getEmbedSlot(self.ui) then
             embedIntoFileManager(self.ui)
+            if package.loaded["infra/sui_core"] then
+                UIManager:scheduleIn(0, function()
+                    if self.ui and self.ui._nimbus_embedded_view and not self.ui._nimbus_browsing_files
+                        and self.ui._nimbus_embedded_view.refreshView then
+                        self.ui._nimbus_embedded_view.refreshView()
+                    end
+                end)
+            end
         end
     end
 end

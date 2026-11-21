@@ -931,3 +931,66 @@ msgstr "Отключиться от %s? Сохранённые учётные д
 
 msgid "Edit Server Settings"
 msgstr "Изменить настройки сервера"
+
+msgid "Background"
+msgstr "В фоне"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Загрузка %d книг(и) в фоне..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Загрузка (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Файловый менеджер"
+
+msgid "Library"
+msgstr "Библиотека"
+
+msgid "Nimbus Library"
+msgstr "Библиотека Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Показывать библиотеку Nimbus вместо списка файлов KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Использовать Nimbus как библиотеку"
+
+msgid "%d %s in this folder"
+msgstr "%d %s в этой папке"
+
+msgid "+ New"
+msgstr "+ Создать"
+
+msgid "Create"
+msgstr "Создать"
+
+msgid "Create Folder"
+msgstr "Создать папку"
+
+msgid "Created '%s'."
+msgstr "Создано «%s»."
+
+msgid "Failed to create folder."
+msgstr "Не удалось создать папку."
+
+msgid "Folder name:"
+msgstr "Имя папки:"
+
+msgid "No subfolders"
+msgstr "Нет подпапок"
+
+msgid "Page %d of %d"
+msgstr "Страница %d из %d"
+
+msgid "Parent Folder"
+msgstr "Родительская папка"
+
+msgid "Select Book Folder"
+msgstr "Выберите папку с книгами"
+
+msgid "Select Folder"
+msgstr "Выбрать папку"
+
+msgid "%s (Backup)"
+msgstr "%s (Резервная копия)"

@@ -931,3 +931,66 @@ msgstr "Odpojiť od %s? Uložené prihlasovacie údaje budú z Nimbusu odstráne
 
 msgid "Edit Server Settings"
 msgstr "Upraviť nastavenia servera"
+
+msgid "Background"
+msgstr "Na pozadí"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Nahrávanie %d kníh na pozadí..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Nahrávanie (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Prehliadač súborov"
+
+msgid "Library"
+msgstr "Knižnica"
+
+msgid "Nimbus Library"
+msgstr "Knižnica Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Zobraziť knižnicu Nimbus namiesto zoznamu súborov KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Použiť Nimbus ako knižnicu"
+
+msgid "%d %s in this folder"
+msgstr "%d %s v tomto priečinku"
+
+msgid "+ New"
+msgstr "+ Nový"
+
+msgid "Create"
+msgstr "Vytvoriť"
+
+msgid "Create Folder"
+msgstr "Vytvoriť priečinok"
+
+msgid "Created '%s'."
+msgstr "Vytvorené '%s'."
+
+msgid "Failed to create folder."
+msgstr "Nepodarilo sa vytvoriť priečinok."
+
+msgid "Folder name:"
+msgstr "Názov priečinka:"
+
+msgid "No subfolders"
+msgstr "Žiadne podpriečinky"
+
+msgid "Page %d of %d"
+msgstr "Strana %d z %d"
+
+msgid "Parent Folder"
+msgstr "Nadradený priečinok"
+
+msgid "Select Book Folder"
+msgstr "Vybrať priečinok s knihami"
+
+msgid "Select Folder"
+msgstr "Vybrať priečinok"
+
+msgid "%s (Backup)"
+msgstr "%s (Záloha)"

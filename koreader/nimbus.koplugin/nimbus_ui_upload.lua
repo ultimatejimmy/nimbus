@@ -15,6 +15,7 @@ local ok_loc, Localization = pcall(require, "localization_nimbus")
 local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Cloud = require("nimbus_cloud")
+local Settings = require("nimbus_settings")
 local Sync = require("nimbus_sync")
 local NimbusProgress = require("nimbus_progress")
 local Widgets = require("nimbus_ui_widgets")
@@ -23,7 +24,28 @@ local theme = require("nimbus_theme")
 local UploadMixin = {}
 local sc = theme.sc
 
-function UploadMixin.uploadBookBatch(books_list, open_doc, on_complete)
+UploadMixin._active_job = nil
+UploadMixin._status_listener = nil
+
+function UploadMixin.getActiveJob()
+    return UploadMixin._active_job
+end
+
+function UploadMixin.setStatusListener(fn)
+    UploadMixin._status_listener = fn
+end
+
+local function notifyUploadStatus()
+    if type(UploadMixin._status_listener) == "function" then
+        pcall(UploadMixin._status_listener)
+    end
+end
+
+function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
+    if UploadMixin._active_job then
+        UploadMixin._active_job.reopen()
+        return
+    end
     if not Cloud.isConfigured() then
         Widgets.showToast(_("Please connect a cloud storage provider in Settings first."), 3)
         if on_complete then on_complete(false, 0) end
@@ -36,66 +58,36 @@ function UploadMixin.uploadBookBatch(books_list, open_doc, on_complete)
     end
 
     local total_books = #books_list
-    local prog_dlg = NimbusProgress:new{
-        title = _("Uploading to Nimbus Cloud"),
+    local active_cancel_fn = nil
+    local is_canceled = false
+    local finished = false
+    local uploaded = 0
+    local last_err = nil
+    local batch_catalog = nil
+    local dirty_catalog = false
+    local since_last_save = 0
+
+    local prog_dlg
+    local job = {
+        current = 1,
+        total = total_books,
+        uploaded = 0,
+        pct = 0,
         subtitle = _("Preparing upload..."),
         detail = string.format(_("0 of %d books"), total_books),
-        progress = 0,
+        is_background = false,
     }
-    prog_dlg:show()
+    UploadMixin._active_job = job
 
-    UIManager:nextTick(function()
-        local uploaded = 0
-        local last_err = nil
-
-        for idx, book in ipairs(books_list) do
-            if prog_dlg:isCanceled() then break end
-            local filepath = book.local_path or book.filepath
-            local title = book.title or (filepath and filepath:match("([^/\\]+)$")) or "Book"
-            local base_pct = math.floor(((idx - 1) / total_books) * 100)
-            prog_dlg:setProgress(base_pct,
-                string.format(_("Uploading %d of %d..."), idx, total_books),
-                title)
-
-            local props = book.props or {
-                title = book.title,
-                authors = book.authors,
-                series = book.series,
-                series_index = book.series_index,
-                language = book.language,
-                isbn = book.isbn,
-                partial_md5 = book.partial_md5,
-            }
-
-            local ok_up, res_or_err = false, nil
-            Sync.uploadBook(filepath, props, nil, function(ok, res)
-                ok_up = ok
-                res_or_err = res
-            end, {
-                open_doc = open_doc,
-                is_canceled = function() return prog_dlg:isCanceled() end,
-                on_progress = function(sent, total_b, phase)
-                    local file_frac = (total_b and total_b > 0) and (sent / total_b) or 0
-                    local overall_pct = math.floor((((idx - 1) + file_frac) / total_books) * 100)
-                    local sub = (phase == "finalizing")
-                        and string.format(_("Finalizing %d of %d..."), idx, total_books)
-                        or string.format("%d/%d · %s/%s", idx, total_books,
-                            NimbusProgress.formatBytes(sent), NimbusProgress.formatBytes(total_b))
-                    prog_dlg:setProgress(overall_pct, sub, title)
-                end,
-            })
-
-            if ok_up then
-                uploaded = uploaded + 1
-            else
-                last_err = res_or_err
-                if res_or_err == "canceled" then break end
-            end
+    local function closeAndFinish(is_canceled_flag)
+        UploadMixin._active_job = nil
+        if prog_dlg and not prog_dlg.is_closed then
+            prog_dlg:close()
         end
+        notifyUploadStatus()
 
-        prog_dlg:close()
         local toast_msg
-        if prog_dlg:isCanceled() then
+        if is_canceled_flag then
             toast_msg = string.format(_("Upload canceled (%d uploaded)."), uploaded)
         elseif uploaded > 0 then
             toast_msg = string.format(_("Uploaded %d of %d book(s) to Nimbus Cloud!"), uploaded, total_books)
@@ -104,10 +96,207 @@ function UploadMixin.uploadBookBatch(books_list, open_doc, on_complete)
         end
 
         if on_complete then
-            on_complete(uploaded > 0, uploaded, toast_msg)
+            on_complete(uploaded > 0, uploaded, toast_msg, job.is_background)
         else
             Widgets.showToast(toast_msg, 3)
         end
+    end
+
+    local function finalizeBatch(is_canceled_flag)
+        if finished then return end
+        finished = true
+        if active_cancel_fn then
+            local cancel_sub = active_cancel_fn
+            active_cancel_fn = nil
+            pcall(cancel_sub)
+        end
+
+        if dirty_catalog and batch_catalog then
+            Sync.runInBackground(function()
+                local ok_save, save_err = false, nil
+                Sync.saveCatalog(batch_catalog, function(ok_s, err_s)
+                    ok_save = ok_s
+                    save_err = err_s
+                end)
+                if ok_save then
+                    local _cat, merged = Sync.loadCachedCatalog()
+                    Sync.saveCachedCatalog(batch_catalog, merged)
+                end
+                return { ok = ok_save, err = save_err }
+            end, function(ok_bg, res)
+                if (not ok_bg or (type(res) == "table" and not res.ok)) and not last_err then
+                    last_err = (type(res) == "table" and res.err) or res
+                end
+                closeAndFinish(is_canceled_flag)
+            end)
+        else
+            if uploaded > 0 and batch_catalog then
+                local _cat, merged = Sync.loadCachedCatalog()
+                Sync.saveCachedCatalog(batch_catalog, merged)
+            end
+            closeAndFinish(is_canceled_flag)
+        end
+    end
+
+    local function openProgressDialog()
+        if finished then return end
+        if prog_dlg and not prog_dlg.is_closed then return end
+        job.is_background = false
+        prog_dlg = NimbusProgress:new{
+            title = _("Uploading to Nimbus Cloud"),
+            subtitle = job.subtitle,
+            detail = job.detail,
+            progress = job.pct,
+            background_text = _("Background"),
+            on_background = function()
+                if finished then return end
+                job.is_background = true
+                notifyUploadStatus()
+                Widgets.showToast(string.format(_("Uploading %d book(s) in background..."), math.max(1, total_books - uploaded)), 2.5)
+            end,
+            on_cancel = function()
+                is_canceled = true
+                finalizeBatch(true)
+            end,
+        }
+        prog_dlg:show()
+        notifyUploadStatus()
+    end
+
+    job.reopen = openProgressDialog
+    job.cancel = function()
+        is_canceled = true
+        finalizeBatch(true)
+    end
+
+    openProgressDialog()
+
+    local function updateJobProgress(pct, subtitle, detail)
+        job.pct = pct
+        job.subtitle = subtitle
+        job.detail = detail
+        if prog_dlg and not prog_dlg.is_closed then
+            prog_dlg:setProgress(pct, subtitle, detail)
+        end
+        if job.is_background then
+            notifyUploadStatus()
+        end
+    end
+
+    local function uploadNext(idx)
+        if finished or is_canceled then
+            finalizeBatch(true)
+            return
+        end
+        if idx > total_books then
+            finalizeBatch(false)
+            return
+        end
+
+        local book = books_list[idx]
+        local filepath = book.local_path or book.filepath
+        local title = book.title or (filepath and filepath:match("([^/\\]+)$")) or _("Book")
+        local base_pct = math.floor(((idx - 1) / total_books) * 100)
+        job.current = idx
+        updateJobProgress(base_pct, string.format(_("Uploading %d of %d..."), idx, total_books), title)
+
+        local props = book.props or {
+            title = book.title,
+            authors = book.authors,
+            series = book.series,
+            series_index = book.series_index,
+            language = book.language,
+            isbn = book.isbn,
+            partial_md5 = book.partial_md5,
+        }
+
+        local _started, cancel_fn = Sync.runInBackground(function()
+            local ok_up, res_or_err = false, nil
+            Sync.uploadBook(filepath, props, nil, function(ok, res)
+                ok_up = ok
+                res_or_err = res
+            end, {
+                catalog = batch_catalog,
+                defer_catalog_save = true,
+                skip_metadata_file = true,
+            })
+            return {
+                ok = ok_up,
+                entry = ok_up and res_or_err or nil,
+                err = (not ok_up) and tostring(res_or_err or _("Unknown error")) or nil,
+            }
+        end, function(ok_bg, res)
+            active_cancel_fn = nil
+            if finished or is_canceled then return end
+
+            if ok_bg and type(res) == "table" and res.ok and type(res.entry) == "table" then
+                batch_catalog.books = batch_catalog.books or {}
+                batch_catalog.books[res.entry.id] = res.entry
+                Settings.linkBook(filepath, res.entry.id)
+                uploaded = uploaded + 1
+                job.uploaded = uploaded
+                dirty_catalog = true
+                since_last_save = since_last_save + 1
+                local done_pct = math.floor((idx / total_books) * 100)
+                updateJobProgress(done_pct, string.format(_("Uploading %d of %d..."), idx, total_books), title)
+
+                if since_last_save >= 10 then
+                    local _s, c_fn = Sync.runInBackground(function()
+                        local ok_save = false
+                        Sync.saveCatalog(batch_catalog, function(ok_s)
+                            ok_save = ok_s
+                        end)
+                        return ok_save
+                    end, function(ok_s_bg, saved_res)
+                        active_cancel_fn = nil
+                        if finished or is_canceled then return end
+                        if ok_s_bg and saved_res then
+                            since_last_save = 0
+                            dirty_catalog = false
+                        end
+                        uploadNext(idx + 1)
+                    end)
+                    active_cancel_fn = c_fn
+                else
+                    uploadNext(idx + 1)
+                end
+            else
+                last_err = (type(res) == "table" and res.err) or res
+                if last_err == "canceled" then
+                    finalizeBatch(true)
+                else
+                    uploadNext(idx + 1)
+                end
+            end
+        end)
+        active_cancel_fn = cancel_fn
+    end
+
+    UIManager:nextTick(function()
+        if finished or is_canceled then return end
+        local _started, cancel_fn = Sync.runInBackground(function()
+            local ok_cat, cat_or_err = false, nil
+            Sync.loadCatalog(function(ok, res)
+                ok_cat = ok
+                cat_or_err = res
+            end)
+            return {
+                ok = ok_cat,
+                catalog = ok_cat and cat_or_err or nil,
+                err = (not ok_cat) and tostring(cat_or_err or _("Unknown error")) or nil,
+            }
+        end, function(ok_bg, res)
+            active_cancel_fn = nil
+            if finished or is_canceled then return end
+            if not ok_bg or type(res) ~= "table" or not res.ok or type(res.catalog) ~= "table" then
+                last_err = (type(res) == "table" and res.err) or res
+                finalizeBatch(false)
+                return
+            end
+            batch_catalog = res.catalog
+            uploadNext(1)
+        end)
+        active_cancel_fn = cancel_fn
     end)
 end
 
@@ -256,6 +445,10 @@ function UploadMixin.showBookSelectionChecklist(device_books, open_doc, on_compl
 end
 
 function UploadMixin.showUploadDialog(device_books, open_doc_info, on_complete)
+    if UploadMixin._active_job then
+        UploadMixin._active_job.reopen()
+        return
+    end
     local unsynced = {}
     for _, b in ipairs(device_books or {}) do
         if not b.is_in_cloud then

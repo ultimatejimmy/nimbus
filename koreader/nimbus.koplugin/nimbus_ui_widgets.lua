@@ -490,7 +490,7 @@ function Widgets.showCardDialog(opts)
     }
     local title_w = TextWidget:new{
         text = opts.title or "Nimbus",
-        face = Font:getFace("NotoSerif-Regular.ttf", 20),
+        face = Font:getFace(theme.getTitleFontName and theme.getTitleFontName() or "tfont", 20),
         bold = true,
         fgcolor = Blitbuffer.COLOR_BLACK,
         max_width = inner_w - sc(36),

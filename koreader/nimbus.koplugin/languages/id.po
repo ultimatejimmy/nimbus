@@ -931,3 +931,66 @@ msgstr "Putuskan koneksi dari %s? Kredensial tersimpan akan dihapus dari Nimbus.
 
 msgid "Edit Server Settings"
 msgstr "Edit Pengaturan Server"
+
+msgid "Background"
+msgstr "Latar Belakang"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Mengunggah %d buku di latar belakang..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Mengunggah (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Peramban File"
+
+msgid "Library"
+msgstr "Perpustakaan"
+
+msgid "Nimbus Library"
+msgstr "Perpustakaan Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Tampilkan perpustakaan Nimbus alih-alih daftar file KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Gunakan Nimbus sebagai Perpustakaan"
+
+msgid "%d %s in this folder"
+msgstr "%d %s di folder ini"
+
+msgid "+ New"
+msgstr "+ Baru"
+
+msgid "Create"
+msgstr "Buat"
+
+msgid "Create Folder"
+msgstr "Buat Folder"
+
+msgid "Created '%s'."
+msgstr "'%s' dibuat."
+
+msgid "Failed to create folder."
+msgstr "Gagal membuat folder."
+
+msgid "Folder name:"
+msgstr "Nama folder:"
+
+msgid "No subfolders"
+msgstr "Tidak ada subfolder"
+
+msgid "Page %d of %d"
+msgstr "Halaman %d dari %d"
+
+msgid "Parent Folder"
+msgstr "Folder Induk"
+
+msgid "Select Book Folder"
+msgstr "Pilih Folder Buku"
+
+msgid "Select Folder"
+msgstr "Pilih Folder"
+
+msgid "%s (Backup)"
+msgstr "%s (Cadangan)"

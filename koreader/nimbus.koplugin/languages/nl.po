@@ -931,3 +931,66 @@ msgstr "Verbinding met %s verbreken? Opgeslagen inloggegevens worden uit Nimbus 
 
 msgid "Edit Server Settings"
 msgstr "Serverinstellingen bewerken"
+
+msgid "Background"
+msgstr "Achtergrond"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "%d boek(en) uploaden op de achtergrond..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Uploaden (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Bestandsbrowser"
+
+msgid "Library"
+msgstr "Bibliotheek"
+
+msgid "Nimbus Library"
+msgstr "Nimbus-bibliotheek"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Nimbus-bibliotheek tonen in plaats van KOReader-bestandenlijst"
+
+msgid "Use Nimbus as Library"
+msgstr "Nimbus als bibliotheek gebruiken"
+
+msgid "%d %s in this folder"
+msgstr "%d %s in deze map"
+
+msgid "+ New"
+msgstr "+ Nieuw"
+
+msgid "Create"
+msgstr "Maken"
+
+msgid "Create Folder"
+msgstr "Map maken"
+
+msgid "Created '%s'."
+msgstr "'%s' aangemaakt."
+
+msgid "Failed to create folder."
+msgstr "Kan map niet aanmaken."
+
+msgid "Folder name:"
+msgstr "Mapnaam:"
+
+msgid "No subfolders"
+msgstr "Geen submappen"
+
+msgid "Page %d of %d"
+msgstr "Pagina %d van %d"
+
+msgid "Parent Folder"
+msgstr "Bovenliggende map"
+
+msgid "Select Book Folder"
+msgstr "Boekenmap selecteren"
+
+msgid "Select Folder"
+msgstr "Map selecteren"
+
+msgid "%s (Backup)"
+msgstr "%s (Back-up)"

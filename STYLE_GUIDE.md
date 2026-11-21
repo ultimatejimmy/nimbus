@@ -37,7 +37,8 @@ Keep files small, single-purpose (target **under 450 lines per file**), and stri
 
 ## 2. UI/UX Design Tokens (`nimbus_theme.lua`)
 
-- **Monochrome E-Ink Clarity**: Pure black (`Blitbuffer.COLOR_BLACK`) on white (`Blitbuffer.COLOR_WHITE`), `COLOR_DARK_GRAY` 1px dividers, and `COLOR_LIGHT_GRAY` section pills.
+- **Monochrome E-Ink Clarity (No Grey on E-Ink)**: Do not use grey (`COLOR_GRAY`, `COLOR_DARK_GRAY`, `COLOR_LIGHT_GRAY`, `Color8(...)`) for text, icons, or readable UI elements — grey is hard to read on e-ink displays. Always use pure black (`Blitbuffer.COLOR_BLACK`) on pure white (`Blitbuffer.COLOR_WHITE`) for all text and labels, and keep thin structural rules crisp.
+- **Minimal E-Ink Progress Dialogs**: Keep progress dialogs uncluttered (status + title/item only) and throttle redraws (≥ 1.2 s) without rapid byte-counter churn (e.g., avoid `xx MB / XX MB`).
 - **Dynamic Screen Scaling**: All sizes, paddings, borders, and margins pass through `sc(val)` (`Device.screen:scaleBySize`).
 - **Single-Choice vs. Toggle**: Use `Widgets.createRadioRow` for mutually exclusive single-choice pickers (filters, providers, matching methods) and `Widgets.createCheckboxRow` only for boolean on/off toggles or multi-select checklists.
 - **Dense Bordered Menus**: Action menus (`Library Menu`, `Book Actions`, `Settings`) should wrap rows in `Widgets.createMenuList` (1px outer border, rounded corners, 1px `COLOR_LIGHT_GRAY` dividers, compact `sc(3)` vertical padding).
@@ -47,9 +48,11 @@ Keep files small, single-purpose (target **under 450 lines per file**), and stri
 - **Neutral Terminology**: Never use trademarked terms such as `"Whispersync"` in UI copy, settings, or comments; use `"Reading Sync"` / `"Auto-Jump to Latest Page"`.
 
 ### Typography
+Always use KOReader's fontmap slots (`tfont` / `cfont`) rather than hardcoded `.ttf` filenames so Nimbus automatically inherits KOReader / SimpleUI font choices.
+
 | Role | Font Face | Base Size | Usage |
 | :--- | :--- | :--- | :--- |
-| **Title / Header** | `NotoSerif-Regular.ttf` | 20–22 pt (bold) | View headers and card titles |
+| **Title / Header** | `tfont` | 20–22 pt (bold) | View headers and card titles |
 | **Book Titles** | `cfont` | 14–18 pt (bold) | Book titles in Grid & List views |
 | **Body / Labels** | `cfont` | 16–18 pt | Setting rows, checklists, buttons |
 | **Subtext / Meta** | `cfont` | 13–15 pt | Authors, progress, provider status |

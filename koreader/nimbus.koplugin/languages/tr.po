@@ -931,3 +931,66 @@ msgstr "%s bağlantısı kesilsin mi? Kayıtlı kimlik bilgileri Nimbus'tan kald
 
 msgid "Edit Server Settings"
 msgstr "Sunucu Ayarlarını Düzenle"
+
+msgid "Background"
+msgstr "Arka Plan"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "%d kitap arka planda yükleniyor..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Yükleniyor (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Dosya Tarayıcı"
+
+msgid "Library"
+msgstr "Kütüphane"
+
+msgid "Nimbus Library"
+msgstr "Nimbus Kütüphanesi"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "KOReader dosya listesi yerine Nimbus kütüphanesini göster"
+
+msgid "Use Nimbus as Library"
+msgstr "Nimbus'u Kütüphane Olarak Kullan"
+
+msgid "%d %s in this folder"
+msgstr "Bu klasörde %d %s"
+
+msgid "+ New"
+msgstr "+ Yeni"
+
+msgid "Create"
+msgstr "Oluştur"
+
+msgid "Create Folder"
+msgstr "Klasör Oluştur"
+
+msgid "Created '%s'."
+msgstr "'%s' oluşturuldu."
+
+msgid "Failed to create folder."
+msgstr "Klasör oluşturulamadı."
+
+msgid "Folder name:"
+msgstr "Klasör adı:"
+
+msgid "No subfolders"
+msgstr "Alt klasör yok"
+
+msgid "Page %d of %d"
+msgstr "Sayfa %d / %d"
+
+msgid "Parent Folder"
+msgstr "Üst Klasör"
+
+msgid "Select Book Folder"
+msgstr "Kitap Klasörünü Seç"
+
+msgid "Select Folder"
+msgstr "Klasör Seç"
+
+msgid "%s (Backup)"
+msgstr "%s (Yedekleme)"

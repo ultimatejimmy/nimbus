@@ -931,3 +931,66 @@ msgstr "هل تريد قطع الاتصال من %s؟ ستتم إزالة بيا
 
 msgid "Edit Server Settings"
 msgstr "تعديل إعدادات الخادم"
+
+msgid "Background"
+msgstr "في الخلفية"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "جارٍ رفع %d كتاب في الخلفية..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· جارٍ الرفع (%d/%d)..."
+
+msgid "File Browser"
+msgstr "متصفح الملفات"
+
+msgid "Library"
+msgstr "المكتبة"
+
+msgid "Nimbus Library"
+msgstr "مكتبة Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "عرض مكتبة Nimbus بدلاً من قائمة ملفات KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "استخدام Nimbus كمكتبة"
+
+msgid "%d %s in this folder"
+msgstr "%d %s في هذا المجلد"
+
+msgid "+ New"
+msgstr "+ جديد"
+
+msgid "Create"
+msgstr "إنشاء"
+
+msgid "Create Folder"
+msgstr "إنشاء مجلد"
+
+msgid "Created '%s'."
+msgstr "تم إنشاء '%s'."
+
+msgid "Failed to create folder."
+msgstr "فشل إنشاء المجلد."
+
+msgid "Folder name:"
+msgstr "اسم المجلد:"
+
+msgid "No subfolders"
+msgstr "لا توجد مجلدات فرعية"
+
+msgid "Page %d of %d"
+msgstr "صفحة %d من %d"
+
+msgid "Parent Folder"
+msgstr "المجلد الأصلي"
+
+msgid "Select Book Folder"
+msgstr "اختر مجلد الكتب"
+
+msgid "Select Folder"
+msgstr "اختر مجلداً"
+
+msgid "%s (Backup)"
+msgstr "%s (النسخ الاحتياطي)"

@@ -244,9 +244,8 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
     local attr = lfs and lfs.attributes(filepath)
     local size_bytes = (attr and attr.size) or 0
 
-    Sync.loadCatalog(function(ok_cat, catalog_or_err)
-        if not ok_cat then return cb(false, catalog_or_err) end
-        local catalog = catalog_or_err
+    local function doUploadWithCatalog(catalog)
+        catalog.books = catalog.books or {}
 
         -- Check if already in catalog
         local existing_id = Matcher.resolve(filepath, catalog, {
@@ -326,8 +325,15 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
             deleted = false,
         }
 
-        Cloud.uploadString(folder .. "/metadata.json", Http.jsonEncode(entry), "application/json", function() end)
+        if not opts.skip_metadata_file then
+            Cloud.uploadString(folder .. "/metadata.json", Http.jsonEncode(entry), "application/json", function() end)
+        end
         catalog.books[book_id] = entry
+        if opts.defer_catalog_save then
+            Settings.linkBook(filepath, book_id)
+            Logger.info("uploadBook complete (deferred catalog save): " .. tostring(title) .. " [" .. tostring(book_id) .. "]")
+            return cb(true, entry)
+        end
         Sync.saveCatalog(catalog, function(ok_save, save_err)
             if not ok_save then
                 Logger.err("uploadBook failed to save catalog for " .. tostring(book_id) .. ": " .. tostring(save_err))
@@ -337,6 +343,15 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
             Logger.info("uploadBook complete: " .. tostring(title) .. " [" .. tostring(book_id) .. "]")
             cb(true, entry)
         end)
+    end
+
+    if type(opts.catalog) == "table" then
+        return doUploadWithCatalog(opts.catalog)
+    end
+
+    Sync.loadCatalog(function(ok_cat, catalog_or_err)
+        if not ok_cat then return cb(false, catalog_or_err) end
+        doUploadWithCatalog(catalog_or_err)
     end)
 end
 
@@ -578,10 +593,10 @@ function Sync.runInBackground(worker_fn, on_complete)
     if not ok_fu or not ffiUtil or not ffiUtil.runInSubProcess or not ok_ui or not UIManager then
         local ok_w, res = xpcall(worker_fn, debug.traceback)
         if on_complete then on_complete(ok_w, res) end
-        return true
+        return true, function() end
     end
 
-    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_, child_write_fd)
+    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_pid, child_write_fd)
         local ok_run, res = xpcall(worker_fn, debug.traceback)
         if not ok_run then
             Logger.err("Background worker exception: " .. tostring(res))
@@ -601,8 +616,18 @@ function Sync.runInBackground(worker_fn, on_complete)
         return false
     end
 
+    local canceled = false
+    local function cancel()
+        if canceled then return end
+        canceled = true
+        if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+        if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
+        if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+    end
+
     local attempts = 0
     local function poll()
+        if canceled then return end
         attempts = attempts + 1
         if attempts > 180 then
             Logger.warn("Sync.runInBackground timed out")
@@ -629,7 +654,7 @@ function Sync.runInBackground(worker_fn, on_complete)
         UIManager:scheduleIn(0.3, poll)
     end
     UIManager:scheduleIn(0.3, poll)
-    return true
+    return true, cancel
 end
 
 return Sync

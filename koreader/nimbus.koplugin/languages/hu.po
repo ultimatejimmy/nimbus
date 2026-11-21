@@ -931,3 +931,66 @@ msgstr "Leválasztja a(z) %s fiókot? A mentett hitelesítő adatok törlődnek 
 
 msgid "Edit Server Settings"
 msgstr "Kiszolgálóbeállítások szerkesztése"
+
+msgid "Background"
+msgstr "Háttérben"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "%d könyv feltöltése a háttérben..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Feltöltés (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Fájlböngésző"
+
+msgid "Library"
+msgstr "Könyvtár"
+
+msgid "Nimbus Library"
+msgstr "Nimbus könyvtár"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "A Nimbus könyvtár megjelenítése a KOReader fájllistája helyett"
+
+msgid "Use Nimbus as Library"
+msgstr "Nimbus használata könyvtárként"
+
+msgid "%d %s in this folder"
+msgstr "%d %s ebben a mappában"
+
+msgid "+ New"
+msgstr "+ Új"
+
+msgid "Create"
+msgstr "Létrehozás"
+
+msgid "Create Folder"
+msgstr "Mappa létrehozása"
+
+msgid "Created '%s'."
+msgstr "'%s' létrehozva."
+
+msgid "Failed to create folder."
+msgstr "Nem sikerült létrehozni a mappát."
+
+msgid "Folder name:"
+msgstr "Mappa neve:"
+
+msgid "No subfolders"
+msgstr "Nincsenek almappák"
+
+msgid "Page %d of %d"
+msgstr "%d / %d. oldal"
+
+msgid "Parent Folder"
+msgstr "Szülőmappa"
+
+msgid "Select Book Folder"
+msgstr "Könyvmappa kiválasztása"
+
+msgid "Select Folder"
+msgstr "Mappa kiválasztása"
+
+msgid "%s (Backup)"
+msgstr "%s (Biztonsági mentés)"

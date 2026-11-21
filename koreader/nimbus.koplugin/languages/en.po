@@ -5,6 +5,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "%d %s in this folder"
+msgstr "%d %s in this folder"
+
+msgid "%s (Backup)"
+msgstr "%s (Backup)"
+
 msgid "%s (Device Backup and Restore)"
 msgstr "%s (Device Backup and Restore)"
 
@@ -19,6 +25,9 @@ msgstr "%s authorization failed: %s"
 
 msgid "%s authorization was denied."
 msgstr "%s authorization was denied."
+
+msgid "+ New"
+msgstr "+ New"
 
 msgid "0 of %d books"
 msgstr "0 of %d books"
@@ -58,6 +67,9 @@ msgstr "Automatically download newly added cloud books to this device"
 
 msgid "Back"
 msgstr "Back"
+
+msgid "Background"
+msgstr "Background"
 
 msgid "Backup & Restore Auth"
 msgstr "Backup & Restore Auth"
@@ -154,6 +166,15 @@ msgstr "Connection timed out"
 
 msgid "Contacting %s..."
 msgstr "Contacting %s..."
+
+msgid "Create"
+msgstr "Create"
+
+msgid "Create Folder"
+msgstr "Create Folder"
+
+msgid "Created '%s'."
+msgstr "Created '%s'."
 
 msgid "CrossPoint / Sink / KOSync"
 msgstr "CrossPoint / Sink / KOSync"
@@ -254,11 +275,17 @@ msgstr "Enable CrossPoint/KOSync Bridge"
 msgid "Enter search term..."
 msgstr "Enter search term..."
 
+msgid "Failed to create folder."
+msgstr "Failed to create folder."
+
 msgid "Failed to delete from cloud: "
 msgstr "Failed to delete from cloud: "
 
 msgid "Failed to start %s authorization:\n%s"
 msgstr "Failed to start %s authorization:\n%s"
+
+msgid "File Browser"
+msgstr "File Browser"
 
 msgid "Filename"
 msgstr "Filename"
@@ -277,6 +304,9 @@ msgstr "Finalizing catalog…"
 
 msgid "Finished"
 msgstr "Finished"
+
+msgid "Folder name:"
+msgstr "Folder name:"
 
 msgid "Folder · %d %s"
 msgstr "Folder · %d %s"
@@ -329,6 +359,9 @@ msgstr "KOSync connected (%s)"
 msgid "KOSync failed: %s"
 msgstr "KOSync failed: %s"
 
+msgid "Library"
+msgstr "Library"
+
 msgid "Library & Home Screen"
 msgstr "Library & Home Screen"
 
@@ -374,6 +407,9 @@ msgstr "Nimbus"
 msgid "Nimbus Cloud"
 msgstr "Nimbus Cloud"
 
+msgid "Nimbus Library"
+msgstr "Nimbus Library"
+
 msgid "Nimbus Menu"
 msgstr "Nimbus Menu"
 
@@ -409,6 +445,9 @@ msgstr "No saved account found for this provider in backup.koplugin."
 
 msgid "No saved cloud accounts found in backup.koplugin."
 msgstr "No saved cloud accounts found in backup.koplugin."
+
+msgid "No subfolders"
+msgstr "No subfolders"
 
 msgid "None"
 msgstr "None"
@@ -457,6 +496,12 @@ msgstr "Open File Browser"
 
 msgid "Operation in Progress"
 msgstr "Operation in Progress"
+
+msgid "Page %d of %d"
+msgstr "Page %d of %d"
+
+msgid "Parent Folder"
+msgstr "Parent Folder"
 
 msgid "Password"
 msgstr "Password"
@@ -518,6 +563,9 @@ msgstr "Search library..."
 msgid "Select All"
 msgstr "Select All"
 
+msgid "Select Book Folder"
+msgstr "Select Book Folder"
+
 msgid "Select Books to Upload"
 msgstr "Select Books to Upload"
 
@@ -527,6 +575,9 @@ msgstr "Select Books to Upload... (%d on device)"
 msgid "Select Cloud Provider"
 msgstr "Select Cloud Provider"
 
+msgid "Select Folder"
+msgstr "Select Folder"
+
 msgid "Series: %s"
 msgstr "Series: %s"
 
@@ -535,6 +586,9 @@ msgstr "Server URL"
 
 msgid "Set"
 msgstr "Set"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Show Nimbus library instead of KOReader's file list"
 
 msgid "Show your library at startup instead of KOReader's file list"
 msgstr "Show your library at startup instead of KOReader's file list"
@@ -653,6 +707,9 @@ msgstr "Uploaded %d of %d book(s) to Nimbus Cloud!"
 msgid "Uploaded '%s' to Nimbus Cloud!"
 msgstr "Uploaded '%s' to Nimbus Cloud!"
 
+msgid "Uploading %d book(s) in background..."
+msgstr "Uploading %d book(s) in background..."
+
 msgid "Uploading %d of %d..."
 msgstr "Uploading %d of %d..."
 
@@ -661,6 +718,9 @@ msgstr "Uploading to Nimbus Cloud"
 
 msgid "Use Nimbus as Home Screen"
 msgstr "Use Nimbus as Home Screen"
+
+msgid "Use Nimbus as Library"
+msgstr "Use Nimbus as Library"
 
 msgid "Use as Home Screen"
 msgstr "Use as Home Screen"
@@ -706,6 +766,9 @@ msgstr "· Sync error"
 
 msgid "· Syncing..."
 msgstr "· Syncing..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Uploading (%d/%d)..."
 
 msgid "‹ Prev"
 msgstr "‹ Prev"

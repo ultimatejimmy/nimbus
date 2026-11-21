@@ -931,3 +931,66 @@ msgstr "Verbindung zu %s trennen? Gespeicherte Anmeldedaten werden aus Nimbus en
 
 msgid "Edit Server Settings"
 msgstr "Servereinstellungen bearbeiten"
+
+msgid "Background"
+msgstr "Hintergrund"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "%d Buch/Bücher wird/werden im Hintergrund hochgeladen..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Wird hochgeladen (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Dateibrowser"
+
+msgid "Library"
+msgstr "Bibliothek"
+
+msgid "Nimbus Library"
+msgstr "Nimbus-Bibliothek"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Nimbus-Bibliothek statt der KOReader-Dateiliste anzeigen"
+
+msgid "Use Nimbus as Library"
+msgstr "Nimbus als Bibliothek verwenden"
+
+msgid "%d %s in this folder"
+msgstr "%d %s in diesem Ordner"
+
+msgid "+ New"
+msgstr "+ Neu"
+
+msgid "Create"
+msgstr "Erstellen"
+
+msgid "Create Folder"
+msgstr "Ordner erstellen"
+
+msgid "Created '%s'."
+msgstr "„%s“ erstellt."
+
+msgid "Failed to create folder."
+msgstr "Ordner konnte nicht erstellt werden."
+
+msgid "Folder name:"
+msgstr "Ordnername:"
+
+msgid "No subfolders"
+msgstr "Keine Unterordner"
+
+msgid "Page %d of %d"
+msgstr "Seite %d von %d"
+
+msgid "Parent Folder"
+msgstr "Übergeordneter Ordner"
+
+msgid "Select Book Folder"
+msgstr "Bücherordner auswählen"
+
+msgid "Select Folder"
+msgstr "Ordner auswählen"
+
+msgid "%s (Backup)"
+msgstr "%s (Backup)"

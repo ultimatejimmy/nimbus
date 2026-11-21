@@ -12,6 +12,10 @@ local CenterContainer = require("ui/widget/container/centercontainer")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local ok_hg, HorizontalGroup = pcall(require, "ui/widget/horizontalgroup")
+if not ok_hg or not HorizontalGroup then HorizontalGroup = nil end
+local ok_hs, HorizontalSpan = pcall(require, "ui/widget/horizontalspan")
+if not ok_hs or not HorizontalSpan then HorizontalSpan = nil end
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local ok_loc, Localization = pcall(require, "localization_nimbus")
@@ -59,6 +63,8 @@ if InputContainer and type(InputContainer.extend) == "function" then
         progress = 0,
         cancel_text = nil,
         on_cancel = nil,
+        background_text = nil,
+        on_background = nil,
         cancelable = true,
         is_closed = false,
         is_canceled = false,
@@ -92,11 +98,12 @@ function NimbusProgress:init()
     self.subtitle = self.subtitle or _("Please wait...")
     self.detail = self.detail or ""
     self.cancel_text = self.cancel_text or _("Cancel")
+    self.background_text = self.background_text or _("Background")
     self.cancelable = (self.cancelable ~= false)
     self.progress = self.progress or 0
     self.is_closed = false
     self.is_canceled = false
-    self.redraw_interval_ms = self.redraw_interval_ms or 400
+    self.redraw_interval_ms = self.redraw_interval_ms or 1200
     self.last_redraw_time_ms = 0
     self._applied_progress = nil
     self._applied_subtitle = nil
@@ -106,7 +113,7 @@ function NimbusProgress:init()
     if TextWidget then
         self.title_widget = TextWidget:new{
             text = self.title,
-            face = Font and Font.getFace and Font:getFace("NotoSerif-Regular.ttf", 20),
+            face = Font and Font.getFace and Font:getFace("tfont", 20),
             bold = true,
             max_width = inner_width,
         }
@@ -120,7 +127,7 @@ function NimbusProgress:init()
             text = self.detail,
             face = Font and Font.getFace and Font:getFace("cfont", 13),
             max_width = inner_width,
-            fgcolor = Blitbuffer and Blitbuffer.COLOR_DARK_GRAY,
+            fgcolor = Blitbuffer and Blitbuffer.COLOR_BLACK,
             truncate_with_ellipsis = true,
             truncate_left = true,
         }
@@ -138,41 +145,69 @@ function NimbusProgress:init()
         }
     end
 
+    local has_bg = (type(self.on_background) == "function") and HorizontalGroup and HorizontalSpan
     if Button then
-        self.cancel_button = Button:new{
-            text = self.cancel_text,
-            text_font_size = 16,
-            text_font_bold = true,
-            bold = true,
-            bordersize = sc(1),
-            radius = sc(4),
-            padding = sc(6),
-            padding_h = sc(18),
-            width = inner_width,
-            enabled = self.cancelable,
-            show_parent = self,
-            callback = function()
+        local function makeActionBtn(label, w, cb)
+            local btn = Button:new{
+                text = label,
+                text_font_size = 16,
+                text_font_bold = true,
+                bold = true,
+                bordersize = sc(1),
+                radius = sc(4),
+                padding = sc(6),
+                padding_h = sc(10),
+                width = w,
+                enabled = self.cancelable,
+                show_parent = self,
+                callback = cb,
+            }
+            if btn.frame and Blitbuffer then
+                btn.frame.color = Blitbuffer.COLOR_BLACK
+                btn.frame.bordersize = sc(1)
+                btn.frame.background = Blitbuffer.COLOR_WHITE
+            end
+            return btn
+        end
+
+        if has_bg then
+            local gap = sc(8)
+            local w1 = math.floor((inner_width - gap) / 2)
+            local w2 = inner_width - gap - w1
+            self.cancel_button = makeActionBtn(self.cancel_text, w1, function()
                 self:triggerCancel()
-            end,
-        }
-        if self.cancel_button.frame and Blitbuffer then
-            self.cancel_button.frame.color = Blitbuffer.COLOR_BLACK
-            self.cancel_button.frame.bordersize = sc(1)
-            self.cancel_button.frame.background = Blitbuffer.COLOR_WHITE
+            end)
+            self.bg_button = makeActionBtn(self.background_text, w2, function()
+                self:triggerBackground()
+            end)
+        else
+            self.cancel_button = makeActionBtn(self.cancel_text, inner_width, function()
+                self:triggerCancel()
+            end)
         end
     elseif ButtonTable then
+        local row = {
+            {
+                text = self.cancel_text,
+                id = "cancel",
+                enabled = self.cancelable,
+                callback = function()
+                    self:triggerCancel()
+                end,
+            },
+        }
+        if type(self.on_background) == "function" then
+            table.insert(row, {
+                text = self.background_text,
+                id = "background",
+                callback = function()
+                    self:triggerBackground()
+                end,
+            })
+        end
         self.button_table = ButtonTable:new{
             width = inner_width,
-            buttons = {{
-                {
-                    text = self.cancel_text,
-                    id = "cancel",
-                    enabled = self.cancelable,
-                    callback = function()
-                        self:triggerCancel()
-                    end,
-                }
-            }},
+            buttons = { row },
             zero_sep = true,
             show_parent = self,
         }
@@ -230,7 +265,13 @@ function NimbusProgress:init()
         table.insert(group_items, self.pbar_widget)
         if VerticalSpan then table.insert(group_items, VerticalSpan:new{ width = sc(14) }) end
     end
-    if self.cancel_button then
+    if self.cancel_button and self.bg_button and HorizontalGroup and HorizontalSpan then
+        table.insert(group_items, HorizontalGroup:new{
+            self.cancel_button,
+            HorizontalSpan:new{ width = sc(8) },
+            self.bg_button,
+        })
+    elseif self.cancel_button then
         table.insert(group_items, self.cancel_button)
     elseif self.button_table then
         table.insert(group_items, self.button_table)
@@ -304,6 +345,14 @@ function NimbusProgress:triggerCancel()
     self:setSubtitle(_("Canceling..."))
     if self.on_cancel then
         pcall(self.on_cancel, self)
+    end
+end
+
+function NimbusProgress:triggerBackground()
+    if self.is_closed then return end
+    self:close()
+    if self.on_background then
+        pcall(self.on_background, self)
     end
 end
 

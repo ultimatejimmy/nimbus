@@ -931,3 +931,66 @@ msgstr "Відключитися від %s? Збережені облікові 
 
 msgid "Edit Server Settings"
 msgstr "Змінити налаштування сервера"
+
+msgid "Background"
+msgstr "У фоні"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Завантаження %d книг у фоні..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Завантаження (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Файловий менеджер"
+
+msgid "Library"
+msgstr "Бібліотека"
+
+msgid "Nimbus Library"
+msgstr "Бібліотека Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Показувати бібліотеку Nimbus замість списку файлів KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Використовувати Nimbus як бібліотеку"
+
+msgid "%d %s in this folder"
+msgstr "%d %s у цій теці"
+
+msgid "+ New"
+msgstr "+ Нова"
+
+msgid "Create"
+msgstr "Створити"
+
+msgid "Create Folder"
+msgstr "Створити теку"
+
+msgid "Created '%s'."
+msgstr "Створено '%s'."
+
+msgid "Failed to create folder."
+msgstr "Не вдалося створити теку."
+
+msgid "Folder name:"
+msgstr "Назва теки:"
+
+msgid "No subfolders"
+msgstr "Немає підтек"
+
+msgid "Page %d of %d"
+msgstr "Сторінка %d з %d"
+
+msgid "Parent Folder"
+msgstr "Батьківська тека"
+
+msgid "Select Book Folder"
+msgstr "Вибрати теку книг"
+
+msgid "Select Folder"
+msgstr "Вибрати теку"
+
+msgid "%s (Backup)"
+msgstr "%s (Резервна копія)"

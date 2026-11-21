@@ -931,3 +931,66 @@ msgstr "要断开与 %s 的连接吗？保存的凭据将从 Nimbus 中移除，
 
 msgid "Edit Server Settings"
 msgstr "编辑服务器设置"
+
+msgid "Background"
+msgstr "后台运行"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "正在后台上传 %d 本书..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· 正在上传 (%d/%d)..."
+
+msgid "File Browser"
+msgstr "文件浏览器"
+
+msgid "Library"
+msgstr "书库"
+
+msgid "Nimbus Library"
+msgstr "Nimbus 书库"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "显示 Nimbus 书库而不是 KOReader 文件列表"
+
+msgid "Use Nimbus as Library"
+msgstr "将 Nimbus 用作书库"
+
+msgid "%d %s in this folder"
+msgstr "此文件夹中有 %d %s"
+
+msgid "+ New"
+msgstr "+ 新建"
+
+msgid "Create"
+msgstr "创建"
+
+msgid "Create Folder"
+msgstr "创建文件夹"
+
+msgid "Created '%s'."
+msgstr "已创建“%s”。"
+
+msgid "Failed to create folder."
+msgstr "创建文件夹失败。"
+
+msgid "Folder name:"
+msgstr "文件夹名称："
+
+msgid "No subfolders"
+msgstr "没有子文件夹"
+
+msgid "Page %d of %d"
+msgstr "第 %d / %d 页"
+
+msgid "Parent Folder"
+msgstr "上级文件夹"
+
+msgid "Select Book Folder"
+msgstr "选择书籍文件夹"
+
+msgid "Select Folder"
+msgstr "选择文件夹"
+
+msgid "%s (Backup)"
+msgstr "%s（备份）"

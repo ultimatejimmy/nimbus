@@ -160,8 +160,7 @@ function UILibrary.buildView(on_open_book, opts)
     opts = opts or {}
     local embedded_fm = opts.embedded_fm
     local is_home = (opts.is_home_screen == true) or (embedded_fm ~= nil)
-    local sw = (opts.width) or Device.screen:getWidth()
-    local sh = (opts.height) or Device.screen:getHeight()
+    local sw, sh = theme.resolveHomeViewport(opts, is_home)
 
     local current_page = 1
     local current_folder = nil
@@ -303,6 +302,11 @@ function UILibrary.buildView(on_open_book, opts)
     end
 
     renderShelf = function()
+        sw, sh = theme.resolveHomeViewport(opts, is_home)
+        if host_container.dimen then
+            host_container.dimen.w = sw
+            host_container.dimen.h = sh
+        end
         local cfg = Settings.load()
         local active_tab = cfg.library_active_tab or "device"
         local view_mode = cfg.library_view_mode or "cover"
@@ -377,8 +381,11 @@ function UILibrary.buildView(on_open_book, opts)
                             closeDlg()
                             UILibrary.showUploadDialog(device_books, opts.open_doc_info, function(uploaded, _, toast_msg)
                                 if uploaded then
-                                    fetchCloudWithBar(false, toast_msg)
-                                elseif toast_msg then
+                                    catalog_data, merged_progress = Sync.loadCachedCatalog()
+                                    refreshLocalBooks(false)
+                                    if isAlive() then renderShelf() end
+                                end
+                                if toast_msg then
                                     Widgets.showToast(toast_msg, 3)
                                 end
                             end)
@@ -421,8 +428,10 @@ function UILibrary.buildView(on_open_book, opts)
                         table.insert(rows, Widgets.createMenuRow(_("Open File Browser"), chevron(), inner_w, function()
                             closeDlg()
                             if embedded_fm and embedded_fm._nimbus_orig_fc then
+                                local slot = (embedded_fm._navbar_inner and embedded_fm._navbar_inner[1])
+                                    and embedded_fm._navbar_inner or embedded_fm[1]
                                 embedded_fm._nimbus_browsing_files = true
-                                embedded_fm[1][1] = embedded_fm._nimbus_orig_fc
+                                slot[1] = embedded_fm._nimbus_orig_fc
                                 embedded_fm.layout = embedded_fm._nimbus_orig_fc.layout
                                 UIManager:setDirty(embedded_fm, "ui")
                             else
@@ -695,7 +704,10 @@ function UILibrary.buildView(on_open_book, opts)
         end
 
         local status_suffix
-        if bg_syncing then
+        local active_up = UILibrary.getActiveJob and UILibrary.getActiveJob()
+        if active_up then
+            status_suffix = string.format(_("· Uploading (%d/%d)..."), active_up.current or 1, active_up.total or 1)
+        elseif bg_syncing then
             status_suffix = _("· Syncing...")
         elseif not configured then
             status_suffix = _("· Offline")
@@ -822,8 +834,11 @@ function UILibrary.buildView(on_open_book, opts)
                 on_upload_single = function(single)
                     UILibrary.uploadBookBatch({ single }, opts.open_doc_info and opts.open_doc_info.open_doc, function(ok, _, toast_msg)
                         if ok then
-                            fetchCloudWithBar(false, toast_msg)
-                        elseif toast_msg then
+                            catalog_data, merged_progress = Sync.loadCachedCatalog()
+                            refreshLocalBooks(false)
+                            if isAlive() then renderShelf() end
+                        end
+                        if toast_msg then
                             Widgets.showToast(toast_msg, 3)
                         end
                     end)
@@ -1309,8 +1324,18 @@ function UILibrary.buildView(on_open_book, opts)
     end
     host_container.onCloseWidget = function()
         is_destroyed = true
+        if UILibrary.setStatusListener then
+            UILibrary.setStatusListener(nil)
+        end
     end
 
+    if UILibrary.setStatusListener then
+        UILibrary.setStatusListener(function()
+            if isAlive() and renderShelf then
+                renderShelf()
+            end
+        end)
+    end
     refreshLocalBooks(false)
     renderShelf()
 

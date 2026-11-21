@@ -931,3 +931,66 @@ msgstr "Odłączyć od %s? Zapisane dane logowania zostaną usunięte z Nimbusa.
 
 msgid "Edit Server Settings"
 msgstr "Edytuj ustawienia serwera"
+
+msgid "Background"
+msgstr "W tle"
+
+msgid "Uploading %d book(s) in background..."
+msgstr "Przesyłanie %d książki/książek w tle..."
+
+msgid "· Uploading (%d/%d)..."
+msgstr "· Przesyłanie (%d/%d)..."
+
+msgid "File Browser"
+msgstr "Przeglądarka plików"
+
+msgid "Library"
+msgstr "Biblioteka"
+
+msgid "Nimbus Library"
+msgstr "Biblioteka Nimbus"
+
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Pokaż bibliotekę Nimbus zamiast listy plików KOReader"
+
+msgid "Use Nimbus as Library"
+msgstr "Użyj Nimbusa jako biblioteki"
+
+msgid "%d %s in this folder"
+msgstr "%d %s w tym folderze"
+
+msgid "+ New"
+msgstr "+ Nowy"
+
+msgid "Create"
+msgstr "Utwórz"
+
+msgid "Create Folder"
+msgstr "Utwórz folder"
+
+msgid "Created '%s'."
+msgstr "Utworzono '%s'."
+
+msgid "Failed to create folder."
+msgstr "Nie udało się utworzyć folderu."
+
+msgid "Folder name:"
+msgstr "Nazwa folderu:"
+
+msgid "No subfolders"
+msgstr "Brak podfolderów"
+
+msgid "Page %d of %d"
+msgstr "Strona %d z %d"
+
+msgid "Parent Folder"
+msgstr "Folder nadrzędny"
+
+msgid "Select Book Folder"
+msgstr "Wybierz folder książek"
+
+msgid "Select Folder"
+msgstr "Wybierz folder"
+
+msgid "%s (Backup)"
+msgstr "%s (Kopia zapasowa)"
