@@ -5,6 +5,9 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Device Backup and Restore)"
+
 msgid "%s Account"
 msgstr "%s Account"
 
@@ -185,6 +188,9 @@ msgstr "Detected Sync Plugins"
 msgid "Device & About"
 msgstr "Device & About"
 
+msgid "Device Backup and Restore"
+msgstr "Device Backup and Restore"
+
 msgid "Device ID"
 msgstr "Device ID"
 
@@ -193,6 +199,18 @@ msgstr "Device: %s"
 
 msgid "Directory path scanned for local books:"
 msgstr "Directory path scanned for local books:"
+
+msgid "Disconnect"
+msgstr "Disconnect"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+
+msgid "Disconnect Account"
+msgstr "Disconnect Account"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
 
 msgid "Disconnect/Log Out"
 msgstr "Disconnect/Log Out"
@@ -226,6 +244,9 @@ msgstr "Downloading Book"
 
 msgid "Dropbox"
 msgstr "Dropbox"
+
+msgid "Edit Server Settings"
+msgstr "Edit Server Settings"
 
 msgid "Enable CrossPoint/KOSync Bridge"
 msgstr "Enable CrossPoint/KOSync Bridge"

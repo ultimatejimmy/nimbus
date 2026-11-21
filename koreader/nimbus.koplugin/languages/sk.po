@@ -910,3 +910,24 @@ msgstr "Aktualizuje sa cloudový katalóg..."
 
 msgid "Delete"
 msgstr "Odstrániť"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Záloha a obnova zariadenia)"
+
+msgid "Device Backup and Restore"
+msgstr "Záloha a obnova zariadenia"
+
+msgid "Disconnect"
+msgstr "Odpojiť"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Odpojiť %s od Nimbusu? Vaše nastavenie Zálohy a obnovy zariadenia, miestne knihy a cloudové súbory nebudú ovplyvnené."
+
+msgid "Disconnect Account"
+msgstr "Odpojiť účet"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Odpojiť od %s? Uložené prihlasovacie údaje budú z Nimbusu odstránené. Vaše miestne knihy a cloudové súbory zostanú nedotknuté."
+
+msgid "Edit Server Settings"
+msgstr "Upraviť nastavenia servera"

@@ -910,3 +910,24 @@ msgstr "Memperbarui katalog cloud..."
 
 msgid "Delete"
 msgstr "Hapus"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Cadangan & Pemulihan Perangkat)"
+
+msgid "Device Backup and Restore"
+msgstr "Cadangan & Pemulihan Perangkat"
+
+msgid "Disconnect"
+msgstr "Putuskan"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Putuskan %s dari Nimbus? Pengaturan Cadangan & Pemulihan Perangkat, buku lokal, dan file cloud Anda tidak akan terpengaruh."
+
+msgid "Disconnect Account"
+msgstr "Putuskan Akun"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Putuskan koneksi dari %s? Kredensial tersimpan akan dihapus dari Nimbus. Buku lokal dan file cloud Anda tetap aman."
+
+msgid "Edit Server Settings"
+msgstr "Edit Pengaturan Server"

@@ -910,3 +910,24 @@ msgstr "Felhőkatalógus frissítése..."
 
 msgid "Delete"
 msgstr "Törlés"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Eszköz biztonsági mentése és visszaállítása)"
+
+msgid "Device Backup and Restore"
+msgstr "Eszköz biztonsági mentése és visszaállítása"
+
+msgid "Disconnect"
+msgstr "Leválasztás"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Leválasztja a(z) %s fiókot a Nimbusról? Az Eszköz biztonsági mentése és visszaállítása beállítása, a helyi könyvek és a felhőfájlok érintetlenek maradnak."
+
+msgid "Disconnect Account"
+msgstr "Fiók leválasztása"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Leválasztja a(z) %s fiókot? A mentett hitelesítő adatok törlődnek a Nimbusból. Helyi könyvei és felhőfájljai érintetlenek maradnak."
+
+msgid "Edit Server Settings"
+msgstr "Kiszolgálóbeállítások szerkesztése"

@@ -910,3 +910,24 @@ msgstr "클라우드 카탈로그 업데이트 중..."
 
 msgid "Delete"
 msgstr "삭제"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (기기 백업 및 복원)"
+
+msgid "Device Backup and Restore"
+msgstr "기기 백업 및 복원"
+
+msgid "Disconnect"
+msgstr "연결 해제"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Nimbus에서 %s 연결을 해제하시겠습니까? 기기 백업 및 복원 설정, 로컬 도서 및 클라우드 파일에는 영향을 미치지 않습니다."
+
+msgid "Disconnect Account"
+msgstr "계정 연결 해제"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "%s 연결을 해제하시겠습니까? 저장된 자격 증명이 Nimbus에서 제거됩니다. 로컬 도서와 클라우드 파일은 그대로 유지됩니다."
+
+msgid "Edit Server Settings"
+msgstr "서버 설정 편집"

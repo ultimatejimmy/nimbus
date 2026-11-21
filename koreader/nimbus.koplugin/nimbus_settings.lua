@@ -174,65 +174,42 @@ function Settings.detectBackupPluginAccounts()
     return available, creds, tokens, backup_cfg.cloud_provider
 end
 
---- Automatically imports OAuth tokens / WebDAV creds (and active provider) from backup.koplugin.
+--- Auto-selects an available Device Backup and Restore slot ("backup:<provider>") without modifying backup.koplugin or copying its credentials.
 function Settings.autoImportFromBackupPlugin(merged, force_provider)
-    local available, backup_creds, backup_tokens, backup_provider = Settings.detectBackupPluginAccounts()
+    local available, _, _, backup_provider = Settings.detectBackupPluginAccounts()
     if #available == 0 then
         return false
     end
 
-    local changed = false
-    local oauth_path = Settings.getNimbusDir() .. "/oauth.lua"
-    local nimbus_oauth = Settings.readLuaTable(oauth_path) or {}
-    local oauth_dirty = false
-    for _, p in ipairs({ "gdrive", "onedrive", "dropbox" }) do
-        if type(backup_tokens[p]) == "table" and (backup_tokens[p].refresh_token or backup_tokens[p].access_token) then
-            local cur = nimbus_oauth[p]
-            if not cur or (not cur.refresh_token and not cur.access_token) then
-                nimbus_oauth[p] = backup_tokens[p]
-                oauth_dirty = true
-            end
-        end
-    end
-    if oauth_dirty then
-        Settings.writeLuaTable(oauth_path, nimbus_oauth)
-        changed = true
-    end
-
-    if type(backup_creds.webdav) == "table" and backup_creds.webdav.url and backup_creds.webdav.url ~= "" then
-        local creds_path = Settings.getNimbusDir() .. "/creds.lua"
-        local nimbus_creds = Settings.readLuaTable(creds_path) or {}
-        if not nimbus_creds.webdav or not nimbus_creds.webdav.url or nimbus_creds.webdav.url == "" then
-            nimbus_creds.webdav = backup_creds.webdav
-            Settings.writeLuaTable(creds_path, nimbus_creds)
-            changed = true
-        end
-    end
-
     local should_pick_provider = force_provider
         or ((not merged.provider or merged.provider == Constants.CLOUD_PROVIDERS.NONE) and not merged.provider_user_selected)
-    if should_pick_provider then
-        local available_set = {}
-        for _, p in ipairs(available) do available_set[p] = true end
+    if not should_pick_provider then
+        return false
+    end
 
-        local chosen = nil
-        if backup_provider and available_set[backup_provider] then
-            chosen = backup_provider
-        else
-            for _, p in ipairs({ "gdrive", "onedrive", "dropbox", "webdav" }) do
-                if available_set[p] then
-                    chosen = p
-                    break
-                end
+    local available_set = {}
+    for _, p in ipairs(available) do available_set[p] = true end
+
+    local chosen = nil
+    if backup_provider and available_set[backup_provider] then
+        chosen = backup_provider
+    else
+        for _, p in ipairs({ "gdrive", "onedrive", "dropbox", "webdav" }) do
+            if available_set[p] then
+                chosen = p
+                break
             end
         end
-        if chosen then
-            merged.provider = chosen
-            changed = true
+    end
+    if chosen then
+        local target_slot = "backup:" .. chosen
+        if merged.provider ~= target_slot then
+            merged.provider = target_slot
+            return true
         end
     end
 
-    return changed
+    return false
 end
 
 local _pending_sync_import_notice = nil

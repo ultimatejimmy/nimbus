@@ -910,3 +910,24 @@ msgstr "Ажурирање каталога у облаку..."
 
 msgid "Delete"
 msgstr "Обриши"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Резервна копија и опоравак уређаја)"
+
+msgid "Device Backup and Restore"
+msgstr "Резервна копија и опоравак уређаја"
+
+msgid "Disconnect"
+msgstr "Прекини везу"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Искључити %s из Nimbus-а? Ваша поставка Резервне копије и опоравка уређаја, локалне књиге и фајлови у облаку неће бити промењени."
+
+msgid "Disconnect Account"
+msgstr "Искључи налог"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Искључити се са %s? Сачувани акредитиви биће уклоњени из Nimbus-а. Ваше локалне књиге и фајлови у облаку остаће нетакнути."
+
+msgid "Edit Server Settings"
+msgstr "Измени подешавања сервера"

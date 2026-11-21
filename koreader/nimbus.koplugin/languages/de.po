@@ -910,3 +910,24 @@ msgstr "Cloud-Katalog wird aktualisiert..."
 
 msgid "Delete"
 msgstr "Löschen"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Gerätesicherung und -wiederherstellung)"
+
+msgid "Device Backup and Restore"
+msgstr "Gerätesicherung und -wiederherstellung"
+
+msgid "Disconnect"
+msgstr "Trennen"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "%s von Nimbus trennen? Ihre Einrichtung für Gerätesicherung und -wiederherstellung, lokale Bücher und Cloud-Dateien bleiben unberührt."
+
+msgid "Disconnect Account"
+msgstr "Konto trennen"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Verbindung zu %s trennen? Gespeicherte Anmeldedaten werden aus Nimbus entfernt. Ihre lokalen Bücher und Cloud-Dateien bleiben unverändert."
+
+msgid "Edit Server Settings"
+msgstr "Servereinstellungen bearbeiten"

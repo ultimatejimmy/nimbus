@@ -54,10 +54,30 @@ function OAuth.saveAllTokens(tbl)
     return Settings.writeLuaTable(getTokensFilePath(), _tokens_cache)
 end
 
+local function resolveBaseProvider(provider)
+    if type(provider) ~= "string" then return nil, false end
+    local base = provider:match("^backup:(.+)$")
+    if base then return base, true end
+    return provider, false
+end
+
 function OAuth.loadTokens(provider)
     if not provider then return nil end
     local all = OAuth.loadAllTokens()
-    return all[provider]
+    if all[provider] then
+        return all[provider]
+    end
+    local base, is_backup = resolveBaseProvider(provider)
+    if is_backup and base then
+        local _, _, backup_tokens = Settings.detectBackupPluginAccounts()
+        local bt = backup_tokens and backup_tokens[base]
+        if type(bt) == "table" and (bt.access_token or bt.refresh_token) then
+            local copy = {}
+            for k, v in pairs(bt) do copy[k] = v end
+            return copy
+        end
+    end
+    return nil
 end
 
 function OAuth.saveTokens(provider, tokens)
@@ -177,7 +197,8 @@ end
 
 function OAuth.refreshToken(provider, refresh_token, opts, callback)
     opts = opts or {}
-    local pdef = OAuth.PROVIDERS[provider]
+    local base = resolveBaseProvider(provider)
+    local pdef = OAuth.PROVIDERS[base]
     if not pdef or not refresh_token or refresh_token == "" then
         if callback then callback(false, "Missing refresh_token") end
         return
@@ -187,11 +208,11 @@ function OAuth.refreshToken(provider, refresh_token, opts, callback)
     local client_id = opts.client_id or pdef.client_id
     local url, headers, body
 
-    if provider == Constants.CLOUD_PROVIDERS.GDRIVE and relay_url and relay_url ~= "" then
+    if base == Constants.CLOUD_PROVIDERS.GDRIVE and relay_url and relay_url ~= "" then
         url = relay_url:gsub("/+$", "") .. "/api/oauth/gdrive/refresh"
         headers = { ["Content-Type"] = "application/json" }
         body = Http.jsonEncode({ refresh_token = refresh_token, client_id = client_id })
-    elseif provider == Constants.CLOUD_PROVIDERS.DROPBOX and relay_url and relay_url ~= "" then
+    elseif base == Constants.CLOUD_PROVIDERS.DROPBOX and relay_url and relay_url ~= "" then
         url = relay_url:gsub("/+$", "") .. "/api/oauth/dropbox/refresh"
         headers = { ["Content-Type"] = "application/json" }
         body = Http.jsonEncode({ refresh_token = refresh_token })
@@ -232,8 +253,9 @@ end
 
 function OAuth.getValidAccessToken(provider, opts, callback)
     local tokens = OAuth.loadTokens(provider)
+    local base = resolveBaseProvider(provider)
     if not tokens or not tokens.access_token then
-        if callback then callback(false, _("Not signed in to ") .. (OAuth.PROVIDERS[provider] and OAuth.PROVIDERS[provider].name or provider)) end
+        if callback then callback(false, _("Not signed in to ") .. (OAuth.PROVIDERS[base] and OAuth.PROVIDERS[base].name or tostring(provider))) end
         return
     end
     local now = os.time()

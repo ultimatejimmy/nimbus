@@ -910,3 +910,24 @@ msgstr "Aktualizowanie katalogu w chmurze..."
 
 msgid "Delete"
 msgstr "Usuń"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Kopia zapasowa i przywracanie urządzenia)"
+
+msgid "Device Backup and Restore"
+msgstr "Kopia zapasowa i przywracanie urządzenia"
+
+msgid "Disconnect"
+msgstr "Odłącz"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Odłączyć %s od Nimbusa? Konfiguracja Kopii zapasowej i przywracania urządzenia, lokalne książki i pliki w chmurze pozostaną nienaruszone."
+
+msgid "Disconnect Account"
+msgstr "Odłącz konto"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Odłączyć od %s? Zapisane dane logowania zostaną usunięte z Nimbusa. Lokalne książki i pliki w chmurze pozostaną nietknięte."
+
+msgid "Edit Server Settings"
+msgstr "Edytuj ustawienia serwera"

@@ -52,15 +52,151 @@ local function rightChevron(text, bold_black)
     }
 end
 
+local function testSlotConnection(provider, prov_label)
+    Widgets.showToast(string.format(_("Testing %s connection..."), prov_label), 10)
+    UIManager:nextTick(function()
+        local function handleResult(ok, msg)
+            Widgets.showToast(
+                ok and string.format(_("Connected: %s"), tostring(msg))
+                    or string.format(_("Connection failed: %s"), tostring(msg)),
+                4
+            )
+        end
+        if Settings.load().provider == provider then
+            Cloud.testConnection(handleResult)
+        else
+            local driver = Cloud.getDriver(provider)
+            if not driver then
+                return handleResult(false, _("No cloud provider configured."))
+            end
+            driver.testConnection(Cloud.loadCredentials(provider), handleResult)
+        end
+    end)
+end
+
+local function confirmDisconnectCloud(provider, on_done)
+    local _base, is_backup = Cloud.parseProvider(provider)
+    local prov_label = Cloud.getProviderLabel(provider)
+    local msg = is_backup
+        and string.format(_("Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."), prov_label)
+        or string.format(_("Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."), prov_label)
+    Widgets.showConfirmDialog{
+        title = _("Disconnect Account"),
+        text = msg,
+        ok_text = _("Disconnect"),
+        cancel_text = _("Cancel"),
+        ok_callback = function()
+            Cloud.disconnectProvider(provider)
+            Widgets.showToast(string.format(_("Disconnected from %s."), prov_label), 3)
+            if on_done then on_done() end
+        end,
+        cancel_callback = function()
+            if on_done then on_done() end
+        end,
+    }
+end
+
+local function showWebDAVInputDialog(on_finish_cb)
+    local cfg = Settings.load()
+    local creds = Cloud.loadCredentials(Constants.CLOUD_PROVIDERS.WEBDAV)
+    Widgets.showInputDialog{
+        title = _("WebDAV Server Settings"),
+        on_cancel = function()
+            if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+        end,
+        fields = {
+            { label = _("Server URL"), text = creds.url or "", hint = "https://cloud.example.com/remote.php/dav/files/user" },
+            { label = _("Username"), text = creds.username or "", hint = _("Username") },
+            { label = _("Password or App Token"), text = creds.password or "", hint = _("Password"), text_type = "password" },
+        },
+        buttons = {
+            {
+                text = _("Cancel"),
+                callback = function()
+                    if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                end,
+            },
+            {
+                text = _("Test"),
+                keep_open = true,
+                callback = function(_dlg, all_v)
+                    local driver = Cloud.getDriver(Constants.CLOUD_PROVIDERS.WEBDAV)
+                    local test_creds = { url = all_v[1], username = all_v[2], password = all_v[3] }
+                    Widgets.showToast(_("Testing WebDAV connection..."), 10)
+                    UIManager:nextTick(function()
+                        driver.testConnection(test_creds, function(ok, msg)
+                            Widgets.showToast(
+                                ok and string.format(_("Connected: %s"), tostring(msg))
+                                    or string.format(_("Connection failed: %s"), tostring(msg)),
+                                4
+                            )
+                        end)
+                    end)
+                end,
+            },
+            {
+                text = _("Save"),
+                is_primary = true,
+                callback = function(_dlg, all_v)
+                    creds.url = all_v[1]
+                    creds.username = all_v[2]
+                    creds.password = all_v[3]
+                    Cloud.saveCredentials(Constants.CLOUD_PROVIDERS.WEBDAV, creds)
+                    cfg.provider = Constants.CLOUD_PROVIDERS.WEBDAV
+                    cfg.provider_user_selected = true
+                    Settings.save(cfg)
+                    Widgets.showToast(_("WebDAV settings saved."), 2)
+                    if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                end,
+            },
+        },
+    }
+end
+
 --- Shows the provider-specific configuration card dialog.
 function UISettings.showCloudConfigDialog(provider, on_finish_cb)
     local cfg = Settings.load()
     provider = provider or cfg.provider
+    local base, is_backup = Cloud.parseProvider(provider)
+    local prov_label = Cloud.getProviderLabel(provider)
 
-    if provider == Constants.CLOUD_PROVIDERS.GDRIVE
-        or provider == Constants.CLOUD_PROVIDERS.ONEDRIVE
-        or provider == Constants.CLOUD_PROVIDERS.DROPBOX then
-        local prov_label = Cloud.getProviderLabel(provider)
+    if is_backup then
+        Widgets.showCardDialog{
+            title = string.format(_("%s Account"), prov_label),
+            on_close = function()
+                if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+            end,
+            body_widget = function(inner_w, closeDlg)
+                local vg = VerticalGroup:new{ align = "left" }
+                table.insert(vg, Widgets.createSettingRow(_("Test Connection"),
+                    rightChevron(_("Run"), false), inner_w, function()
+                        testSlotConnection(provider, prov_label)
+                    end))
+                table.insert(vg, Widgets.createSettingRow(_("Disconnect"),
+                    rightChevron("", false), inner_w, function()
+                        closeDlg()
+                        confirmDisconnectCloud(provider, function()
+                            if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                        end)
+                    end))
+                return vg
+            end,
+            buttons = {
+                {
+                    text = _("Done"),
+                    is_primary = true,
+                    callback = function()
+                        if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                    end,
+                },
+            },
+        }
+        return
+    end
+
+    if base == Constants.CLOUD_PROVIDERS.GDRIVE
+        or base == Constants.CLOUD_PROVIDERS.ONEDRIVE
+        or base == Constants.CLOUD_PROVIDERS.DROPBOX then
 
         if Cloud.isConfigured(provider) then
             Widgets.showCardDialog{
@@ -72,23 +208,14 @@ function UISettings.showCloudConfigDialog(provider, on_finish_cb)
                     local vg = VerticalGroup:new{ align = "left" }
                     table.insert(vg, Widgets.createSettingRow(_("Test Connection"),
                         rightChevron(_("Run"), false), inner_w, function()
-                            Widgets.showToast(string.format(_("Testing %s connection..."), prov_label), 10)
-                            UIManager:nextTick(function()
-                                Cloud.testConnection(function(ok, msg)
-                                    Widgets.showToast(
-                                        ok and string.format(_("Connected: %s"), tostring(msg))
-                                            or string.format(_("Connection failed: %s"), tostring(msg)),
-                                        4
-                                    )
-                                end)
-                            end)
+                            testSlotConnection(provider, prov_label)
                         end))
-                    table.insert(vg, Widgets.createSettingRow(_("Disconnect/Log Out"),
+                    table.insert(vg, Widgets.createSettingRow(_("Disconnect"),
                         rightChevron("", false), inner_w, function()
                             closeDlg()
-                            OAuth.clearTokens(provider)
-                            Widgets.showToast(string.format(_("Disconnected from %s."), prov_label), 3)
-                            if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                            confirmDisconnectCloud(provider, function()
+                                if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                            end)
                         end))
                     return vg
                 end,
@@ -148,7 +275,7 @@ function UISettings.showCloudConfigDialog(provider, on_finish_cb)
                     qr_target_url = disp_url .. "?session=" .. info.user_code
                 end
 
-                local _, closeFn = Widgets.showCardDialog{
+                local _ov, closeFn = Widgets.showCardDialog{
                     title = string.format(_("Connect %s"), prov_label),
                     on_close = function()
                         flow_active = false
@@ -302,75 +429,70 @@ function UISettings.showCloudConfigDialog(provider, on_finish_cb)
             if on_finish_cb then UIManager:nextTick(on_finish_cb) end
         end)
 
-    elseif provider == Constants.CLOUD_PROVIDERS.WEBDAV then
-        local creds = Cloud.loadCredentials(Constants.CLOUD_PROVIDERS.WEBDAV)
-        Widgets.showInputDialog{
-            title = _("WebDAV Server Settings"),
-            on_cancel = function()
-                if on_finish_cb then UIManager:nextTick(on_finish_cb) end
-            end,
-            fields = {
-                { label = _("Server URL"), text = creds.url or "", hint = "https://cloud.example.com/remote.php/dav/files/user" },
-                { label = _("Username"), text = creds.username or "", hint = _("Username") },
-                { label = _("Password or App Token"), text = creds.password or "", hint = _("Password"), text_type = "password" },
-            },
-            buttons = {
-                {
-                    text = _("Cancel"),
-                    callback = function()
-                        if on_finish_cb then UIManager:nextTick(on_finish_cb) end
-                    end,
-                },
-                {
-                    text = _("Test"),
-                    keep_open = true,
-                    callback = function(_, all_v)
-                        local driver = Cloud.getDriver(Constants.CLOUD_PROVIDERS.WEBDAV)
-                        local test_creds = { url = all_v[1], username = all_v[2], password = all_v[3] }
-                        Widgets.showToast(_("Testing WebDAV connection..."), 10)
-                        UIManager:nextTick(function()
-                            driver.testConnection(test_creds, function(ok, msg)
-                                Widgets.showToast(
-                                    ok and string.format(_("Connected: %s"), tostring(msg))
-                                        or string.format(_("Connection failed: %s"), tostring(msg)),
-                                    4
-                                )
+    elseif base == Constants.CLOUD_PROVIDERS.WEBDAV then
+        if Cloud.isConfigured(Constants.CLOUD_PROVIDERS.WEBDAV) then
+            Widgets.showCardDialog{
+                title = string.format(_("%s Account"), prov_label),
+                on_close = function()
+                    if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                end,
+                body_widget = function(inner_w, closeDlg)
+                    local vg = VerticalGroup:new{ align = "left" }
+                    table.insert(vg, Widgets.createSettingRow(_("Edit Server Settings"),
+                        rightChevron("", false), inner_w, function()
+                            closeDlg()
+                            showWebDAVInputDialog(function()
+                                UISettings.showCloudConfigDialog(provider, on_finish_cb)
                             end)
-                        end)
-                    end,
+                        end))
+                    table.insert(vg, Widgets.createSettingRow(_("Test Connection"),
+                        rightChevron(_("Run"), false), inner_w, function()
+                            testSlotConnection(provider, prov_label)
+                        end))
+                    table.insert(vg, Widgets.createSettingRow(_("Disconnect"),
+                        rightChevron("", false), inner_w, function()
+                            closeDlg()
+                            confirmDisconnectCloud(provider, function()
+                                if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                            end)
+                        end))
+                    return vg
+                end,
+                buttons = {
+                    {
+                        text = _("Done"),
+                        is_primary = true,
+                        callback = function()
+                            if on_finish_cb then UIManager:nextTick(on_finish_cb) end
+                        end,
+                    },
                 },
-                {
-                    text = _("Save"),
-                    is_primary = true,
-                    callback = function(_, all_v)
-                        creds.url = all_v[1]
-                        creds.username = all_v[2]
-                        creds.password = all_v[3]
-                        Cloud.saveCredentials(Constants.CLOUD_PROVIDERS.WEBDAV, creds)
-                        cfg.provider = Constants.CLOUD_PROVIDERS.WEBDAV
-                        cfg.provider_user_selected = true
-                        Settings.save(cfg)
-                        Widgets.showToast(_("WebDAV settings saved."), 2)
-                        if on_finish_cb then UIManager:nextTick(on_finish_cb) end
-                    end,
-                },
-            },
-        }
+            }
+            return
+        end
+        showWebDAVInputDialog(on_finish_cb)
     end
 end
 
 --- Native KOReader submenu items for Cloud Storage.
 function UISettings.getCloudSettingsSubmenu(refresh_cb)
     local cfg = Settings.load()
-    local provider_list = {
+    local provider_list = {}
+    local avail_backup = Settings.detectBackupPluginAccounts()
+    for _i, bp in ipairs(avail_backup) do
+        table.insert(provider_list, "backup:" .. bp)
+    end
+    for _i, p in ipairs({
         Constants.CLOUD_PROVIDERS.NONE,
         Constants.CLOUD_PROVIDERS.GDRIVE,
         Constants.CLOUD_PROVIDERS.ONEDRIVE,
         Constants.CLOUD_PROVIDERS.DROPBOX,
         Constants.CLOUD_PROVIDERS.WEBDAV,
-    }
+    }) do
+        table.insert(provider_list, p)
+    end
     local provider_subitems = {}
-    for _, p in ipairs(provider_list) do
+    for _i, p in ipairs(provider_list) do
         table.insert(provider_subitems, {
             text = Cloud.getProviderLabel(p),
             radio = true,
@@ -378,6 +500,9 @@ function UISettings.getCloudSettingsSubmenu(refresh_cb)
             checked_func = function() return (Settings.load().provider or Constants.CLOUD_PROVIDERS.NONE) == p end,
             callback = function(touch_menu)
                 local cur = Settings.load()
+                if cur.provider ~= p then
+                    Sync.clearCachedCatalog()
+                end
                 cur.provider = p
                 cur.provider_user_selected = true
                 Settings.save(cur)
@@ -462,27 +587,68 @@ function UISettings.showSettingsDialog(on_finish_cb)
 
     local function showProviderPicker(on_picked)
         local cur_p = Settings.load().provider or Constants.CLOUD_PROVIDERS.NONE
+        local avail_backup = Settings.detectBackupPluginAccounts()
         Widgets.showCardDialog{
             title = _("Select Cloud Provider"),
             on_close = on_picked,
             body_widget = function(inner_w, closeDlg)
                 local vg = VerticalGroup:new{ align = "left" }
-                for _, p in ipairs({
+                for _i, bp in ipairs(avail_backup) do
+                    local slot = "backup:" .. bp
+                    table.insert(vg, Widgets.createRadioRow(
+                        Cloud.getProviderLabel(bp),
+                        _("Device Backup and Restore"),
+                        cur_p == slot,
+                        inner_w,
+                        function()
+                            closeDlg()
+                            local c = Settings.load()
+                            if c.provider ~= slot then
+                                Sync.clearCachedCatalog()
+                            end
+                            c.provider = slot
+                            c.provider_user_selected = true
+                            Settings.save(c)
+                            if on_picked then on_picked() end
+                        end
+                    ))
+                end
+                for _i, p in ipairs({
                     Constants.CLOUD_PROVIDERS.GDRIVE,
                     Constants.CLOUD_PROVIDERS.ONEDRIVE,
                     Constants.CLOUD_PROVIDERS.DROPBOX,
                     Constants.CLOUD_PROVIDERS.WEBDAV,
-                    Constants.CLOUD_PROVIDERS.NONE,
                 }) do
-                    table.insert(vg, Widgets.createRadioRow(Cloud.getProviderLabel(p), nil, cur_p == p, inner_w, function()
+                    local sub = Cloud.isProviderConfigured(p) and _("Connected") or nil
+                    table.insert(vg, Widgets.createRadioRow(Cloud.getProviderLabel(p), sub, cur_p == p, inner_w, function()
                         closeDlg()
                         local c = Settings.load()
+                        if c.provider ~= p then
+                            Sync.clearCachedCatalog()
+                        end
                         c.provider = p
                         c.provider_user_selected = true
                         Settings.save(c)
                         if on_picked then on_picked() end
                     end))
                 end
+                table.insert(vg, Widgets.createRadioRow(
+                    Cloud.getProviderLabel(Constants.CLOUD_PROVIDERS.NONE),
+                    nil,
+                    cur_p == Constants.CLOUD_PROVIDERS.NONE,
+                    inner_w,
+                    function()
+                        closeDlg()
+                        local c = Settings.load()
+                        if c.provider ~= Constants.CLOUD_PROVIDERS.NONE then
+                            Sync.clearCachedCatalog()
+                        end
+                        c.provider = Constants.CLOUD_PROVIDERS.NONE
+                        c.provider_user_selected = true
+                        Settings.save(c)
+                        if on_picked then on_picked() end
+                    end
+                ))
                 return vg
             end,
             buttons = { { text = _("Cancel"), callback = on_picked } },
@@ -547,22 +713,6 @@ function UISettings.showSettingsDialog(on_finish_cb)
                                     reopen()
                                 end,
                             }
-                        end))
-                end
-
-                local avail_backup = Settings.detectBackupPluginAccounts()
-                if #avail_backup > 0 then
-                    table.insert(vg, Widgets.createSettingRow(_("Backup & Restore Auth"),
-                        rightChevron(_("Import"), false), inner_w, function()
-                            local ok, res = Cloud.importFromBackupPlugin(nil)
-                            closeDlg()
-                            reopen()
-                            UIManager:nextTick(function()
-                                Widgets.showToast(
-                                    ok and string.format(_("Imported %s!"), Cloud.getProviderLabel(res)) or tostring(res),
-                                    2.5
-                                )
-                            end)
                         end))
                 end
                 return vg
@@ -746,7 +896,7 @@ function UISettings.showSettingsDialog(on_finish_cb)
                 if #detected > 0 then
                     table.insert(vg, VerticalSpan:new{ width = sc(6) })
                     table.insert(vg, Widgets.createSectionHeader(_("Detected Sync Plugins"), inner_w))
-                    for _, prof in ipairs(detected) do
+                    for _i, prof in ipairs(detected) do
                         local is_sel = (cfg.kosync_source == prof.id) or (cfg.kosync_username == prof.username and cfg.kosync_server == prof.server)
                         table.insert(vg, Widgets.createRadioRow(
                             prof.label,

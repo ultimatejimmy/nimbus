@@ -910,3 +910,24 @@ msgstr "Cloudcatalogus bijwerken..."
 
 msgid "Delete"
 msgstr "Verwijderen"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Apparaatback-up en -herstel)"
+
+msgid "Device Backup and Restore"
+msgstr "Apparaatback-up en -herstel"
+
+msgid "Disconnect"
+msgstr "Verbreken"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "%s loskoppelen van Nimbus? Uw instellingen voor Apparaatback-up en -herstel, lokale boeken en cloudbestanden blijven onaangetast."
+
+msgid "Disconnect Account"
+msgstr "Account loskoppelen"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Verbinding met %s verbreken? Opgeslagen inloggegevens worden uit Nimbus verwijderd. Uw lokale boeken en cloudbestanden blijven behouden."
+
+msgid "Edit Server Settings"
+msgstr "Serverinstellingen bewerken"

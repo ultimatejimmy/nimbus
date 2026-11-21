@@ -38,8 +38,9 @@ local function escapeQuery(str)
     return tostring(str or ""):gsub("\\", "\\\\"):gsub("'", "\\'")
 end
 
-local function withToken(cb)
-    OAuth.getValidAccessToken(Constants.CLOUD_PROVIDERS.GDRIVE, nil, cb)
+local function withToken(creds, cb)
+    local slot = (creds and creds.token_slot) or Constants.CLOUD_PROVIDERS.GDRIVE
+    OAuth.getValidAccessToken(slot, nil, cb)
 end
 
 local function findItemInParent(token, parent_id, name, is_dir)
@@ -138,7 +139,7 @@ local function resolveFileSync(token, remote_path)
 end
 
 function GDrive.testConnection(creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local _, code, _, _, body = Http.request({
             url = DRIVE_API .. "/about?fields=user(displayName,emailAddress)",
@@ -155,7 +156,7 @@ function GDrive.testConnection(creds, cb)
 end
 
 function GDrive.ensurePath(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local id, err = ensureDirSync(token_or_err, remote_dir)
         if id then cb(true, id) else cb(false, err) end
@@ -163,7 +164,7 @@ function GDrive.ensurePath(remote_dir, creds, cb)
 end
 
 function GDrive.uploadString(remote_path, content_str, content_type, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local dir, name = splitPath(remote_path)
         local parent_id, err = ensureDirSync(token_or_err, dir)
@@ -211,7 +212,7 @@ function GDrive.uploadString(remote_path, content_str, content_type, creds, cb)
 end
 
 function GDrive.uploadFile(remote_path, local_path, creds, cb, opts)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local dir, name = splitPath(remote_path)
         local parent_id, err = ensureDirSync(token_or_err, dir)
@@ -275,7 +276,7 @@ function GDrive.uploadFile(remote_path, local_path, creds, cb, opts)
 end
 
 function GDrive.downloadString(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local item, err = resolveFileSync(token_or_err, remote_path)
         if not item then return cb(false, err) end
@@ -293,7 +294,7 @@ end
 
 function GDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
     opts = opts or {}
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local item, err = resolveFileSync(token_or_err, remote_path)
         if not item then return cb(false, err) end
@@ -319,7 +320,7 @@ function GDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
 end
 
 function GDrive.listDir(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_dir)
         local parent_id = "root"
@@ -383,7 +384,7 @@ function GDrive.listDir(remote_dir, creds, cb)
 end
 
 function GDrive.deletePath(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local item, err = resolveFileSync(token_or_err, remote_path)
         if not item then

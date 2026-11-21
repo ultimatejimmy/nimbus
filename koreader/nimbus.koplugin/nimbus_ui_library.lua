@@ -201,6 +201,11 @@ function UILibrary.buildView(on_open_book, opts)
         else
             device_books = Scanner.getCachedLocalBooks(catalog_data, opts.open_doc_info)
         end
+        if not Cloud.isConfigured() then
+            for _, b in ipairs(device_books) do
+                b.is_in_cloud = false
+            end
+        end
     end
 
     local renderShelf
@@ -387,24 +392,27 @@ function UILibrary.buildView(on_open_book, opts)
                             local before_cfg = Settings.load()
                             local prev_root = before_cfg.remote_root or ""
                             local prev_prov = before_cfg.provider or ""
+                            local prev_conn = Cloud.isConfigured()
                             local prev_dl = before_cfg.download_dir or ""
                             local prev_scan = table.concat(before_cfg.scan_dirs or {}, "\0")
                             UISettings.showSettingsDialog(function()
                                 local after_cfg = Settings.load()
+                                local now_conn = Cloud.isConfigured()
                                 local local_dirs_changed = (after_cfg.download_dir or "") ~= prev_dl
                                     or table.concat(after_cfg.scan_dirs or {}, "\0") ~= prev_scan
                                 local cloud_changed = (after_cfg.remote_root or "") ~= prev_root
                                     or (after_cfg.provider or "") ~= prev_prov
-                                refreshLocalBooks(local_dirs_changed)
+                                    or now_conn ~= prev_conn
                                 if cloud_changed then
                                     catalog_data = { books = {} }
                                     merged_progress = {}
                                     sync_error = nil
                                     current_cloud_dir = ""
-                                    if isAlive() then renderShelf() end
+                                end
+                                refreshLocalBooks(local_dirs_changed)
+                                if isAlive() then renderShelf() end
+                                if cloud_changed and now_conn then
                                     fetchCloudSilently(true)
-                                else
-                                    if isAlive() then renderShelf() end
                                 end
                             end)
                         end),
@@ -797,7 +805,7 @@ function UILibrary.buildView(on_open_book, opts)
             if item.is_folder then
                 return string.format("%d", item.book_count or 0), false
             end
-            if item.is_in_cloud and item.local_path then
+            if configured and item.is_in_cloud and item.local_path then
                 return _("Synced"), true
             elseif item.local_path then
                 return _("Local"), false

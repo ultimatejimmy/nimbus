@@ -20,12 +20,13 @@ local function normalizePath(path)
     return "/" .. p
 end
 
-local function withToken(cb)
-    OAuth.getValidAccessToken(Constants.CLOUD_PROVIDERS.DROPBOX, nil, cb)
+local function withToken(creds, cb)
+    local slot = (creds and creds.token_slot) or Constants.CLOUD_PROVIDERS.DROPBOX
+    OAuth.getValidAccessToken(slot, nil, cb)
 end
 
 function Dropbox.testConnection(creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local _, code, _, _, body = Http.request({
             url = RPC_API .. "/users/get_current_account",
@@ -42,7 +43,7 @@ function Dropbox.testConnection(creds, cb)
 end
 
 function Dropbox.ensurePath(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_dir)
         if norm == "" then return cb(true, "") end
@@ -64,7 +65,7 @@ function Dropbox.ensurePath(remote_dir, creds, cb)
 end
 
 function Dropbox.uploadString(remote_path, content_str, content_type, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local _, code, _, _, body = Http.request({
@@ -88,7 +89,7 @@ end
 
 function Dropbox.uploadFile(remote_path, local_path, creds, cb, opts)
     opts = opts or {}
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local f = io.open(local_path, "rb")
@@ -120,7 +121,7 @@ function Dropbox.uploadFile(remote_path, local_path, creds, cb, opts)
 end
 
 function Dropbox.downloadString(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local _, code, _, _, body = Http.request({
@@ -139,7 +140,7 @@ end
 
 function Dropbox.downloadFile(remote_path, local_dest_path, creds, cb, opts)
     opts = opts or {}
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local f = io.open(local_dest_path, "wb")
@@ -166,7 +167,7 @@ function Dropbox.downloadFile(remote_path, local_dest_path, creds, cb, opts)
 end
 
 function Dropbox.listDir(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_dir)
         local entries = {}
@@ -206,7 +207,7 @@ function Dropbox.listDir(remote_dir, creds, cb)
 end
 
 function Dropbox.deletePath(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local _, code = Http.request({

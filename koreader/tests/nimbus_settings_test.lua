@@ -12,9 +12,10 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         os.remove("tests/tmp/settings/nimbus/settings.lua")
         os.remove("tests/tmp/settings/nimbus/oauth.lua")
         os.remove("tests/tmp/settings/nimbus/creds.lua")
+        os.remove("tests/tmp/settings/nimbus/catalog_cache.lua")
     end)
 
-    it("automatically imports backup_cloud_tokens.lua and backup.lua cloud_provider", function()
+    it("automatically selects backup slot from backup_cloud_tokens.lua and backup.lua cloud_provider without copying creds", function()
         Settings.writeLuaTable("tests/tmp/settings/backup.lua", {
             cloud_provider = "gdrive",
         })
@@ -36,15 +37,18 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         assert.is_not_nil(tokens.gdrive)
 
         local cfg = Settings.load()
-        assert.are.equal("gdrive", cfg.provider)
-        assert.is_true(Cloud.isConfigured("gdrive"))
+        assert.are.equal("backup:gdrive", cfg.provider)
+        assert.is_true(Cloud.isConfigured())
+        assert.is_true(Cloud.isProviderConfigured("backup:gdrive"))
+        assert.is_false(Cloud.isProviderConfigured("gdrive"))
+        assert.is_nil(OAuth.loadTokens("gdrive"))
 
-        local imported = OAuth.loadTokens("gdrive")
-        assert.are.equal("ya29.test_access", imported.access_token)
-        assert.are.equal("1//test_refresh", imported.refresh_token)
+        local slot_tokens = OAuth.loadTokens("backup:gdrive")
+        assert.are.equal("ya29.test_access", slot_tokens.access_token)
+        assert.are.equal("1//test_refresh", slot_tokens.refresh_token)
     end)
 
-    it("auto-imports even when existing nimbus settings.lua has provider = none and not user-selected", function()
+    it("auto-selects backup slot even when existing nimbus settings.lua has provider = none and not user-selected", function()
         Settings.writeLuaTable("tests/tmp/settings/nimbus/settings.lua", {
             provider = "none",
             device_id = "TestKobo_1234",
@@ -61,7 +65,7 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         })
 
         local cfg = Settings.load()
-        assert.are.equal("gdrive", cfg.provider)
+        assert.are.equal("backup:gdrive", cfg.provider)
         assert.is_true(Cloud.isConfigured())
     end)
 
@@ -116,5 +120,60 @@ describe("nimbus_settings backup.koplugin auto-import", function()
         assert.are.equal("primary_reader", cfg.kosync_username)
         assert.are.equal("sink_key_123", cfg.kosync_userkey)
         os.remove("tests/tmp/settings.reader.lua")
+    end)
+
+    it("disconnects backup slot without modifying backup.koplugin or re-selecting on reload", function()
+        local Sync = require("nimbus_sync")
+        Settings.writeLuaTable("tests/tmp/settings/backup.lua", {
+            cloud_provider = "gdrive",
+        })
+        Settings.writeLuaTable("tests/tmp/settings/backup_cloud_tokens.lua", {
+            gdrive = {
+                access_token = "ya29.backup_keep",
+                refresh_token = "1//backup_keep",
+                expires_at = 9999999999,
+            },
+        })
+        local cfg = Settings.load()
+        assert.are.equal("backup:gdrive", cfg.provider)
+        Sync.saveCachedCatalog({ books = { b1 = { id = "b1", title = "Test" } } }, {})
+        assert.is_not_nil(Settings.readLuaTable("tests/tmp/settings/nimbus/catalog_cache.lua"))
+
+        assert.is_true(Cloud.disconnectProvider("backup:gdrive"))
+        assert.are.equal("none", Settings.load().provider)
+        assert.is_true(Settings.load().provider_user_selected)
+        assert.is_false(Cloud.isConfigured())
+        assert.is_nil(Settings.readLuaTable("tests/tmp/settings/nimbus/catalog_cache.lua"))
+
+        -- Reloading settings must stay disconnected and backup tokens must remain intact
+        Settings.clearCache()
+        OAuth.clearCache()
+        assert.are.equal("none", Settings.load().provider)
+        local backup_after = Settings.readLuaTable("tests/tmp/settings/backup_cloud_tokens.lua")
+        assert.are.equal("1//backup_keep", backup_after.gdrive.refresh_token)
+    end)
+
+    it("disconnects standalone OAuth and WebDAV providers cleanly", function()
+        OAuth.saveTokens("gdrive", { access_token = "ya29.standalone", refresh_token = "1//standalone" })
+        local cfg = Settings.load()
+        cfg.provider = "gdrive"
+        cfg.provider_user_selected = true
+        Settings.save(cfg)
+        assert.is_true(Cloud.isConfigured("gdrive"))
+
+        assert.is_true(Cloud.disconnectProvider("gdrive"))
+        assert.are.equal("none", Settings.load().provider)
+        assert.is_false(Cloud.isProviderConfigured("gdrive"))
+        assert.is_nil(OAuth.loadTokens("gdrive"))
+
+        Cloud.saveCredentials("webdav", { url = "https://dav.example.com", username = "u", password = "p" })
+        cfg = Settings.load()
+        cfg.provider = "webdav"
+        Settings.save(cfg)
+        assert.is_true(Cloud.isConfigured("webdav"))
+
+        assert.is_true(Cloud.disconnectProvider("webdav"))
+        assert.are.equal("none", Settings.load().provider)
+        assert.is_false(Cloud.isProviderConfigured("webdav"))
     end)
 end)

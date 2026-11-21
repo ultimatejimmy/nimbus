@@ -4,7 +4,8 @@ Unified CloudFS dispatcher, root path prefixing, credential management, and
 1-tap backup.koplugin account importer.
 --]]
 
-local _ = require("gettext")
+local ok_loc, Localization = pcall(require, "localization_nimbus")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 local Constants = require("nimbus_constants")
 local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
@@ -23,23 +24,56 @@ local DRIVERS = {
     [Constants.CLOUD_PROVIDERS.WEBDAV] = WebDAV,
 }
 
+function Cloud.parseProvider(provider)
+    if type(provider) ~= "string" then return nil, false end
+    local base = provider:match("^backup:(.+)$")
+    if base then return base, true end
+    return provider, false
+end
+
 function Cloud.getDriver(provider)
-    return DRIVERS[provider]
+    local base = Cloud.parseProvider(provider)
+    return DRIVERS[base]
 end
 
 function Cloud.getProviderLabel(provider)
-    if provider == Constants.CLOUD_PROVIDERS.GDRIVE then return _("Google Drive")
-    elseif provider == Constants.CLOUD_PROVIDERS.ONEDRIVE then return _("Microsoft OneDrive")
-    elseif provider == Constants.CLOUD_PROVIDERS.DROPBOX then return _("Dropbox")
-    elseif provider == Constants.CLOUD_PROVIDERS.WEBDAV then return _("WebDAV")
+    local base, is_backup = Cloud.parseProvider(provider)
+    local base_label
+    if base == Constants.CLOUD_PROVIDERS.GDRIVE then base_label = _("Google Drive")
+    elseif base == Constants.CLOUD_PROVIDERS.ONEDRIVE then base_label = _("Microsoft OneDrive")
+    elseif base == Constants.CLOUD_PROVIDERS.DROPBOX then base_label = _("Dropbox")
+    elseif base == Constants.CLOUD_PROVIDERS.WEBDAV then base_label = _("WebDAV")
+    else return _("Not Configured") end
+    if is_backup then
+        return string.format(_("%s (Device Backup and Restore)"), base_label)
     end
-    return _("Not Configured")
+    return base_label
 end
 
 function Cloud.loadCredentials(provider)
+    local base, is_backup = Cloud.parseProvider(provider)
+    if is_backup then
+        if base == Constants.CLOUD_PROVIDERS.WEBDAV then
+            local _avail, backup_creds = Settings.detectBackupPluginAccounts()
+            if type(backup_creds) == "table" and type(backup_creds.webdav) == "table" then
+                local copy = {}
+                for k, v in pairs(backup_creds.webdav) do copy[k] = v end
+                return copy
+            end
+            return {}
+        end
+        return { token_slot = provider }
+    end
     local path = Settings.getNimbusDir() .. "/creds.lua"
     local all = Settings.readLuaTable(path) or {}
-    return all[provider] or {}
+    local c = all[provider] or {}
+    if base and base ~= Constants.CLOUD_PROVIDERS.WEBDAV then
+        local out = {}
+        for k, v in pairs(c) do out[k] = v end
+        out.token_slot = provider
+        return out
+    end
+    return c
 end
 
 function Cloud.saveCredentials(provider, creds)
@@ -59,17 +93,38 @@ function Cloud.clearCredentials(provider)
     if d and d.clearFolderCache then d.clearFolderCache() end
 end
 
---- Imports credentials/OAuth tokens for a provider (or best available) from backup.koplugin.
+function Cloud.disconnectProvider(provider)
+    local cfg = Settings.load()
+    local target = provider or cfg.provider
+    if not target or target == Constants.CLOUD_PROVIDERS.NONE then
+        return false
+    end
+    Cloud.clearCredentials(target)
+    if cfg.provider == target then
+        cfg.provider = Constants.CLOUD_PROVIDERS.NONE
+        cfg.provider_user_selected = true
+        Settings.save(cfg)
+        local ok_s, Sync = pcall(require, "nimbus_sync")
+        if ok_s and Sync and Sync.clearCachedCatalog then
+            Sync.clearCachedCatalog()
+        end
+    end
+    Logger.action("Disconnected cloud provider: " .. tostring(target))
+    return true
+end
+
+--- Selects a Device Backup and Restore provider slot ("backup:<provider>") without modifying backup.koplugin.
 function Cloud.importFromBackupPlugin(provider)
-    local available, creds, tokens, backup_provider = Settings.detectBackupPluginAccounts()
+    local available, _c, _t, backup_provider = Settings.detectBackupPluginAccounts()
     if #available == 0 then
         return false, _("No saved cloud accounts found in backup.koplugin.")
     end
 
-    local target = provider
+    local _base, is_backup_req = Cloud.parseProvider(provider)
+    local target = is_backup_req and provider:match("^backup:(.+)$") or provider
     if not target then
         local avail_set = {}
-        for _, p in ipairs(available) do avail_set[p] = true end
+        for _i, p in ipairs(available) do avail_set[p] = true end
         if backup_provider and avail_set[backup_provider] then
             target = backup_provider
         else
@@ -78,25 +133,20 @@ function Cloud.importFromBackupPlugin(provider)
     end
 
     local found = false
-    for _, p in ipairs(available) do
+    for _i, p in ipairs(available) do
         if p == target then found = true break end
     end
     if not found then
         return false, _("No saved account found for this provider in backup.koplugin.")
     end
 
-    if target == Constants.CLOUD_PROVIDERS.WEBDAV then
-        Cloud.saveCredentials(target, creds.webdav)
-    else
-        OAuth.saveTokens(target, tokens[target])
-    end
-
+    local slot = "backup:" .. target
     local cfg = Settings.load()
-    cfg.provider = target
+    cfg.provider = slot
     cfg.provider_user_selected = true
     Settings.save(cfg)
-    Logger.action("Imported cloud credentials from backup.koplugin for provider: " .. tostring(target))
-    return true, target
+    Logger.action("Selected Device Backup and Restore slot: " .. tostring(slot))
+    return true, slot
 end
 
 function Cloud.withRoot(rel_path)
@@ -109,10 +159,11 @@ function Cloud.withRoot(rel_path)
 end
 
 function Cloud.isProviderConfigured(provider)
-    if not provider or provider == Constants.CLOUD_PROVIDERS.NONE then
+    local base = Cloud.parseProvider(provider)
+    if not base or base == Constants.CLOUD_PROVIDERS.NONE then
         return false
     end
-    if provider == Constants.CLOUD_PROVIDERS.WEBDAV then
+    if base == Constants.CLOUD_PROVIDERS.WEBDAV then
         local c = Cloud.loadCredentials(provider)
         return c.url ~= nil and c.url ~= ""
     end

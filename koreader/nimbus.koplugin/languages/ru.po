@@ -910,3 +910,24 @@ msgstr "Обновление облачного каталога..."
 
 msgid "Delete"
 msgstr "Удалить"
+
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Резервное копирование и восстановление устройства)"
+
+msgid "Device Backup and Restore"
+msgstr "Резервное копирование и восстановление устройства"
+
+msgid "Disconnect"
+msgstr "Отключить"
+
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Отключить %s от Nimbus? Настройки резервного копирования и восстановления устройства, локальные книги и файлы в облаке не пострадают."
+
+msgid "Disconnect Account"
+msgstr "Отключить аккаунт"
+
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Отключиться от %s? Сохранённые учётные данные будут удалены из Nimbus. Локальные книги и файлы в облаке останутся нетронутыми."
+
+msgid "Edit Server Settings"
+msgstr "Изменить настройки сервера"

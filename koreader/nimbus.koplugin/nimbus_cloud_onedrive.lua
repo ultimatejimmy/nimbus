@@ -25,8 +25,9 @@ local function splitPath(path)
     return dir, name
 end
 
-local function withToken(cb)
-    OAuth.getValidAccessToken(Constants.CLOUD_PROVIDERS.ONEDRIVE, nil, cb)
+local function withToken(creds, cb)
+    local slot = (creds and creds.token_slot) or Constants.CLOUD_PROVIDERS.ONEDRIVE
+    OAuth.getValidAccessToken(slot, nil, cb)
 end
 
 local function ensureDirSync(token, remote_dir)
@@ -67,7 +68,7 @@ local function ensureDirSync(token, remote_dir)
 end
 
 function OneDrive.testConnection(creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local _, code, _, _, body = Http.request({
             url = GRAPH_API,
@@ -84,7 +85,7 @@ function OneDrive.testConnection(creds, cb)
 end
 
 function OneDrive.ensurePath(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local ok_dir, err = ensureDirSync(token_or_err, remote_dir)
         if ok_dir then cb(true, normalizePath(remote_dir)) else cb(false, err) end
@@ -92,7 +93,7 @@ function OneDrive.ensurePath(remote_dir, creds, cb)
 end
 
 function OneDrive.uploadString(remote_path, content_str, content_type, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local dir = splitPath(norm)
@@ -116,7 +117,7 @@ end
 
 function OneDrive.uploadFile(remote_path, local_path, creds, cb, opts)
     opts = opts or {}
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local dir = splitPath(norm)
@@ -190,7 +191,7 @@ function OneDrive.uploadFile(remote_path, local_path, creds, cb, opts)
 end
 
 function OneDrive.downloadString(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local _, code, _, _, body = Http.request({
@@ -206,7 +207,7 @@ end
 
 function OneDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
     opts = opts or {}
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local f = io.open(local_dest_path, "wb")
@@ -230,7 +231,7 @@ function OneDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
 end
 
 function OneDrive.listDir(remote_dir, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_dir)
         local url = (norm == "")
@@ -264,7 +265,7 @@ function OneDrive.listDir(remote_dir, creds, cb)
 end
 
 function OneDrive.deletePath(remote_path, creds, cb)
-    withToken(function(ok, token_or_err)
+    withToken(creds, function(ok, token_or_err)
         if not ok then return cb(false, token_or_err) end
         local norm = normalizePath(remote_path)
         local _, code = Http.request({
