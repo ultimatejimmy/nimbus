@@ -120,7 +120,7 @@ function Sync.deduplicateCatalog(catalog)
         return tostring(a.id) < tostring(b.id)
     end)
 
-    local by_sha, by_pmd5, by_isbn, by_ta = {}, {}, {}, {}
+    local by_sha, by_pmd5, by_isbn, by_ta, by_file, by_tsize, by_folder = {}, {}, {}, {}, {}, {}, {}
     local id_remap = {}
     local dup_folders = {}
     local removed = 0
@@ -136,11 +136,19 @@ function Sync.deduplicateCatalog(catalog)
         if norm_t ~= "" and norm_t ~= "untitled" and norm_a ~= "" and norm_a ~= "unknown author" and norm_a ~= "unknown" then
             ta_key = norm_t .. "\0" .. norm_a
         end
+        local fname = entry.filename and tostring(entry.filename):lower() or ""
+        local sz = tonumber(entry.size_bytes) or 0
+        local file_key = (fname ~= "" and sz > 0) and (fname .. "\0" .. tostring(sz)) or nil
+        local tsize_key = (norm_t ~= "" and norm_t ~= "untitled" and sz > 0) and (norm_t .. "\0" .. tostring(sz)) or nil
+        local folder_key = (entry.folder and entry.folder ~= "") and tostring(entry.folder):lower() or nil
 
         local keep_id = (sha ~= "" and by_sha[sha])
             or (pmd5 ~= "" and by_pmd5[pmd5])
             or (isbn ~= "" and by_isbn[isbn])
             or (ta_key and by_ta[ta_key])
+            or (file_key and by_file[file_key])
+            or (tsize_key and by_tsize[tsize_key])
+            or (folder_key and by_folder[folder_key])
 
         if keep_id and keep_id ~= entry.id and catalog.books[keep_id] then
             local keep = catalog.books[keep_id]
@@ -167,6 +175,9 @@ function Sync.deduplicateCatalog(catalog)
             if pmd5 ~= "" then by_pmd5[pmd5] = entry.id end
             if isbn ~= "" then by_isbn[isbn] = entry.id end
             if ta_key then by_ta[ta_key] = entry.id end
+            if file_key then by_file[file_key] = entry.id end
+            if tsize_key then by_tsize[tsize_key] = entry.id end
+            if folder_key then by_folder[folder_key] = entry.id end
         end
     end
 
@@ -210,8 +221,10 @@ function Sync.loadCatalog(cb, opts)
             Logger.info(string.format("Deduplicated %d duplicate cloud book(s)", removed))
             if not (opts and opts.skip_dedup_save) then
                 Sync.saveCatalog(data, function() end)
-                for _, folder in ipairs(dup_folders) do
-                    Cloud.deleteFile(folder, function() end)
+                if Cloud.deletePath then
+                    for _, folder in ipairs(dup_folders) do
+                        pcall(Cloud.deletePath, folder, function() end)
+                    end
                 end
             end
         end
@@ -367,6 +380,20 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
         }, { allow_slow_sha256 = true })
         if not existing_id and candidates and #candidates > 0 then
             existing_id = candidates[1].id
+        end
+        if not existing_id and filename and size_bytes > 0 then
+            local fname_l = filename:lower()
+            local norm_t = Matcher.normalizeText(title)
+            for id, entry in pairs(catalog.books) do
+                if type(entry) == "table" and not entry.deleted and tonumber(entry.size_bytes) == size_bytes then
+                    local ef = entry.filename and tostring(entry.filename):lower() or ""
+                    local et = Matcher.normalizeText(entry.title)
+                    if (ef ~= "" and ef == fname_l) or (norm_t ~= "" and norm_t ~= "untitled" and et == norm_t) then
+                        existing_id = id
+                        break
+                    end
+                end
+            end
         end
         local existing = existing_id and catalog.books[existing_id]
         if existing and not existing.deleted and not opts.force_reupload and existing.folder and existing.filename then

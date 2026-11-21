@@ -76,6 +76,71 @@ function Widgets.getAssetPath(filename)
     return fallback
 end
 
+local _focus_controllers = setmetatable({}, { __mode = "k" })
+
+function Widgets.clearKeyboardFocus()
+    for ctrl in pairs(_focus_controllers) do
+        if ctrl._nimbus_focus_active then
+            ctrl._nimbus_focus_active = false
+            local sel = ctrl.selected
+            local row = ctrl.layout and sel and ctrl.layout[sel.y]
+            local w = row and row[sel.x]
+            if w and w.onUnfocus then
+                pcall(w.onUnfocus, w)
+            end
+        end
+    end
+end
+
+function Widgets.installLazyFocus(ctrl)
+    if not ctrl then return end
+    _focus_controllers[ctrl] = true
+    ctrl._nimbus_focus_active = false
+    if ctrl.layout and ctrl.layout[1] and ctrl.layout[1][1] and ctrl.layout[1][1].onUnfocus then
+        pcall(ctrl.layout[1][1].onUnfocus, ctrl.layout[1][1])
+    end
+
+    local function activateCurrent()
+        ctrl._nimbus_focus_active = true
+        if not ctrl.layout or #ctrl.layout == 0 then return false end
+        local sel = ctrl.selected or { x = 1, y = 1 }
+        local y = math.max(1, math.min(sel.y or 1, #ctrl.layout))
+        local row = ctrl.layout[y]
+        if not row or #row == 0 then return false end
+        local x = math.max(1, math.min(sel.x or 1, #row))
+        ctrl.selected = { x = x, y = y }
+        local w = row[x]
+        if w and w.onFocus then
+            pcall(w.onFocus, w)
+        end
+        return true
+    end
+
+    for _, method_name in ipairs({ "onFocusMove", "onFocusHalfMove", "onFocusNext", "onFocusPrevious" }) do
+        local orig = ctrl[method_name]
+        if type(orig) == "function" then
+            ctrl[method_name] = function(self, ...)
+                if not self._nimbus_focus_active then
+                    return activateCurrent()
+                end
+                return orig(self, ...)
+            end
+        end
+    end
+
+    for _, action_name in ipairs({ "onPress", "onHold" }) do
+        local orig = ctrl[action_name]
+        if type(orig) == "function" then
+            ctrl[action_name] = function(self, ...)
+                if not self._nimbus_focus_active then
+                    return false
+                end
+                return orig(self, ...)
+            end
+        end
+    end
+end
+
 function Widgets.makeTapItem(widget, callback, hold_callback, opts)
     opts = opts or {}
     local focus_frame = (widget and widget.bordersize ~= nil) and widget or FrameContainer:new{
@@ -99,12 +164,14 @@ function Widgets.makeTapItem(widget, callback, hold_callback, opts)
         Tap = { GestureRange:new{ ges = "tap", range = getRange } },
     }
     item.onTap = function()
+        Widgets.clearKeyboardFocus()
         if callback then callback() end
         return true
     end
     if hold_callback then
         item.ges_events.Hold = { GestureRange:new{ ges = "hold", range = getRange } }
         item.onHold = function()
+            Widgets.clearKeyboardFocus()
             hold_callback()
             return true
         end
@@ -773,6 +840,9 @@ function Widgets.showCardDialog(opts)
     overlay.key_events.Close = { { "Back" }, { "Escape" } }
     if Device and Device.input and Device.input.group and Device.input.group.Back then
         table.insert(overlay.key_events.Close, { Device.input.group.Back })
+    end
+    if BaseClass == FocusManager then
+        Widgets.installLazyFocus(overlay)
     end
     overlay.onClose = function()
         closeDlg()

@@ -179,6 +179,9 @@ function UILibrary.buildView(on_open_book, opts)
         dimen = Geom:new{ w = sw, h = sh },
         layout = {},
     }
+    if BaseContainer == FocusManager then
+        Widgets.installLazyFocus(host_container)
+    end
 
     local function isAlive()
         if is_destroyed then return false end
@@ -1310,7 +1313,7 @@ function UILibrary.buildView(on_open_book, opts)
             local row = host_container.layout[y]
             local x = math.max(1, math.min(sel.x or 1, #row))
             host_container.selected = { x = x, y = y }
-            if row[x] and row[x].onFocus then
+            if host_container._nimbus_focus_active and row[x] and row[x].onFocus then
                 row[x]:onFocus()
             end
         end

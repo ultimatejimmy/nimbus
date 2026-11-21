@@ -40,15 +40,39 @@ describe("nimbus_sync deduplication", function()
                     hashes = { partial_md5 = "pmd5_m", sha256 = "" },
                     added_at = "2026-01-03T00:00:00Z",
                 },
+                b5 = {
+                    id = "b5",
+                    title = "Career of Evil",
+                    authors = { "Robert Galbraith" },
+                    filename = "Career of Evil.epub",
+                    size_bytes = 512000,
+                    folder = "Books/Robert Galbraith - Career of Evil [b5]",
+                    has_cover = true,
+                    hashes = {},
+                    added_at = "2026-01-01T00:00:00Z",
+                },
+                b6 = {
+                    id = "b6",
+                    title = "Career of Evil (Cormoran Strike)",
+                    authors = { "Unknown Author" },
+                    filename = "Career of Evil.epub",
+                    size_bytes = 512000,
+                    folder = "Books/Unknown - Career of Evil [b6]",
+                    has_cover = false,
+                    hashes = {},
+                    added_at = "2026-01-04T00:00:00Z",
+                },
             },
         }
 
         local removed, dup_folders = Sync.deduplicateCatalog(catalog)
-        assert.are.equal(2, removed)
-        assert.are.equal(2, #dup_folders)
+        assert.are.equal(3, removed)
+        assert.are.equal(3, #dup_folders)
         assert.is_nil(catalog.books.b1.deleted)
         assert.is_true(catalog.books.b2.deleted)
         assert.is_nil(catalog.books.b3.deleted)
         assert.is_true(catalog.books.b4.deleted)
+        assert.is_nil(catalog.books.b5.deleted)
+        assert.is_true(catalog.books.b6.deleted)
     end)
 end)
