@@ -15,8 +15,9 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Blitbuffer = require("ffi/blitbuffer")
 local ok_util, util = pcall(require, "util")
+local ko_gettext = require("gettext")
 local ok_loc, Localization = pcall(require, "localization_nimbus")
-local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
+local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or ko_gettext
 
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
@@ -126,18 +127,198 @@ local function promptDeleteFromCloud(item, opts)
     }
 end
 
-function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
-    opts = opts or {}
+local function getNativeFileContext(local_path)
+    if not local_path or local_path == "" then return nil end
+    local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
+    local ok_fmu, filemanagerutil = pcall(require, "apps/filemanager/filemanagerutil")
+    local ok_bl, BookList = pcall(require, "ui/widget/booklist")
+    local ok_ds, DocSettings = pcall(require, "docsettings")
+    local ok_dr, DocumentRegistry = pcall(require, "document/documentregistry")
+    local ok_bi, FileManagerBookInfo = pcall(require, "apps/filemanager/filemanagerbookinfo")
+    local fm = ok_fm and FileManager and FileManager.instance or nil
+    local has_provider = ok_dr and DocumentRegistry and DocumentRegistry:hasProvider(local_path) or false
+    local been_opened = ok_bl and BookList and BookList.hasBookBeenOpened(local_path) or false
+    local doc_settings_or_file = local_path
+    local book_props = fm and fm.coverbrowser and fm.coverbrowser.getBookInfo and fm.coverbrowser:getBookInfo(local_path) or nil
+    if been_opened and ok_bl and BookList and BookList.getDocSettings then
+        doc_settings_or_file = BookList.getDocSettings(local_path)
+        if not book_props and ok_bi and FileManagerBookInfo and doc_settings_or_file then
+            local props = doc_settings_or_file:readSetting("doc_props")
+            book_props = FileManagerBookInfo.extendProps(props, local_path)
+            book_props.has_cover = true
+        end
+    end
+    local annotations = (been_opened and type(doc_settings_or_file) == "table" and doc_settings_or_file.readSetting)
+        and doc_settings_or_file:readSetting("annotations") or nil
+    return {
+        file = local_path,
+        fm = fm,
+        filemanagerutil = ok_fmu and filemanagerutil or nil,
+        BookList = ok_bl and BookList or nil,
+        DocSettings = ok_ds and DocSettings or nil,
+        has_provider = has_provider,
+        been_opened = been_opened,
+        doc_settings_or_file = doc_settings_or_file,
+        book_props = book_props,
+        annotations = annotations,
+    }
+end
+
+local function buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, opts)
+    if not (ctx and ctx.DocSettings) then return nil end
+    local current_status
+    if ctx.been_opened and type(ctx.doc_settings_or_file) == "table" and ctx.doc_settings_or_file.readSetting then
+        local summary = ctx.doc_settings_or_file:readSetting("summary")
+        current_status = summary and summary.status
+    end
+    if not current_status then
+        current_status = (merged_prog and merged_prog.status) or item.status
+    end
+    if current_status == "finished" then current_status = "complete" end
+
+    local statuses = {
+        { id = "reading", label = ko_gettext("Reading") },
+        { id = "abandoned", label = ko_gettext("On hold") },
+        { id = "complete", label = ko_gettext("Finished") },
+    }
+    local gap = sc(6)
+    local btn_w = math.floor((inner_w - (gap * 2)) / 3)
+    local row_items = { align = "center" }
+    for idx, st in ipairs(statuses) do
+        if idx > 1 then table.insert(row_items, HorizontalSpan:new{ width = gap }) end
+        local is_active = (current_status == st.id)
+        local btn = Widgets.createButton{
+            text = is_active and (st.label .. " ✓") or st.label,
+            is_primary = is_active,
+            width = btn_w,
+            padding = sc(6),
+            padding_h = sc(4),
+            text_font_size = theme.fs and theme.fs("detail") or 14,
+            callback = function()
+                local ds = ctx.DocSettings:open(ctx.file)
+                local summary = ds:readSetting("summary") or {}
+                summary.status = st.id
+                ds:saveSetting("summary", summary)
+                ds:flush()
+                if ctx.BookList and ctx.BookList.setBookInfoCacheProperty then
+                    ctx.BookList.setBookInfoCacheProperty(ctx.file, "status", st.id)
+                end
+                item.status = st.id
+                if merged_prog then merged_prog.status = st.id end
+                closeDlg()
+                if opts.on_refresh then opts.on_refresh() end
+            end,
+        }
+        table.insert(row_items, btn)
+    end
+    return HorizontalGroup:new(row_items)
+end
+
+local function addNativeRow(rows, btn, chevron, inner_w, closeDlg)
+    if not btn or btn.enabled == false or not btn.text or not btn.callback then return end
+    table.insert(rows, Widgets.createMenuRow(btn.text, chevron(), inner_w, function()
+        closeDlg()
+        btn.callback()
+    end))
+end
+
+local function showMoreBookActionsMenu(item, merged_prog, opts, ctx)
     local local_path = item.local_path
     local is_in_cloud = item.is_in_cloud or (item.folder ~= nil)
     local chevron = function()
-        return TextWidget:new{ text = "›", face = Font:getFace("cfont", 18), fgcolor = theme.color_label_dim }
+        return TextWidget:new{ text = "›", face = Font:getFace("cfont", theme.fs and theme.fs("subtitle") or 18), fgcolor = theme.color_label_dim }
     end
 
     Widgets.showCardDialog{
         title = tostring(item.title or _("Book Actions")),
         body_widget = function(inner_w, closeDlg)
             local rows = {}
+            local noop = function() end
+            local refresh_cb = function()
+                if opts.on_refresh then opts.on_refresh() end
+            end
+            local close_and_refresh = function()
+                closeDlg()
+                refresh_cb()
+            end
+
+            if ctx and ctx.fm and ctx.filemanagerutil then
+                if ctx.has_provider then
+                    addNativeRow(rows, ctx.filemanagerutil.genBookCoverButton(local_path, ctx.book_props, noop), chevron, inner_w, closeDlg)
+                    addNativeRow(rows, ctx.filemanagerutil.genBookDescriptionButton(local_path, ctx.book_props, noop), chevron, inner_w, closeDlg)
+                end
+                if ctx.annotations and #ctx.annotations > 0 and ctx.fm.collections and ctx.fm.collections.genExportHighlightsButton then
+                    addNativeRow(rows, ctx.fm.collections:genExportHighlightsButton({ [local_path] = true }, noop), chevron, inner_w, closeDlg)
+                end
+                if ctx.fm.showOpenWithDialog then
+                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Open with…"), chevron(), inner_w, function()
+                        closeDlg()
+                        ctx.fm:showOpenWithDialog(local_path)
+                    end))
+                end
+                if ctx.has_provider or ctx.been_opened then
+                    addNativeRow(rows, ctx.filemanagerutil.genResetSettingsButton(ctx.doc_settings_or_file, refresh_cb), chevron, inner_w, closeDlg)
+                end
+                if ctx.fm.file_dialog_added_buttons then
+                    for _, row_func in ipairs(ctx.fm.file_dialog_added_buttons) do
+                        local row = row_func(local_path, true, ctx.book_props)
+                        if type(row) == "table" then
+                            for _, btn in ipairs(row) do
+                                addNativeRow(rows, btn, chevron, inner_w, closeDlg)
+                            end
+                        end
+                    end
+                end
+                if ctx.fm.showRenameFileDialog then
+                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Rename"), chevron(), inner_w, function()
+                        closeDlg()
+                        ctx.fm:showRenameFileDialog(local_path, true)
+                    end))
+                end
+                if ctx.fm.showDeleteFileDialog then
+                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Delete"), chevron(), inner_w, function()
+                        closeDlg()
+                        ctx.fm:showDeleteFileDialog(local_path, refresh_cb)
+                    end))
+                end
+            end
+
+            if is_in_cloud then
+                table.insert(rows, Widgets.createMenuRow(_("Delete from Cloud"), chevron(), inner_w, function()
+                    closeDlg()
+                    promptDeleteFromCloud(item, opts)
+                end))
+            end
+
+            table.insert(rows, Widgets.createMenuRow(_("Book Details"), chevron(), inner_w, function()
+                closeDlg()
+                BookCardMixin.showBookDetailModal(item, merged_prog, opts)
+            end))
+
+            return Widgets.createMenuList(rows, inner_w)
+        end,
+        buttons = { { text = _("Close") } },
+    }
+end
+
+function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
+    opts = opts or {}
+    local local_path = item.local_path
+    local is_in_cloud = item.is_in_cloud or (item.folder ~= nil)
+    local ctx = getNativeFileContext(local_path)
+    local chevron = function()
+        return TextWidget:new{ text = "›", face = Font:getFace("cfont", theme.fs and theme.fs("subtitle") or 18), fgcolor = theme.color_label_dim }
+    end
+
+    Widgets.showCardDialog{
+        title = tostring(item.title or _("Book Actions")),
+        body_widget = function(inner_w, closeDlg)
+            local rows = {}
+            local noop = function() end
+            local refresh_cb = function()
+                if opts.on_refresh then opts.on_refresh() end
+            end
+
             if local_path then
                 table.insert(rows, Widgets.createMenuRow(_("Open Book"), chevron(), inner_w, function()
                     closeDlg()
@@ -165,19 +346,41 @@ function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
                 end))
             end
 
-            if is_in_cloud then
-                table.insert(rows, Widgets.createMenuRow(_("Delete from Cloud"), chevron(), inner_w, function()
+            if ctx and ctx.fm and ctx.filemanagerutil then
+                if ctx.has_provider or ctx.been_opened then
+                    if ctx.fm.collections and ctx.fm.collections.genAddToCollectionButton then
+                        addNativeRow(rows, ctx.fm.collections:genAddToCollectionButton(local_path, noop, refresh_cb), chevron, inner_w, closeDlg)
+                    end
+                end
+                if ctx.annotations and #ctx.annotations > 0 and ctx.fm.collections and ctx.fm.collections.genBookmarkBrowserButton then
+                    addNativeRow(rows, ctx.fm.collections:genBookmarkBrowserButton({ [local_path] = true }, noop), chevron, inner_w, closeDlg)
+                end
+                addNativeRow(rows, ctx.filemanagerutil.genBookInformationButton(ctx.doc_settings_or_file, ctx.book_props, noop), chevron, inner_w, closeDlg)
+            else
+                table.insert(rows, Widgets.createMenuRow(_("Book Details"), chevron(), inner_w, function()
                     closeDlg()
-                    promptDeleteFromCloud(item, opts)
+                    BookCardMixin.showBookDetailModal(item, merged_prog, opts)
                 end))
             end
 
-            table.insert(rows, Widgets.createMenuRow(_("Book Details"), chevron(), inner_w, function()
-                closeDlg()
-                BookCardMixin.showBookDetailModal(item, merged_prog, opts)
-            end))
+            if local_path or is_in_cloud then
+                table.insert(rows, Widgets.createMenuRow(ko_gettext("More…"), chevron(), inner_w, function()
+                    closeDlg()
+                    showMoreBookActionsMenu(item, merged_prog, opts, ctx)
+                end))
+            end
 
-            return Widgets.createMenuList(rows, inner_w)
+            local menu_list = Widgets.createMenuList(rows, inner_w)
+            local status_row = buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, opts)
+            if status_row then
+                return VerticalGroup:new{
+                    align = "left",
+                    status_row,
+                    VerticalSpan:new{ width = sc(10) },
+                    menu_list,
+                }
+            end
+            return menu_list
         end,
         buttons = { { text = _("Close") } },
     }

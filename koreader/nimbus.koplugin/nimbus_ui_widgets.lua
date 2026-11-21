@@ -17,6 +17,7 @@ local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local InputText = require("ui/widget/inputtext")
 local LineWidget = require("ui/widget/linewidget")
+local OverlapGroup = require("ui/widget/overlapgroup")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -131,7 +132,7 @@ function Widgets.createButton(opts)
     local border_w = opts.bordersize or sc(1)
     local pad_v = opts.padding or sc(7)
     local pad_h = opts.padding_h or sc(10)
-    local font_sz = opts.text_font_size or 15
+    local font_sz = opts.text_font_size or (theme.isSimpleUIActive and theme.isSimpleUIActive() and theme.fs("body") or 15)
     local is_bold = (opts.bold ~= nil) and opts.bold or is_primary
 
     local max_tw = opts.width and math.max(sc(40), opts.width - (pad_h * 2) - (border_w * 2)) or nil
@@ -162,23 +163,120 @@ function Widgets.createButton(opts)
     return Widgets.makeTapItem(frame, opts.callback)
 end
 
-function Widgets.createBadge(text, is_highlighted)
+function Widgets.createBadge(text, is_highlighted, opts)
     if not text or text == "" then return nil end
+    local is_compact = opts and opts.compact
+    local is_sui = theme.isSimpleUIActive and theme.isSimpleUIActive()
+    local badge_fs = is_compact and (theme.fs and theme.fs("caption") or 12) or (is_sui and (theme.fs("detail") - 1) or (theme.fs and theme.fs("caption") or 12))
+    local pad_v = is_compact and sc(1) or sc(2)
+    local pad_h = is_compact and sc(5) or (is_sui and sc(7) or sc(6))
     local label = TextWidget:new{
         text = text,
-        face = Font:getFace("cfont", 12),
+        face = Font:getFace("cfont", badge_fs),
         bold = is_highlighted,
         fgcolor = is_highlighted and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK,
     }
     return FrameContainer:new{
-        padding = sc(2),
-        padding_left = sc(6),
-        padding_right = sc(6),
+        padding = pad_v,
+        padding_left = pad_h,
+        padding_right = pad_h,
         bordersize = sc(1),
         color = Blitbuffer.COLOR_BLACK,
         radius = theme.radius_badge or sc(10),
         background = is_highlighted and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
         label,
+    }
+end
+
+function Widgets.createIconBadge(icon_name, is_highlighted, opts)
+    if not icon_name or icon_name == "" then return nil end
+    local badge_fs = theme.fs and theme.fs("caption") or 12
+    local probe = TextWidget:new{
+        text = "0%",
+        face = Font:getFace("cfont", badge_fs),
+    }
+    local inner_h = probe:getSize().h
+    probe:free()
+    local sz = (opts and opts.size) or math.max(sc(12), inner_h - sc(2))
+    local icon = ImageWidget:new{
+        file = Widgets.getAssetPath(icon_name),
+        width = sz,
+        height = sz,
+        scale_factor = 0,
+        is_icon = true,
+        alpha = true,
+        invert = is_highlighted and true or nil,
+    }
+    return FrameContainer:new{
+        padding = sc(1),
+        padding_left = sc(5),
+        padding_right = sc(5),
+        bordersize = sc(1),
+        color = Blitbuffer.COLOR_BLACK,
+        radius = theme.radius_badge or sc(10),
+        background = is_highlighted and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
+        CenterContainer:new{
+            dimen = Geom:new{ w = sz, h = inner_h },
+            icon,
+        },
+    }
+end
+
+function Widgets.createCornerTag(text)
+    if not text or text == "" then return nil end
+    local tag_fs = theme.fs and theme.fs("caption") or 12
+    local label = TextWidget:new{
+        text = text,
+        face = Font:getFace("cfont", tag_fs),
+        bold = true,
+        fgcolor = Blitbuffer.COLOR_WHITE,
+    }
+    return FrameContainer:new{
+        padding_top = sc(2),
+        padding_bottom = sc(3),
+        padding_left = sc(6),
+        padding_right = sc(6),
+        bordersize = 0,
+        background = Blitbuffer.COLOR_BLACK,
+        label,
+    }
+end
+
+function Widgets.createCircleBadge(opts)
+    opts = opts or {}
+    local is_sui = theme.isSimpleUIActive and theme.isSimpleUIActive()
+    local d = sc(is_sui and 26 or 24)
+    if opts.icon then
+        local svg_file = (opts.icon == "check-white.svg" or opts.icon == "check.svg")
+            and "check-circle-filled.svg" or opts.icon
+        return ImageWidget:new{
+            file = Widgets.getAssetPath(svg_file),
+            width = d,
+            height = d,
+            scale_factor = 0,
+            alpha = true,
+        }
+    end
+    local bg = ImageWidget:new{
+        file = Widgets.getAssetPath("circle-filled.svg"),
+        width = d,
+        height = d,
+        scale_factor = 0,
+        alpha = true,
+    }
+    local label = TextWidget:new{
+        text = tostring(opts.text or ""),
+        face = Font:getFace("cfont", theme.fs and theme.fs("caption") or 12),
+        bold = true,
+        fgcolor = Blitbuffer.COLOR_WHITE,
+    }
+    return OverlapGroup:new{
+        dimen = Geom:new{ w = d, h = d },
+        bg,
+        CenterContainer:new{
+            dimen = Geom:new{ w = d, h = d },
+            label,
+        },
     }
 end
 
@@ -333,15 +431,17 @@ end
 --- Kindle-style two-tab bar (`On Device (N)` | `Cloud (M)`).
 function Widgets.createTwoTabBar(tabs, active_id, total_w, on_select)
     local tab_w = math.floor(total_w / #tabs)
+    local tab_fs = theme.isSimpleUIActive and theme.isSimpleUIActive() and theme.fs("body") or 15
     local tab_items = {}
     for _, tab in ipairs(tabs) do
         local is_active = (tab.id == active_id)
         local label = TextWidget:new{
             text = tab.label,
-            face = Font:getFace("cfont", 15),
+            face = Font:getFace("cfont", tab_fs),
             bold = is_active,
             fgcolor = is_active and Blitbuffer.COLOR_BLACK or theme.color_label_dim,
         }
+        local tab_h = math.max(sc(34), label:getSize().h + sc(12))
         local indicator = LineWidget:new{
             dimen = Geom:new{ w = tab_w, h = is_active and sc(3) or sc(1) },
             background = is_active and Blitbuffer.COLOR_BLACK or theme.color_bg_dim,
@@ -349,7 +449,7 @@ function Widgets.createTwoTabBar(tabs, active_id, total_w, on_select)
         local cell = VerticalGroup:new{
             align = "center",
             CenterContainer:new{
-                dimen = Geom:new{ w = tab_w, h = sc(34) },
+                dimen = Geom:new{ w = tab_w, h = tab_h },
                 label,
             },
             indicator,
@@ -481,7 +581,7 @@ function Widgets.showCardDialog(opts)
 
     local close_icon = Widgets.createIconButton{
         icon = "x.svg",
-        size = sc(22),
+        size = theme.icon and theme.icon(22) or sc(22),
         padding = sc(6),
         callback = function()
             closeDlg()
@@ -490,7 +590,7 @@ function Widgets.showCardDialog(opts)
     }
     local title_w = TextWidget:new{
         text = opts.title or "Nimbus",
-        face = Font:getFace(theme.getTitleFontName and theme.getTitleFontName() or "tfont", 20),
+        face = Font:getFace(theme.getTitleFontName and theme.getTitleFontName() or "tfont", theme.fs and theme.fs("title") or 20),
         bold = true,
         fgcolor = Blitbuffer.COLOR_BLACK,
         max_width = inner_w - sc(36),

@@ -446,7 +446,8 @@ function UILibrary.buildView(on_open_book, opts)
         end
 
         -- Option A Header with deterministic OverlapGroup (LeftContainer / CenterContainer / RightContainer)
-        local icon_sz = sc(24)
+        local is_sui = theme.isSimpleUIActive and theme.isSimpleUIActive()
+        local icon_sz = theme.icon and theme.icon(24) or sc(24)
         local icon_pad = sc(5)
         local left_btn = is_home
             and Widgets.createIconButton{
@@ -495,26 +496,27 @@ function UILibrary.buildView(on_open_book, opts)
         local side_reserve = math.max(left_w, right_w)
         local search_bar_w = math.max(sc(140), header_inner_w - (side_reserve * 2) - (gap_w * 2))
 
+        local search_icon_sz = theme.icon and theme.icon(16) or sc(16)
         local search_icon = ImageWidget:new{
             file = Widgets.getAssetPath("search.svg"),
-            width = sc(16),
-            height = sc(16),
+            width = search_icon_sz,
+            height = search_icon_sz,
             scale_factor = 0,
             is_icon = true,
             alpha = true,
         }
         local has_query = (q_lower ~= "")
-        local clear_btn_w = has_query and sc(24) or 0
+        local clear_btn_w = has_query and (search_icon_sz + sc(8)) or 0
         local search_inner_w = search_bar_w - sc(20)
-        local search_inner_h = sc(24)
-        local search_text_w = math.max(sc(60), search_inner_w - sc(24) - clear_btn_w)
+        local search_text_w = math.max(sc(60), search_inner_w - search_icon_sz - sc(8) - clear_btn_w)
         local search_label = TextWidget:new{
             text = has_query and search_query or _("Search library..."),
-            face = Font:getFace("cfont", 15),
+            face = Font:getFace("cfont", is_sui and theme.fs("body") or 15),
             bold = has_query,
             fgcolor = has_query and Blitbuffer.COLOR_BLACK or theme.color_label_dim,
             max_width = search_text_w,
         }
+        local search_inner_h = math.max(sc(24), search_label:getSize().h + sc(2))
         local search_tap_target = Widgets.makeTapItem(
             FrameContainer:new{
                 padding = 0,
@@ -547,7 +549,7 @@ function UILibrary.buildView(on_open_book, opts)
                 dimen = Geom:new{ w = search_inner_w, h = search_inner_h },
                 Widgets.createIconButton{
                     icon = "x.svg",
-                    size = sc(16),
+                    size = search_icon_sz,
                     padding = sc(3),
                     callback = function()
                         search_query = ""
@@ -612,11 +614,12 @@ function UILibrary.buildView(on_open_book, opts)
         end)
 
         -- Sub-toolbar: Filter dropdown / Folder Up breadcrumb on left; Grid/List + Sync on right
+        local sub_icon_sz = theme.icon and theme.icon(20) or sc(20)
         local sub_tools = HorizontalGroup:new{
             align = "center",
             Widgets.createIconButton{
                 icon = (view_mode == "cover") and "list.svg" or "grid.svg",
-                size = sc(20),
+                size = sub_icon_sz,
                 padding = sc(4),
                 callback = function()
                     local c = Settings.load()
@@ -629,7 +632,7 @@ function UILibrary.buildView(on_open_book, opts)
             HorizontalSpan:new{ width = sc(6) },
             Widgets.createIconButton{
                 icon = "refresh-cw.svg",
-                size = sc(20),
+                size = sub_icon_sz,
                 padding = sc(4),
                 callback = function()
                     fetchCloudWithBar(true)
@@ -649,8 +652,8 @@ function UILibrary.buildView(on_open_book, opts)
                         align = "center",
                         ImageWidget:new{
                             file = Widgets.getAssetPath("chevron-left.svg"),
-                            width = sc(18),
-                            height = sc(18),
+                            width = theme.icon and theme.icon(18) or sc(18),
+                            height = theme.icon and theme.icon(18) or sc(18),
                             scale_factor = 0,
                             is_icon = true,
                             alpha = true,
@@ -658,7 +661,7 @@ function UILibrary.buildView(on_open_book, opts)
                         HorizontalSpan:new{ width = sc(2) },
                         TextWidget:new{
                             text = tostring(folder_info.current_label or ""),
-                            face = Font:getFace("cfont", 15),
+                            face = Font:getFace("cfont", is_sui and theme.fs("body") or 15),
                             bold = true,
                             fgcolor = Blitbuffer.COLOR_BLACK,
                         },
@@ -685,7 +688,7 @@ function UILibrary.buildView(on_open_book, opts)
                     bordersize = 0,
                     TextWidget:new{
                         text = filter_lbl_text,
-                        face = Font:getFace("cfont", 14),
+                        face = Font:getFace("cfont", is_sui and (theme.fs("detail") + 1) or 14),
                         bold = (current_filter ~= "all"),
                         fgcolor = Blitbuffer.COLOR_BLACK,
                     },
@@ -719,7 +722,7 @@ function UILibrary.buildView(on_open_book, opts)
         local left_fixed_w = sub_left_items[1]:getSize().w
         table.insert(sub_left_items, TextWidget:new{
             text = status_suffix,
-            face = Font:getFace("cfont", 13),
+            face = Font:getFace("cfont", is_sui and theme.fs("detail") or 13),
             fgcolor = theme.color_label_dim,
             max_width = math.max(sc(60), sw - sc(24) - left_fixed_w - sub_tools:getSize().w - sc(8)),
         })
@@ -749,43 +752,57 @@ function UILibrary.buildView(on_open_book, opts)
             background = theme.color_bg_dim,
         }
 
+        local total_pages = 1
+        local prev_btn = Widgets.createButton{
+            text = _("‹ Prev"),
+            callback = function()
+                if current_page > 1 then current_page = current_page - 1; renderShelf() end
+            end,
+        }
+        local next_btn = Widgets.createButton{
+            text = _("Next ›"),
+            callback = function()
+                if current_page < total_pages then current_page = current_page + 1; renderShelf() end
+            end,
+        }
+        local page_label_fs = is_sui and theme.fs("body") or 16
+        local page_label_probe = TextWidget:new{
+            text = string.format("%d / %d", 1, 1),
+            face = Font:getFace("cfont", page_label_fs),
+            fgcolor = theme.color_label_dim,
+        }
         local header_h = header_frame:getSize().h + sc(1) + tab_bar:getSize().h + sub_toolbar:getSize().h + sc(1)
-        local footer_h = sc(48)
-        local top_margin = sc(6)
-        local avail_h = sh - header_h - footer_h - top_margin - sc(14)
+        local footer_h = math.max(sc(48), prev_btn:getSize().h + sc(10), next_btn:getSize().h + sc(10), page_label_probe:getSize().h + sc(10))
+        local avail_h = sh - header_h - footer_h
 
-        local COLS = 3
-        local grid_gap = sc(12)
-        local margin_h = sc(14)
-        local cell_w = math.floor((sw - (margin_h * 2) - (grid_gap * (COLS - 1))) / COLS)
-        local row_total_w = (cell_w * COLS) + (grid_gap * (COLS - 1))
-        margin_h = math.floor((sw - row_total_w) / 2)
-        local content_w = row_total_w
+        local title_fs = theme.fs and theme.fs("detail") or 14
+        local grid = theme.computeCoverGrid{
+            avail_h = avail_h,
+            sw = sw,
+            cols = 3,
+            margin_h = is_sui and sc(10) or sc(14),
+            grid_gap = is_sui and sc(10) or sc(12),
+            title_slot_h = 0,
+            title_gap = 0,
+            min_gap_v = sc(8),
+            max_gap_v = sc(24),
+        }
+        local COLS = grid.cols
+        local grid_gap = grid.grid_gap
+        local margin_h = grid.margin_h
+        local cell_w = grid.cell_w
+        local content_w = grid.row_total_w
         local content_inner = content_w - sc(12)
-
-        local title_slot_h = sc(38)
-        local tile_extra_h = sc(6) + title_slot_h
-        local grid_gap_v = sc(10)
-        local cover_slot_w, cover_slot_h, cover_row_h
-
-        if view_mode == "cover" then
-            local max_cover_w_by_cell = cell_w
-            local ideal_cover_h = math.floor(max_cover_w_by_cell * 1.42)
-            local max_cover_h_3 = math.floor((avail_h - (grid_gap_v * 2)) / 3) - tile_extra_h
-            local max_cover_h_2 = math.floor((avail_h - grid_gap_v) / 2) - tile_extra_h
-            local num_rows = (max_cover_h_3 >= math.floor(ideal_cover_h * 0.88)) and 3 or ((max_cover_h_2 >= sc(70)) and 2 or 1)
-            local max_row_h = math.floor((avail_h - (grid_gap_v * (num_rows - 1))) / num_rows)
-            local max_cover_h = math.max(sc(45), max_row_h - tile_extra_h)
-            cover_slot_w = math.max(sc(40), math.min(max_cover_w_by_cell, math.floor(max_cover_h / 1.42)))
-            cover_slot_h = math.floor(cover_slot_w * 1.42)
-            cover_row_h = cover_slot_h + tile_extra_h
-        end
+        local grid_gap_v = grid.grid_gap_v
+        local cover_slot_w = grid.cover_slot_w
+        local cover_slot_h = grid.cover_slot_h
+        local cover_row_h = grid.cover_row_h
 
         local pages = {}
         if #display_books > 0 then
             local per_page = (view_mode == "cover")
-                and (math.max(1, math.floor((avail_h + grid_gap_v) / (cover_row_h + grid_gap_v))) * COLS)
-                or math.max(1, math.floor(avail_h / sc(92)))
+                and grid.per_page
+                or math.max(1, math.floor(avail_h / sc(is_sui and 100 or 92)))
             for i = 1, #display_books, per_page do
                 local chunk = {}
                 for k = i, math.min(#display_books, i + per_page - 1) do
@@ -795,7 +812,7 @@ function UILibrary.buildView(on_open_book, opts)
             end
         end
 
-        local total_pages = math.max(1, #pages)
+        total_pages = math.max(1, #pages)
         if current_page > total_pages then current_page = total_pages end
         local cur_page_books = pages[current_page] or {}
         local page_content_vg = VerticalGroup:new{ align = "left" }
@@ -805,7 +822,7 @@ function UILibrary.buildView(on_open_book, opts)
             local prog = merged_progress[item.cloud_id or item.id]
             local pct = (prog and prog.percent) or item.percent or 0
             local status = (prog and prog.status) or item.status
-            if status == "finished" then
+            if status == "finished" or status == "complete" then
                 return _("Done"), true
             elseif pct > 0 then
                 return string.format("%d%%", math.floor(pct * 100 + 0.5)), false
@@ -927,7 +944,7 @@ function UILibrary.buildView(on_open_book, opts)
                 handlePrimaryTap(item)
                 return
             end
-            UILibrary.showBookDetailModal(item, merged_progress[item.cloud_id or item.id], makeBookActionOpts())
+            UILibrary.showBookActionsMenu(item, merged_progress[item.cloud_id or item.id], makeBookActionOpts())
         end
 
         if #display_books == 0 then
@@ -949,7 +966,7 @@ function UILibrary.buildView(on_open_book, opts)
                     dimen = Geom:new{ w = sw - sc(48), h = sh - sc(260) },
                     TextBoxWidget:new{
                         text = empty_msg,
-                        face = Font:getFace("cfont", 16),
+                        face = Font:getFace("cfont", theme.fs and theme.fs("body") or 16),
                         fgcolor = Blitbuffer.COLOR_BLACK,
                         width = sw - sc(48),
                         alignment = "center",
@@ -964,7 +981,7 @@ function UILibrary.buildView(on_open_book, opts)
                 local status_w = Widgets.createBadge(s_text, s_hl)
                 local dots_w = (not item.is_folder) and Widgets.createIconButton{
                     icon = "more-vertical.svg",
-                    size = sc(18),
+                    size = theme.icon and theme.icon(18) or sc(18),
                     padding = sc(4),
                     callback = function() openActionsMenu(item) end,
                 } or nil
@@ -1045,7 +1062,7 @@ function UILibrary.buildView(on_open_book, opts)
                         align = "left",
                         TextWidget:new{
                             text = tostring(item.title or _("Untitled")),
-                            face = Font:getFace("cfont", 18),
+                            face = Font:getFace("cfont", is_sui and theme.fs("subtitle") or 18),
                             bold = true,
                             fgcolor = Blitbuffer.COLOR_BLACK,
                             max_width = text_w,
@@ -1053,7 +1070,7 @@ function UILibrary.buildView(on_open_book, opts)
                         VerticalSpan:new{ width = sc(2) },
                         TextWidget:new{
                             text = sub_line,
-                            face = Font:getFace("cfont", 15),
+                            face = Font:getFace("cfont", is_sui and (theme.fs("detail") + 1) or 15),
                             fgcolor = theme.color_label_dim,
                             max_width = text_w,
                         },
@@ -1083,6 +1100,7 @@ function UILibrary.buildView(on_open_book, opts)
                 })
             end
         else
+            table.insert(page_content_vg, VerticalSpan:new{ width = grid_gap_v })
             local current_row_widgets = {}
             for i, item in ipairs(cur_page_books) do
                 local cover_slot
@@ -1124,60 +1142,80 @@ function UILibrary.buildView(on_open_book, opts)
                     end
                 end
 
-                local p_text, p_hl = getProgressBadge(item)
-                local prog_w = p_text and Widgets.createBadge(p_text, p_hl) or nil
-                local s_text, s_hl = getStatusBadge(item)
-                local status_w = Widgets.createBadge(s_text, s_hl)
                 local cover_with_badge = OverlapGroup:new{
                     dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
                     cover_slot,
                 }
-                if status_w then
+                if item.is_folder then
+                    local folder_lbl = FrameContainer:new{
+                        padding = sc(2),
+                        padding_left = sc(5),
+                        padding_right = sc(5),
+                        bordersize = sc(1),
+                        color = Blitbuffer.COLOR_BLACK,
+                        background = Blitbuffer.COLOR_WHITE,
+                        TextWidget:new{
+                            text = tostring(item.title or _("Untitled")),
+                            face = Font:getFace("cfont", theme.fs and theme.fs("caption") or 12),
+                            bold = true,
+                            fgcolor = Blitbuffer.COLOR_BLACK,
+                            max_width = cover_slot_w - sc(18),
+                        },
+                    }
+                    table.insert(cover_with_badge, CenterContainer:new{
+                        dimen = Geom:new{ w = cover_slot_w, h = folder_lbl:getSize().h + sc(8) },
+                        FrameContainer:new{
+                            padding = sc(4),
+                            bordersize = 0,
+                            folder_lbl,
+                        },
+                    })
+                    local count_badge = Widgets.createCircleBadge{
+                        text = string.format("%d", item.book_count or 0),
+                    }
                     table.insert(cover_with_badge, BottomContainer:new{
                         dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
                         LeftContainer:new{
-                            dimen = Geom:new{ w = cover_slot_w, h = status_w:getSize().h + sc(8) },
+                            dimen = Geom:new{ w = cover_slot_w, h = count_badge:getSize().h + sc(12) },
                             FrameContainer:new{
-                                padding = sc(4),
+                                padding = sc(6),
                                 bordersize = 0,
-                                status_w,
+                                count_badge,
                             },
                         },
                     })
-                end
-                if prog_w then
-                    table.insert(cover_with_badge, BottomContainer:new{
-                        dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
-                        RightContainer:new{
-                            dimen = Geom:new{ w = cover_slot_w, h = prog_w:getSize().h + sc(8) },
+                else
+                    local p_text, p_hl = getProgressBadge(item)
+                    if p_text then
+                        local tag_w = Widgets.createCornerTag(p_hl and string.upper(p_text) or p_text)
+                        table.insert(cover_with_badge, RightContainer:new{
+                            dimen = Geom:new{ w = cover_slot_w, h = tag_w:getSize().h },
                             FrameContainer:new{
-                                padding = sc(4),
+                                padding = 0,
+                                padding_right = sc(6),
                                 bordersize = 0,
-                                prog_w,
+                                tag_w,
                             },
-                        },
-                    })
+                        })
+                    end
+                    if active_tab == "cloud" and item.local_path then
+                        local check_badge = Widgets.createCircleBadge{ icon = "check-white.svg" }
+                        table.insert(cover_with_badge, BottomContainer:new{
+                            dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
+                            LeftContainer:new{
+                                dimen = Geom:new{ w = cover_slot_w, h = check_badge:getSize().h + sc(12) },
+                                FrameContainer:new{
+                                    padding = sc(6),
+                                    bordersize = 0,
+                                    check_badge,
+                                },
+                            },
+                        })
+                    end
                 end
 
                 local cell_content = Widgets.makeTapItem(
-                    VerticalGroup:new{
-                        align = "center",
-                        cover_with_badge,
-                        VerticalSpan:new{ width = sc(6) },
-                        CenterContainer:new{
-                            dimen = Geom:new{ w = cell_w - sc(4), h = title_slot_h },
-                            TextBoxWidget:new{
-                                text = tostring(item.title or _("Untitled")),
-                                face = Font:getFace("cfont", 14),
-                                bold = true,
-                                width = cell_w - sc(6),
-                                height = title_slot_h,
-                                height_overflow_show_ellipsis = true,
-                                alignment = "center",
-                                fgcolor = Blitbuffer.COLOR_BLACK,
-                            },
-                        },
-                    },
+                    cover_with_badge,
                     function() handlePrimaryTap(item) end,
                     function() openActionsMenu(item) end
                 )
@@ -1204,21 +1242,9 @@ function UILibrary.buildView(on_open_book, opts)
             end
         end
 
-        local prev_btn = Widgets.createButton{
-            text = _("‹ Prev"),
-            callback = function()
-                if current_page > 1 then current_page = current_page - 1; renderShelf() end
-            end,
-        }
-        local next_btn = Widgets.createButton{
-            text = _("Next ›"),
-            callback = function()
-                if current_page < total_pages then current_page = current_page + 1; renderShelf() end
-            end,
-        }
         local page_label = TextWidget:new{
             text = string.format("%d / %d", current_page, total_pages),
-            face = Font:getFace("cfont", 16),
+            face = Font:getFace("cfont", page_label_fs),
             fgcolor = theme.color_label_dim,
         }
         local prev_w, next_w, label_w = prev_btn:getSize().w, next_btn:getSize().w, page_label:getSize().w
