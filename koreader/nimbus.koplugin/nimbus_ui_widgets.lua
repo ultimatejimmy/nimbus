@@ -587,6 +587,7 @@ function Widgets.showCardDialog(opts)
 
     overlay = InputContainer:new{
         dimen = Geom:new{ w = sw, h = sh },
+        is_always_active = opts.is_always_active,
         key_events = { Close = { { "Back" }, { "Escape" } } },
         container_widget,
     }
@@ -661,9 +662,10 @@ function Widgets.showInputDialog(opts)
             table.insert(action_buttons, {
                 text = b.text,
                 is_primary = b.is_primary,
-                keep_open = b.keep_open,
+                keep_open = true,
                 callback = function(closeDlg)
                     local v1, all_v = getValues()
+                    if not b.keep_open and closeDlg then closeDlg() end
                     if b.callback then b.callback(v1, all_v, closeDlg) end
                 end,
             })
@@ -671,15 +673,19 @@ function Widgets.showInputDialog(opts)
     else
         table.insert(action_buttons, {
             text = opts.cancel_text or _("Cancel"),
-            callback = function()
+            keep_open = true,
+            callback = function(closeDlg)
+                if closeDlg then closeDlg() end
                 if opts.on_cancel then opts.on_cancel() end
             end,
         })
         table.insert(action_buttons, {
             text = opts.save_text or _("Save"),
             is_primary = true,
-            callback = function()
+            keep_open = true,
+            callback = function(closeDlg)
                 local v1, all_v = getValues()
+                if closeDlg then closeDlg() end
                 if opts.on_submit then opts.on_submit(v1, all_v) end
             end,
         })
@@ -692,6 +698,7 @@ function Widgets.showInputDialog(opts)
     local sh = Device.screen:getHeight()
     local overlay, closeDlg = Widgets.showCardDialog{
         title = opts.title or _("Input"),
+        is_always_active = true,
         container_h = should_show_vk and math.floor(sh * 0.58) or sh,
         on_before_close = cleanupInputs,
         on_close = opts.on_cancel,

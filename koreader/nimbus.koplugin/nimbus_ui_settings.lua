@@ -702,13 +702,11 @@ function UISettings.showSettingsDialog(on_finish_cb)
                                 input = cfg.remote_root or Constants.DEFAULT_REMOTE_ROOT,
                                 on_cancel = reopen,
                                 on_submit = function(v)
-                                    if v and v ~= "" then
-                                        local next_root = v:gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", "")
-                                        if next_root ~= (cfg.remote_root or Constants.DEFAULT_REMOTE_ROOT) then
-                                            cfg.remote_root = next_root
-                                            Settings.save(cfg)
-                                            Sync.clearCachedCatalog()
-                                        end
+                                    local next_root = tostring(v or ""):gsub("\\", "/"):gsub("^/+", ""):gsub("/+$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                                    if next_root ~= "" and next_root ~= (cfg.remote_root or Constants.DEFAULT_REMOTE_ROOT) then
+                                        cfg.remote_root = next_root
+                                        Settings.save(cfg)
+                                        Sync.clearCachedCatalog()
                                     end
                                     reopen()
                                 end,
