@@ -84,7 +84,107 @@ function Sync.clearCachedCatalog()
     pcall(os.remove, getCatalogCachePath())
 end
 
-function Sync.loadCatalog(cb)
+local function getPrimaryAuthor(entry)
+    if type(entry.authors) == "table" and entry.authors[1] then
+        return Matcher.normalizeText(entry.authors[1])
+    elseif type(entry.authors) == "string" then
+        return Matcher.normalizeText(entry.authors)
+    end
+    return ""
+end
+
+--- Deduplicates catalog.books in-place by sha256, partial_md5, isbn, or normalized (title, author).
+-- Keeps the best canonical entry, marks duplicates deleted=true, and remaps local book_links.
+-- @return number removed_count, table dup_folders
+function Sync.deduplicateCatalog(catalog)
+    if type(catalog) ~= "table" or type(catalog.books) ~= "table" then
+        return 0, {}
+    end
+    local entries = {}
+    for id, entry in pairs(catalog.books) do
+        if type(entry) == "table" and not entry.deleted then
+            entry.id = entry.id or id
+            table.insert(entries, entry)
+        end
+    end
+    table.sort(entries, function(a, b)
+        local ac = a.has_cover and 1 or 0
+        local bc = b.has_cover and 1 or 0
+        if ac ~= bc then return ac > bc end
+        local as = (a.hashes and a.hashes.sha256 and a.hashes.sha256 ~= "") and 1 or 0
+        local bs = (b.hashes and b.hashes.sha256 and b.hashes.sha256 ~= "") and 1 or 0
+        if as ~= bs then return as > bs end
+        local aa = tostring(a.added_at or "9999")
+        local ba = tostring(b.added_at or "9999")
+        if aa ~= ba then return aa < ba end
+        return tostring(a.id) < tostring(b.id)
+    end)
+
+    local by_sha, by_pmd5, by_isbn, by_ta = {}, {}, {}, {}
+    local id_remap = {}
+    local dup_folders = {}
+    local removed = 0
+    local now_iso = os.date("!%Y-%m-%dT%H:%M:%SZ")
+
+    for _, entry in ipairs(entries) do
+        local sha = entry.hashes and entry.hashes.sha256 or ""
+        local pmd5 = entry.hashes and entry.hashes.partial_md5 or ""
+        local isbn = entry.isbn and tostring(entry.isbn):gsub("[^%w]", "") or ""
+        local norm_t = Matcher.normalizeText(entry.title)
+        local norm_a = getPrimaryAuthor(entry)
+        local ta_key = nil
+        if norm_t ~= "" and norm_t ~= "untitled" and norm_a ~= "" and norm_a ~= "unknown author" and norm_a ~= "unknown" then
+            ta_key = norm_t .. "\0" .. norm_a
+        end
+
+        local keep_id = (sha ~= "" and by_sha[sha])
+            or (pmd5 ~= "" and by_pmd5[pmd5])
+            or (isbn ~= "" and by_isbn[isbn])
+            or (ta_key and by_ta[ta_key])
+
+        if keep_id and keep_id ~= entry.id and catalog.books[keep_id] then
+            local keep = catalog.books[keep_id]
+            keep.hashes = keep.hashes or {}
+            if (not keep.hashes.sha256 or keep.hashes.sha256 == "") and sha ~= "" then
+                keep.hashes.sha256 = sha
+            end
+            if (not keep.hashes.partial_md5 or keep.hashes.partial_md5 == "") and pmd5 ~= "" then
+                keep.hashes.partial_md5 = pmd5
+            end
+            if not keep.has_cover and entry.has_cover then
+                keep.has_cover = true
+                keep.cover_etag = entry.cover_etag
+            end
+            entry.deleted = true
+            entry.updated_at = now_iso
+            id_remap[entry.id] = keep_id
+            removed = removed + 1
+            if entry.folder and entry.folder ~= "" and entry.folder ~= keep.folder then
+                table.insert(dup_folders, entry.folder)
+            end
+        else
+            if sha ~= "" then by_sha[sha] = entry.id end
+            if pmd5 ~= "" then by_pmd5[pmd5] = entry.id end
+            if isbn ~= "" then by_isbn[isbn] = entry.id end
+            if ta_key then by_ta[ta_key] = entry.id end
+        end
+    end
+
+    if removed > 0 then
+        local ok_l, links = pcall(Settings.loadBookLinks)
+        if ok_l and type(links) == "table" and type(links.by_path) == "table" then
+            for path, lid in pairs(links.by_path) do
+                if id_remap[lid] then
+                    pcall(Settings.linkBook, path, id_remap[lid])
+                end
+            end
+        end
+    end
+
+    return removed, dup_folders
+end
+
+function Sync.loadCatalog(cb, opts)
     Cloud.downloadString("_sync/catalog.json", function(ok, body_or_err)
         if not ok then
             if body_or_err == "not_found" then
@@ -104,6 +204,16 @@ function Sync.loadCatalog(cb)
         if not data or type(data.books) ~= "table" then
             Logger.err("Invalid catalog.json format")
             return cb(false, "Invalid catalog.json format")
+        end
+        local removed, dup_folders = Sync.deduplicateCatalog(data)
+        if removed > 0 then
+            Logger.info(string.format("Deduplicated %d duplicate cloud book(s)", removed))
+            if not (opts and opts.skip_dedup_save) then
+                Sync.saveCatalog(data, function() end)
+                for _, folder in ipairs(dup_folders) do
+                    Cloud.deleteFile(folder, function() end)
+                end
+            end
         end
         local _, prev_prog = Sync.loadCachedCatalog()
         Sync.saveCachedCatalog(data, prev_prog)
@@ -247,16 +357,25 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
     local function doUploadWithCatalog(catalog)
         catalog.books = catalog.books or {}
 
-        -- Check if already in catalog
-        local existing_id = Matcher.resolve(filepath, catalog, {
+        -- Check if already in catalog (exact hash or strong ISBN/title+author candidate)
+        local existing_id, _, candidates = Matcher.resolve(filepath, catalog, {
             partial_md5 = partial_md5,
             sha256 = sha256,
             title = title,
             authors = authors[1],
             isbn = doc_props.isbn,
-        })
+        }, { allow_slow_sha256 = true })
+        if not existing_id and candidates and #candidates > 0 then
+            existing_id = candidates[1].id
+        end
+        local existing = existing_id and catalog.books[existing_id]
+        if existing and not existing.deleted and not opts.force_reupload and existing.folder and existing.filename then
+            Settings.linkBook(filepath, existing_id)
+            Logger.info("uploadBook skipped duplicate (already in catalog): " .. tostring(title) .. " [" .. tostring(existing_id) .. "]")
+            return cb(true, existing)
+        end
         local book_id = existing_id or Hash.generateBookId()
-        local folder = string.format("Books/%s - %s [%s]",
+        local folder = (existing and existing.folder and existing.folder ~= "") and existing.folder or string.format("Books/%s - %s [%s]",
             sanitizeFolderPart(authors[1], "Unknown"),
             sanitizeFolderPart(title, "Untitled"),
             book_id)

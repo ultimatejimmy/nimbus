@@ -167,6 +167,7 @@ function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc)
             if ok_bb and bb then
                 local ok_w = writeScaledBlitBuffer(bb, dest_path)
                 if bb.free then pcall(function() bb:free() end) end
+                collectgarbage("step", 100)
                 if ok_w then return true end
             end
         end
@@ -216,6 +217,49 @@ function Covers.fetchCover(entry, cb, open_doc)
     end)
 end
 
+local _fetch_queue = {}
+local _fetch_running = false
+
+function Covers.clearFetchQueue()
+    _fetch_queue = {}
+end
+
+local function pumpFetchQueue()
+    if _fetch_running then return end
+    local job = table.remove(_fetch_queue, 1)
+    if not job then return end
+    _fetch_running = true
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    Covers.fetchCover(job.entry, function(path)
+        _fetch_running = false
+        if job.cb then pcall(job.cb, path) end
+        if ok_ui and UIManager and UIManager.nextTick then
+            UIManager:nextTick(pumpFetchQueue)
+        else
+            pumpFetchQueue()
+        end
+    end, job.open_doc)
+end
+
+function Covers.enqueueFetchCover(entry, cb, open_doc)
+    if not entry then
+        if cb then cb(nil) end
+        return
+    end
+    local cached = Covers.getCachedCoverPath(entry)
+    if cached then
+        if cb then cb(cached) end
+        return
+    end
+    table.insert(_fetch_queue, { entry = entry, cb = cb, open_doc = open_doc })
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if ok_ui and UIManager and UIManager.nextTick then
+        UIManager:nextTick(pumpFetchQueue)
+    else
+        pumpFetchQueue()
+    end
+end
+
 function Covers.computeFitSize(orig_w, orig_h, max_w, max_h)
     if not orig_w or not orig_h or orig_w <= 0 or orig_h <= 0 then
         return max_w, max_h
@@ -226,7 +270,17 @@ end
 
 local _scaled_bb_cache = {}
 local _scaled_bb_order = {}
-local MAX_BB_CACHE = 40
+local MAX_BB_CACHE = 12
+
+function Covers.clearMemoryCache()
+    for k, bb in pairs(_scaled_bb_cache) do
+        if bb and bb.free then
+            pcall(function() bb:free() end)
+        end
+        _scaled_bb_cache[k] = nil
+    end
+    _scaled_bb_order = {}
+end
 
 local function getCachedScaledBB(key)
     return _scaled_bb_cache[key]
@@ -343,17 +397,6 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
     local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
 
     local function makeEmptyTile()
-        local ok_iw, ImageWidget = pcall(require, "ui/widget/imagewidget")
-        if ok_iw and ImageWidget and Blitbuffer.new then
-            local bb = Blitbuffer.new(mini_w, mini_h, Blitbuffer.TYPE_BPP24)
-            pcall(function() bb:fill(Blitbuffer.COLOR_GRAY_E) end)
-            return ImageWidget:new{
-                image = bb,
-                image_disposable = true,
-                width = mini_w,
-                height = mini_h,
-            }
-        end
         return LineWidget:new{
             dimen = Geom:new{ w = mini_w, h = mini_h },
             background = Blitbuffer.COLOR_GRAY_E,
@@ -369,13 +412,11 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
             cell_widget = cached and Covers.createCoverImageWidget(cached, mini_w, mini_h)
             if not cell_widget then
                 cell_widget = makeEmptyTile()
-                UIManager:scheduleIn(idx * 0.06, function()
-                    Covers.fetchCover(b, function(loaded_path)
-                        if loaded_path and on_async_loaded then
-                            on_async_loaded()
-                        end
-                    end, open_doc)
-                end)
+                Covers.enqueueFetchCover(b, function(loaded_path)
+                    if loaded_path and on_async_loaded then
+                        on_async_loaded()
+                    end
+                end, open_doc)
             end
         else
             cell_widget = makeEmptyTile()

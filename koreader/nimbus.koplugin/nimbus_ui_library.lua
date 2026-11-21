@@ -8,6 +8,7 @@ local Blitbuffer = require("ffi/blitbuffer")
 local BottomContainer = require("ui/widget/container/bottomcontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
+local ok_fm, FocusManager = pcall(require, "ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
@@ -171,9 +172,12 @@ function UILibrary.buildView(on_open_book, opts)
     local sync_error = nil
     local bg_syncing = false
     local is_destroyed = false
+    local render_gen = 0
 
-    local host_container = InputContainer:new{
+    local BaseContainer = (ok_fm and FocusManager) or InputContainer
+    local host_container = BaseContainer:new{
         dimen = Geom:new{ w = sw, h = sh },
+        layout = {},
     }
 
     local function isAlive()
@@ -302,6 +306,10 @@ function UILibrary.buildView(on_open_book, opts)
     end
 
     renderShelf = function()
+        if not isAlive() then return end
+        render_gen = render_gen + 1
+        local my_gen = render_gen
+        Covers.clearFetchQueue()
         sw, sh = theme.resolveHomeViewport(opts, is_home)
         if host_container.dimen then
             host_container.dimen.w = sw
@@ -1110,7 +1118,7 @@ function UILibrary.buildView(on_open_book, opts)
                         cover_slot_w,
                         cover_slot_h,
                         function()
-                            if isAlive() then renderShelf() end
+                            if my_gen == render_gen and isAlive() then renderShelf() end
                         end,
                         opts.open_doc_info and opts.open_doc_info.open_doc
                     )
@@ -1127,18 +1135,14 @@ function UILibrary.buildView(on_open_book, opts)
                         cover_img,
                     }
                     if not cached_cover then
-                        UIManager:scheduleIn(i * 0.05, function()
-                            if not isAlive() then return end
-                            Covers.fetchCover(item, function(loaded_path)
-                                if loaded_path and isAlive() and cover_slot then
-                                    local new_img = Covers.createCoverImageWidget(loaded_path, cover_slot_w, cover_slot_h)
-                                    if new_img then
-                                        cover_slot[1] = new_img
-                                        dirtyHost()
-                                    end
-                                end
-                            end, opts.open_doc_info and opts.open_doc_info.open_doc)
-                        end)
+                        Covers.enqueueFetchCover(item, function(loaded_path)
+                            if my_gen ~= render_gen or not loaded_path or not isAlive() or not cover_slot then return end
+                            local new_img = Covers.createCoverImageWidget(loaded_path, cover_slot_w, cover_slot_h)
+                            if new_img then
+                                cover_slot[1] = new_img
+                                dirtyHost()
+                            end
+                        end, opts.open_doc_info and opts.open_doc_info.open_doc)
                     end
                 end
 
@@ -1295,27 +1299,31 @@ function UILibrary.buildView(on_open_book, opts)
             },
         }
 
+        if host_container[1] and host_container[1].free then
+            pcall(function() host_container[1]:free() end)
+        end
         host_container[1] = shelf_bg
+        host_container.layout = Widgets.collectFocusableLayout(shelf_bg)
+        if host_container.resetLayout then
+            pcall(function() host_container:resetLayout() end)
+        end
         dirtyHost()
     end
 
-    local key_events = {
-        PrevPage = { { "PgUp" }, { "Prev" }, { "LPgBack" }, { "RPgBack" } },
-        NextPage = { { "PgDn" }, { "Next" }, { "LPgFwd" }, { "RPgFwd" } },
-        OpenMenu = { { "Menu" } },
-    }
+    host_container.key_events = host_container.key_events or {}
+    host_container.key_events.PrevPage = { { "PgUp" }, { "Prev" }, { "LPgBack" }, { "RPgBack" } }
+    host_container.key_events.NextPage = { { "PgDn" }, { "Next" }, { "LPgFwd" }, { "RPgFwd" } }
+    host_container.key_events.OpenMenu = { { "Menu" } }
     if not is_home then
-        key_events.Close = { { "Back" }, { "Escape" } }
+        host_container.key_events.Close = { { "Back" }, { "Escape" } }
     end
     if Device and Device.input and Device.input.group then
         if not is_home and Device.input.group.Back then
-            table.insert(key_events.Close, { Device.input.group.Back })
+            table.insert(host_container.key_events.Close, { Device.input.group.Back })
         end
-        if Device.input.group.PgBack then table.insert(key_events.PrevPage, { Device.input.group.PgBack }) end
-        if Device.input.group.PgFwd then table.insert(key_events.NextPage, { Device.input.group.PgFwd }) end
+        if Device.input.group.PgBack then table.insert(host_container.key_events.PrevPage, { Device.input.group.PgBack }) end
+        if Device.input.group.PgFwd then table.insert(host_container.key_events.NextPage, { Device.input.group.PgFwd }) end
     end
-
-    host_container.key_events = key_events
     host_container.ges_events = {
         Swipe = {
             GestureRange:new{
@@ -1350,9 +1358,15 @@ function UILibrary.buildView(on_open_book, opts)
     end
     host_container.onCloseWidget = function()
         is_destroyed = true
+        Covers.clearFetchQueue()
+        if host_container[1] and host_container[1].free then
+            pcall(function() host_container[1]:free() end)
+        end
+        Covers.clearMemoryCache()
         if UILibrary.setStatusListener then
             UILibrary.setStatusListener(nil)
         end
+        collectgarbage("collect")
     end
 
     if UILibrary.setStatusListener then

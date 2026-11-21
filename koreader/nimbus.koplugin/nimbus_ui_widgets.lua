@@ -7,6 +7,7 @@ local Blitbuffer = require("ffi/blitbuffer")
 local Button = require("ui/widget/button")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
+local ok_fm, FocusManager = pcall(require, "ui/widget/focusmanager")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
@@ -75,9 +76,19 @@ function Widgets.getAssetPath(filename)
     return fallback
 end
 
-function Widgets.makeTapItem(widget, callback, hold_callback)
-    local item = InputContainer:new{ widget }
-    local sz = widget:getSize()
+function Widgets.makeTapItem(widget, callback, hold_callback, opts)
+    opts = opts or {}
+    local focus_frame = (widget and widget.bordersize ~= nil) and widget or FrameContainer:new{
+        padding = 0,
+        margin = 0,
+        bordersize = 0,
+        color = Blitbuffer.COLOR_BLACK,
+        widget,
+    }
+    local orig_border = focus_frame.bordersize or 0
+    local orig_color = focus_frame.color
+    local item = InputContainer:new{ focus_frame }
+    local sz = focus_frame:getSize()
     item.dimen = sz
     local function getRange()
         local d = item.dimen
@@ -98,7 +109,65 @@ function Widgets.makeTapItem(widget, callback, hold_callback)
             return true
         end
     end
+    if opts.focusable ~= false then
+        item.isFocusable = function() return true end
+        item.onFocus = function()
+            focus_frame.bordersize = math.max(orig_border, theme.border_focus or sc(3))
+            focus_frame.color = Blitbuffer.COLOR_BLACK
+            UIManager:setDirty(nil, "ui")
+            return true
+        end
+        item.onUnfocus = function()
+            focus_frame.bordersize = orig_border
+            focus_frame.color = orig_color
+            UIManager:setDirty(nil, "ui")
+            return true
+        end
+        item.onTapSelect = function()
+            if callback then callback() end
+            return true
+        end
+        item.onHoldSelect = function()
+            if hold_callback then
+                hold_callback()
+                return true
+            end
+            return false
+        end
+    end
     return item
+end
+
+function Widgets.collectFocusableLayout(root)
+    local rows = {}
+    local function collectRow(node, out_row)
+        if type(node) ~= "table" then return end
+        if node.isFocusable and node:isFocusable() then
+            table.insert(out_row, node)
+            return
+        end
+        for _, child in ipairs(node) do
+            collectRow(child, out_row)
+        end
+    end
+    local function walk(node)
+        if type(node) ~= "table" then return end
+        if node.isFocusable and node:isFocusable() then
+            table.insert(rows, { node })
+            return
+        end
+        if HorizontalGroup and node.is_a and node:is_a(HorizontalGroup) then
+            local row = {}
+            collectRow(node, row)
+            if #row > 0 then table.insert(rows, row) end
+            return
+        end
+        for _, child in ipairs(node) do
+            walk(child)
+        end
+    end
+    walk(root)
+    return rows
 end
 
 function Widgets.createIconButton(opts)
@@ -685,12 +754,19 @@ function Widgets.showCardDialog(opts)
         card,
     }
 
-    overlay = InputContainer:new{
+    local layout = Widgets.collectFocusableLayout(card)
+    local BaseClass = (ok_fm and FocusManager and #layout > 0) and FocusManager or InputContainer
+    overlay = BaseClass:new{
         dimen = Geom:new{ w = sw, h = sh },
         is_always_active = opts.is_always_active,
-        key_events = { Close = { { "Back" }, { "Escape" } } },
+        layout = (#layout > 0) and layout or nil,
         container_widget,
     }
+    overlay.key_events = overlay.key_events or {}
+    overlay.key_events.Close = { { "Back" }, { "Escape" } }
+    if Device and Device.input and Device.input.group and Device.input.group.Back then
+        table.insert(overlay.key_events.Close, { Device.input.group.Back })
+    end
     overlay.onClose = function()
         closeDlg()
         if opts.on_close then opts.on_close() end
