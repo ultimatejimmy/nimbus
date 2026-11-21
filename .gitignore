@@ -31,3 +31,4 @@ koreader/tests/tmp/
 .env.*
 *_creds.lua
 *_oauth.lua
+!koreader/nimbus.koplugin/nimbus_cloud_oauth.lua
