@@ -5,7 +5,7 @@ Shared constants, OAuth app registrations, and defaults for nimbus.koplugin.
 
 local Constants = {}
 
-Constants.VERSION = "26.11.21.3"
+Constants.VERSION = "26.11.21.4"
 Constants.SCHEMA_VERSION = 1
 
 Constants.CLOUD_PROVIDERS = {
