@@ -13,7 +13,7 @@ class NimbusCalibrePlugin(InterfaceActionBase):
     supported_platforms = ["windows", "osx", "linux"]
     author = "Nimbus"
     version = (26, 11, 20)
-    minimum_calibre_version = (26, 11, 20)
+    minimum_calibre_version = (5, 0, 0)
     actual_plugin = "calibre_plugins.nimbus_calibre.ui:NimbusAction"
 
     def is_customizable(self):

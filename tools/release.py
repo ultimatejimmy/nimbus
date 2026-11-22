@@ -36,9 +36,14 @@ def update_koreader_version(repo_root: Path, new_version: str):
     meta_path = repo_root / "koreader" / "nimbus.koplugin" / "_meta.lua"
     if meta_path.exists():
         content = meta_path.read_text(encoding="utf-8")
-        new_content, count = re.subn(r'version\s*=\s*"[^"]+"', f'version = "{new_version}"', content)
-        if count == 0:
-            print("Error: Could not find version string in _meta.lua")
+        new_content, count = re.subn(
+            r'^([ \t]*version\s*=\s*)"[^"]+"',
+            rf'\g<1>"{new_version}"',
+            content,
+            flags=re.MULTILINE,
+        )
+        if count != 1:
+            print(f"Error: Expected 1 version string in _meta.lua, found {count}")
             sys.exit(1)
         if new_content != content:
             meta_path.write_text(new_content, encoding="utf-8")
@@ -65,9 +70,14 @@ def update_calibre_version(repo_root: Path, new_version: str):
         v0, v1, v2 = parse_version_tuple(new_version)
         ver_tuple = f"({v0}, {v1}, {v2})"
         content = cal_init.read_text(encoding="utf-8")
-        new_content, count = re.subn(r"version\s*=\s*\(\d+,\s*\d+,\s*\d+\)", f"version = {ver_tuple}", content)
-        if count == 0:
-            print("Error: Could not find version tuple in calibre/nimbus_calibre/__init__.py")
+        new_content, count = re.subn(
+            r"^([ \t]*version\s*=\s*)\(\d+,\s*\d+,\s*\d+\)",
+            rf"\g<1>{ver_tuple}",
+            content,
+            flags=re.MULTILINE,
+        )
+        if count != 1:
+            print(f"Error: Expected 1 version tuple in calibre/nimbus_calibre/__init__.py, found {count}")
             sys.exit(1)
         if new_content != content:
             cal_init.write_text(new_content, encoding="utf-8")

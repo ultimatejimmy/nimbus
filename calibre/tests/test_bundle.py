@@ -1,3 +1,4 @@
+import ast
 import sys
 import unittest
 import zipfile
@@ -23,6 +24,27 @@ class TestCalibreBundle(unittest.TestCase):
         self.assertIn("ui.py", names)
         self.assertIn("images/icon.png", names)
         self.assertIn(marker, names)
+
+    def test_plugin_version_and_minimum_calibre_version(self):
+        self.assertEqual(NimbusCalibrePlugin.minimum_calibre_version, (5, 0, 0))
+        self.assertIsInstance(NimbusCalibrePlugin.version, tuple)
+        self.assertEqual(len(NimbusCalibrePlugin.version), 3)
+        self.assertTrue(all(isinstance(part, int) for part in NimbusCalibrePlugin.version))
+
+        out_zip = build()
+        with zipfile.ZipFile(out_zip, "r") as zf:
+            init_src = zf.read("__init__.py").decode("utf-8")
+
+        tree = ast.parse(init_src)
+        attrs = {}
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == "NimbusCalibrePlugin":
+                for stmt in node.body:
+                    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+                        attrs[stmt.targets[0].id] = ast.literal_eval(stmt.value)
+
+        self.assertEqual(attrs.get("minimum_calibre_version"), (5, 0, 0))
+        self.assertEqual(attrs.get("version"), NimbusCalibrePlugin.version)
 
 
 if __name__ == "__main__":
