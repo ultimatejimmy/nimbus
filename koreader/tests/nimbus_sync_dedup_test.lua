@@ -62,17 +62,41 @@ describe("nimbus_sync deduplication", function()
                     hashes = {},
                     added_at = "2026-01-04T00:00:00Z",
                 },
+                b7 = {
+                    id = "b7",
+                    title = "A Christmas Carol",
+                    authors = { "Charles Dickens" },
+                    filename = "Christmas Carol.epub",
+                    size_bytes = 220000,
+                    folder = "Books/Charles Dickens - A Christmas Carol [b7]",
+                    has_cover = true,
+                    hashes = {},
+                    added_at = "2026-01-01T00:00:00Z",
+                },
+                b8 = {
+                    id = "b8",
+                    title = "A Christmas Carol (Annotated Edition)",
+                    authors = { "Dickens, Charles" },
+                    filename = "A Christmas Carol.mobi",
+                    size_bytes = 129008,
+                    folder = "Books/Dickens, Charles - A Christmas Carol [b8]",
+                    has_cover = false,
+                    hashes = {},
+                    added_at = "2026-11-21T05:52:11Z",
+                },
             },
         }
 
         local removed, dup_folders = Sync.deduplicateCatalog(catalog)
-        assert.are.equal(3, removed)
-        assert.are.equal(3, #dup_folders)
+        assert.are.equal(4, removed)
+        assert.are.equal(4, #dup_folders)
         assert.is_nil(catalog.books.b1.deleted)
         assert.is_true(catalog.books.b2.deleted)
         assert.is_nil(catalog.books.b3.deleted)
         assert.is_true(catalog.books.b4.deleted)
         assert.is_nil(catalog.books.b5.deleted)
         assert.is_true(catalog.books.b6.deleted)
+        assert.is_nil(catalog.books.b7.deleted)
+        assert.is_true(catalog.books.b8.deleted)
     end)
 end)

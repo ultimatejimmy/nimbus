@@ -168,6 +168,9 @@ function UILibrary.buildView(on_open_book, opts)
     local current_cloud_dir = ""
     local search_query = ""
     local catalog_data, merged_progress, catalog_saved_at = Sync.loadCachedCatalog()
+    if Sync.deduplicateCatalog and Sync.deduplicateCatalog(catalog_data) > 0 then
+        Sync.saveCachedCatalog(catalog_data, merged_progress)
+    end
     local device_books = {}
     local sync_error = nil
     local bg_syncing = false
@@ -297,6 +300,9 @@ function UILibrary.buildView(on_open_book, opts)
                 if not sync_error and Sync.backfillRelativeDirs(catalog_data, device_books) then
                     Sync.saveCatalog(catalog_data, function() end)
                     Sync.saveCachedCatalog(catalog_data, merged_progress)
+                end
+                if not sync_error and Sync.cleanupCloudBookFolders then
+                    pcall(Sync.cleanupCloudBookFolders, catalog_data)
                 end
                 prog_dlg:setProgress(100, _("Sync complete"))
             end

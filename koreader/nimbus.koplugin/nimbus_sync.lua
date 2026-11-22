@@ -84,16 +84,39 @@ function Sync.clearCachedCatalog()
     pcall(os.remove, getCatalogCachePath())
 end
 
-local function getPrimaryAuthor(entry)
+local function canonicalAuthorKey(entry)
+    local raw = ""
     if type(entry.authors) == "table" and entry.authors[1] then
-        return Matcher.normalizeText(entry.authors[1])
+        raw = tostring(entry.authors[1])
     elseif type(entry.authors) == "string" then
-        return Matcher.normalizeText(entry.authors)
+        raw = entry.authors
     end
-    return ""
+    local norm = Matcher.normalizeText(raw)
+    if norm == "" or norm == "unknown" or norm == "unknown author" or norm == "various" then
+        return ""
+    end
+    local tokens = {}
+    for w in norm:gmatch("%w+") do
+        table.insert(tokens, w)
+    end
+    if #tokens == 0 then return "" end
+    table.sort(tokens)
+    return table.concat(tokens, " ")
 end
 
---- Deduplicates catalog.books in-place by sha256, partial_md5, isbn, or normalized (title, author).
+local function canonicalTitleKeys(title)
+    local raw = tostring(title or "")
+    local full = Matcher.normalizeText(raw)
+    if full == "" or full == "untitled" then return "", "" end
+    local stripped = raw:gsub("%b()", " "):gsub("%b[]", " ")
+    stripped = stripped:gsub(":.*$", "")
+    local base = Matcher.normalizeText(stripped)
+    if base == "" or base == "untitled" then base = full end
+    return full, base
+end
+
+--- Deduplicates catalog.books in-place by sha256, partial_md5, isbn, calibre_uuid,
+-- (filename, size_bytes), canonical (title, author), and folder.
 -- Keeps the best canonical entry, marks duplicates deleted=true, and remaps local book_links.
 -- @return number removed_count, table dup_folders
 function Sync.deduplicateCatalog(catalog)
@@ -114,13 +137,18 @@ function Sync.deduplicateCatalog(catalog)
         local as = (a.hashes and a.hashes.sha256 and a.hashes.sha256 ~= "") and 1 or 0
         local bs = (b.hashes and b.hashes.sha256 and b.hashes.sha256 ~= "") and 1 or 0
         if as ~= bs then return as > bs end
+        local aa_str = canonicalAuthorKey(a) ~= "" and 1 or 0
+        local ba_str = canonicalAuthorKey(b) ~= "" and 1 or 0
+        if aa_str ~= ba_str then return aa_str > ba_str end
         local aa = tostring(a.added_at or "9999")
         local ba = tostring(b.added_at or "9999")
         if aa ~= ba then return aa < ba end
         return tostring(a.id) < tostring(b.id)
     end)
 
-    local by_sha, by_pmd5, by_isbn, by_ta, by_file, by_tsize, by_folder = {}, {}, {}, {}, {}, {}, {}
+    local by_sha, by_pmd5, by_isbn, by_uuid = {}, {}, {}, {}
+    local by_ta, by_ba, by_file, by_tsize, by_folder = {}, {}, {}, {}, {}
+    local by_title_author_any = {}
     local id_remap = {}
     local dup_folders = {}
     local removed = 0
@@ -130,25 +158,30 @@ function Sync.deduplicateCatalog(catalog)
         local sha = entry.hashes and entry.hashes.sha256 or ""
         local pmd5 = entry.hashes and entry.hashes.partial_md5 or ""
         local isbn = entry.isbn and tostring(entry.isbn):gsub("[^%w]", "") or ""
-        local norm_t = Matcher.normalizeText(entry.title)
-        local norm_a = getPrimaryAuthor(entry)
-        local ta_key = nil
-        if norm_t ~= "" and norm_t ~= "untitled" and norm_a ~= "" and norm_a ~= "unknown author" and norm_a ~= "unknown" then
-            ta_key = norm_t .. "\0" .. norm_a
-        end
+        local uuid = entry.calibre_uuid and tostring(entry.calibre_uuid) or ""
+        local norm_t, base_t = canonicalTitleKeys(entry.title)
+        local norm_a = canonicalAuthorKey(entry)
+        local ta_key = (norm_t ~= "" and norm_a ~= "") and (norm_t .. "\0" .. norm_a) or nil
+        local ba_key = (base_t ~= "" and #base_t >= 4 and norm_a ~= "") and (base_t .. "\0" .. norm_a) or nil
         local fname = entry.filename and tostring(entry.filename):lower() or ""
         local sz = tonumber(entry.size_bytes) or 0
         local file_key = (fname ~= "" and sz > 0) and (fname .. "\0" .. tostring(sz)) or nil
-        local tsize_key = (norm_t ~= "" and norm_t ~= "untitled" and sz > 0) and (norm_t .. "\0" .. tostring(sz)) or nil
+        local tsize_key = (norm_t ~= "" and sz > 0) and (norm_t .. "\0" .. tostring(sz)) or nil
         local folder_key = (entry.folder and entry.folder ~= "") and tostring(entry.folder):lower() or nil
 
         local keep_id = (sha ~= "" and by_sha[sha])
             or (pmd5 ~= "" and by_pmd5[pmd5])
             or (isbn ~= "" and by_isbn[isbn])
+            or (uuid ~= "" and by_uuid[uuid])
             or (ta_key and by_ta[ta_key])
+            or (ba_key and by_ba[ba_key])
             or (file_key and by_file[file_key])
             or (tsize_key and by_tsize[tsize_key])
             or (folder_key and by_folder[folder_key])
+
+        if not keep_id and norm_a == "" and base_t ~= "" and (#base_t >= 6 or base_t:find(" ", 1, true)) then
+            keep_id = by_title_author_any[base_t]
+        end
 
         if keep_id and keep_id ~= entry.id and catalog.books[keep_id] then
             local keep = catalog.books[keep_id]
@@ -174,10 +207,15 @@ function Sync.deduplicateCatalog(catalog)
             if sha ~= "" then by_sha[sha] = entry.id end
             if pmd5 ~= "" then by_pmd5[pmd5] = entry.id end
             if isbn ~= "" then by_isbn[isbn] = entry.id end
+            if uuid ~= "" then by_uuid[uuid] = entry.id end
             if ta_key then by_ta[ta_key] = entry.id end
+            if ba_key then by_ba[ba_key] = entry.id end
             if file_key then by_file[file_key] = entry.id end
             if tsize_key then by_tsize[tsize_key] = entry.id end
             if folder_key then by_folder[folder_key] = entry.id end
+            if base_t ~= "" and not by_title_author_any[base_t] then
+                by_title_author_any[base_t] = entry.id
+            end
         end
     end
 
@@ -193,6 +231,52 @@ function Sync.deduplicateCatalog(catalog)
     end
 
     return removed, dup_folders
+end
+
+--- Cleans up remote folders under Books/ belonging to deleted tombstones or orphaned concurrent duplicates.
+function Sync.cleanupCloudBookFolders(catalog)
+    if not Cloud.isConfigured() or not Cloud.listDir or not Cloud.deletePath then return 0 end
+    if type(catalog) ~= "table" or type(catalog.books) ~= "table" then return 0 end
+
+    local active_prefixes = {}
+    for _, entry in pairs(catalog.books) do
+        if type(entry) == "table" and not entry.deleted and entry.folder then
+            local prefix = tostring(entry.folder):match("^Books/(.+) %[[^%]]+%]$")
+            if prefix then
+                active_prefixes[prefix:lower()] = entry.id
+            end
+        end
+    end
+
+    local cleaned = 0
+    Cloud.listDir("Books", function(ok, items)
+        if not ok or type(items) ~= "table" then return end
+        for _, item in ipairs(items) do
+            if item.is_dir and item.name then
+                local folder_id = item.name:match("%[([%w_%-]+)%]$")
+                local entry = folder_id and catalog.books[folder_id]
+                local should_delete = false
+                if entry and entry.deleted then
+                    should_delete = true
+                elseif not entry then
+                    local prefix = item.name:match("^(.+) %[[^%]]+%]$")
+                    if prefix and active_prefixes[prefix:lower()] then
+                        should_delete = true
+                    end
+                end
+                if should_delete then
+                    local rel = "Books/" .. item.name
+                    local ok_d = false
+                    Cloud.deletePath(rel, function(d_ok) ok_d = d_ok end)
+                    if ok_d then
+                        cleaned = cleaned + 1
+                        Logger.info("Removed duplicate/deleted cloud folder: " .. rel)
+                    end
+                end
+            end
+        end
+    end)
+    return cleaned
 end
 
 function Sync.loadCatalog(cb, opts)
@@ -381,14 +465,21 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
         if not existing_id and candidates and #candidates > 0 then
             existing_id = candidates[1].id
         end
-        if not existing_id and filename and size_bytes > 0 then
-            local fname_l = filename:lower()
-            local norm_t = Matcher.normalizeText(title)
+        if not existing_id then
+            local fname_l = filename and filename:lower() or ""
+            local norm_t, base_t = canonicalTitleKeys(title)
+            local norm_a = canonicalAuthorKey({ authors = authors })
             for id, entry in pairs(catalog.books) do
-                if type(entry) == "table" and not entry.deleted and tonumber(entry.size_bytes) == size_bytes then
+                if type(entry) == "table" and not entry.deleted then
                     local ef = entry.filename and tostring(entry.filename):lower() or ""
-                    local et = Matcher.normalizeText(entry.title)
-                    if (ef ~= "" and ef == fname_l) or (norm_t ~= "" and norm_t ~= "untitled" and et == norm_t) then
+                    local et, ebase = canonicalTitleKeys(entry.title)
+                    local ea = canonicalAuthorKey(entry)
+                    if size_bytes > 0 and tonumber(entry.size_bytes) == size_bytes
+                        and ((ef ~= "" and ef == fname_l) or (norm_t ~= "" and et == norm_t)) then
+                        existing_id = id
+                        break
+                    elseif norm_a ~= "" and ea == norm_a
+                        and ((norm_t ~= "" and et == norm_t) or (base_t ~= "" and #base_t >= 4 and ebase == base_t)) then
                         existing_id = id
                         break
                     end
