@@ -46,14 +46,16 @@ export const LibraryView: React.FC<Props> = ({
         if (filter === 'finished' && status !== 'finished') return false;
         if (filter === 'offline' && !offlineBookIds.has(b.id)) return false;
         if (!q) return true;
-        const hay = `${b.title} ${(b.authors || []).join(' ')} ${b.series || ''} ${(b.tags || []).join(' ')}`.toLowerCase();
+        const authors = Array.isArray(b.authors) ? b.authors : [];
+        const tags = Array.isArray(b.tags) ? b.tags : [];
+        const hay = `${b.title || ''} ${authors.join(' ')} ${b.series || ''} ${tags.join(' ')}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => {
         const ta = progressByBook[a.id]?.updated_at || 0;
         const tb = progressByBook[b.id]?.updated_at || 0;
         if (ta !== tb) return tb - ta;
-        return a.title.localeCompare(b.title);
+        return (a.title || '').localeCompare(b.title || '');
       });
   }, [books, progressByBook, offlineBookIds, filter, query]);
 
@@ -185,7 +187,7 @@ export const LibraryView: React.FC<Props> = ({
                       {book.title}
                     </h3>
                     <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-                      {(book.authors || []).join(', ')}
+                      {(Array.isArray(book.authors) ? book.authors : []).join(', ')}
                     </p>
                   </div>
 

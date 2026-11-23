@@ -29,9 +29,9 @@ export const HighlightsView: React.FC<Props> = ({ books, annotationsByBook }) =>
         if (ann.deleted) continue;
         if (
           !q ||
-          ann.text.toLowerCase().includes(q) ||
+          (ann.text || '').toLowerCase().includes(q) ||
           (ann.note || '').toLowerCase().includes(q) ||
-          book.title.toLowerCase().includes(q)
+          (book.title || '').toLowerCase().includes(q)
         ) {
           out.push({ book, ann });
         }
