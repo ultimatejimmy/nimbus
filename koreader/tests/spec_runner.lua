@@ -157,6 +157,9 @@ local test_files = {
     "tests/nimbus_kosync_test.lua",
     "tests/nimbus_theme_test.lua",
     "tests/nimbus_sync_dedup_test.lua",
+    "tests/nimbus_covers_test.lua",
+    "tests/nimbus_progress_sync_test.lua",
+    "tests/nimbus_ui_widgets_test.lua",
 }
 
 for _, tf in ipairs(test_files) do

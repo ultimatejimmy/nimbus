@@ -8,6 +8,12 @@ msgstr ""
 msgid "%d %s in this folder"
 msgstr "%d %s in this folder"
 
+msgid "%d Selected"
+msgstr "%d Selected"
+
+msgid "%d selected"
+msgstr "%d selected"
+
 msgid "%s (Backup)"
 msgstr "%s (Backup)"
 
@@ -34,6 +40,12 @@ msgstr "0 of %d books"
 
 msgid "Account"
 msgstr "Account"
+
+msgid "Actions…"
+msgstr "Actions…"
+
+msgid "All"
+msgstr "All"
 
 msgid "All Books"
 msgstr "All Books"
@@ -70,9 +82,6 @@ msgstr "Back"
 
 msgid "Background"
 msgstr "Background"
-
-msgid "Backup & Restore Auth"
-msgstr "Backup & Restore Auth"
 
 msgid "Binary"
 msgstr "Binary"
@@ -167,6 +176,12 @@ msgstr "Connection timed out"
 msgid "Contacting %s..."
 msgstr "Contacting %s..."
 
+msgid "Copied %d book(s) to clipboard."
+msgstr "Copied %d book(s) to clipboard."
+
+msgid "Copied book to clipboard."
+msgstr "Copied book to clipboard."
+
 msgid "Create"
 msgstr "Create"
 
@@ -185,8 +200,29 @@ msgstr "Current Book"
 msgid "Currently Reading"
 msgstr "Currently Reading"
 
+msgid "Cut %d book(s) to clipboard."
+msgstr "Cut %d book(s) to clipboard."
+
+msgid "Cut book to clipboard."
+msgstr "Cut book to clipboard."
+
 msgid "Delete"
 msgstr "Delete"
+
+msgid "Delete %d local book file(s) from this device? Cloud copies and progress remain safe."
+msgstr "Delete %d local book file(s) from this device? Cloud copies and progress remain safe."
+
+msgid "Delete %d selected book(s) from Nimbus Cloud?"
+msgstr "Delete %d selected book(s) from Nimbus Cloud?"
+
+msgid "Delete (%d)"
+msgstr "Delete (%d)"
+
+msgid "Delete Cloud (%d)"
+msgstr "Delete Cloud (%d)"
+
+msgid "Delete Local Books"
+msgstr "Delete Local Books"
 
 msgid "Delete from Cloud"
 msgstr "Delete from Cloud"
@@ -199,6 +235,12 @@ msgstr "Delete this book from Nimbus Cloud? Any local copy on your device will s
 
 msgid "Delete this book from Nimbus Cloud? This cannot be undone."
 msgstr "Delete this book from Nimbus Cloud? This cannot be undone."
+
+msgid "Deleted %d book(s) from Cloud."
+msgstr "Deleted %d book(s) from Cloud."
+
+msgid "Deleted %d file(s)."
+msgstr "Deleted %d file(s)."
 
 msgid "Deleted from Nimbus Cloud."
 msgstr "Deleted from Nimbus Cloud."
@@ -218,9 +260,6 @@ msgstr "Device ID"
 msgid "Device: %s"
 msgstr "Device: %s"
 
-msgid "Directory path scanned for local books:"
-msgstr "Directory path scanned for local books:"
-
 msgid "Disconnect"
 msgstr "Disconnect"
 
@@ -232,9 +271,6 @@ msgstr "Disconnect Account"
 
 msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
 msgstr "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
-
-msgid "Disconnect/Log Out"
-msgstr "Disconnect/Log Out"
 
 msgid "Disconnected from %s."
 msgstr "Disconnected from %s."
@@ -296,9 +332,6 @@ msgstr "Filter Books"
 msgid "Filter books by title, author, or series:"
 msgstr "Filter books by title, author, or series:"
 
-msgid "Finalizing %d of %d..."
-msgstr "Finalizing %d of %d..."
-
 msgid "Finalizing catalog…"
 msgstr "Finalizing catalog…"
 
@@ -317,17 +350,8 @@ msgstr "Format: %s"
 msgid "Google Drive"
 msgstr "Google Drive"
 
-msgid "Home Screen"
-msgstr "Home Screen"
-
-msgid "Import"
-msgstr "Import"
-
 msgid "Imported %s settings!"
 msgstr "Imported %s settings!"
-
-msgid "Imported %s!"
-msgstr "Imported %s!"
 
 msgid "In Cloud"
 msgstr "In Cloud"
@@ -362,9 +386,6 @@ msgstr "KOSync failed: %s"
 msgid "Library"
 msgstr "Library"
 
-msgid "Library & Home Screen"
-msgstr "Library & Home Screen"
-
 msgid "Library Menu"
 msgstr "Library Menu"
 
@@ -373,9 +394,6 @@ msgstr "Loading library catalog..."
 
 msgid "Local"
 msgstr "Local"
-
-msgid "Local Book Folder"
-msgstr "Local Book Folder"
 
 msgid "Local Only"
 msgstr "Local Only"
@@ -437,6 +455,9 @@ msgstr "No books in Cloud yet.\n\nSwitch to On Device or tap ⋯ → Upload Book
 msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
 msgstr "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
 
+msgid "No books selected."
+msgstr "No books selected."
+
 msgid "No cloud provider configured."
 msgstr "No cloud provider configured."
 
@@ -470,11 +491,20 @@ msgstr "Off"
 msgid "Offload"
 msgstr "Offload"
 
+msgid "Offload (%d)"
+msgstr "Offload (%d)"
+
 msgid "Offload Local"
 msgstr "Offload Local"
 
 msgid "Offload Local Book"
 msgstr "Offload Local Book"
+
+msgid "Offload Local Books"
+msgstr "Offload Local Books"
+
+msgid "Offloaded %d book(s)."
+msgstr "Offloaded %d book(s)."
 
 msgid "Offloaded from device."
 msgstr "Offloaded from device."
@@ -509,6 +539,9 @@ msgstr "Password"
 msgid "Password or App Token"
 msgstr "Password or App Token"
 
+msgid "Permanently delete %d selected file(s) from this device?"
+msgstr "Permanently delete %d selected file(s) from this device?"
+
 msgid "Please connect a cloud storage provider in Settings first."
 msgstr "Please connect a cloud storage provider in Settings first."
 
@@ -526,6 +559,9 @@ msgstr "Progress: %s"
 
 msgid "Pull/push progress automatically when opening or closing a book"
 msgstr "Pull/push progress automatically when opening or closing a book"
+
+msgid "Read"
+msgstr "Read"
 
 msgid "Reading Sync"
 msgstr "Reading Sync"
@@ -589,9 +625,6 @@ msgstr "Set"
 
 msgid "Show Nimbus library instead of KOReader's file list"
 msgstr "Show Nimbus library instead of KOReader's file list"
-
-msgid "Show your library at startup instead of KOReader's file list"
-msgstr "Show your library at startup instead of KOReader's file list"
 
 msgid "Sink / KOSync Server URL"
 msgstr "Sink / KOSync Server URL"
@@ -671,6 +704,9 @@ msgstr "Untitled"
 msgid "Updating cloud catalog..."
 msgstr "Updating cloud catalog..."
 
+msgid "Updating cloud covers..."
+msgstr "Updating cloud covers..."
+
 msgid "Upload"
 msgstr "Upload"
 
@@ -716,14 +752,8 @@ msgstr "Uploading %d of %d..."
 msgid "Uploading to Nimbus Cloud"
 msgstr "Uploading to Nimbus Cloud"
 
-msgid "Use Nimbus as Home Screen"
-msgstr "Use Nimbus as Home Screen"
-
 msgid "Use Nimbus as Library"
 msgstr "Use Nimbus as Library"
-
-msgid "Use as Home Screen"
-msgstr "Use as Home Screen"
 
 msgid "Username"
 msgstr "Username"

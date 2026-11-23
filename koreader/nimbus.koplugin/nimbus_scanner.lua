@@ -153,6 +153,70 @@ local function isDuplicateCopyFilename(filename)
     return stem:match("%(%d+%)$") ~= nil or stem:match(" %- copy$") ~= nil
 end
 
+local function restoreLeadingArticle(t)
+    local stem, art = t:match("^(.-),%s+(The)$")
+    if not stem then stem, art = t:match("^(.-),%s+(the)$") end
+    if not stem then stem, art = t:match("^(.-),%s+(An)$") end
+    if not stem then stem, art = t:match("^(.-),%s+(an)$") end
+    if not stem then stem, art = t:match("^(.-),%s+(A)$") end
+    if not stem then stem, art = t:match("^(.-),%s+(a)$") end
+    if stem and art then
+        local cap_art = art:sub(1, 1):upper() .. art:sub(2):lower()
+        return cap_art .. " " .. stem
+    end
+    return t
+end
+
+--- Parses Calibre-style filenames such as:
+--   "1 - Cuckoo's Calling, The - Robert Galbraith.epub"
+--   "Frankenstein - Mary Shelley (145).epub"
+--   "0.5 - Sunrise on the Reaping - Suzanne Collins.epub"
+-- @return table { title = string, authors = string, series_index = number|nil }
+function Scanner.parseFilenameMetadata(filename)
+    local stem = tostring(filename or ""):gsub("%.[^%.]+$", "")
+    stem = stem:gsub("^%s+", ""):gsub("%s+$", "")
+    stem = stem:gsub("%s*%(%d+%)$", ""):gsub("%s*%-%s*[Cc][Oo][Pp][Yy]$", "")
+    stem = stem:gsub("^%s+", ""):gsub("%s+$", "")
+
+    local series_index = nil
+    local num_str, after_num = stem:match("^(%d+%.?%d*)%s+%-%s*(.+)$")
+    if num_str and after_num then
+        local n = tonumber(num_str)
+        if n and n <= 50 then
+            series_index = n
+            stem = after_num
+        end
+    else
+        local int_str, after_int = stem:match("^(%d+)%s+([A-Z].+%s+%-%s+[^%-]+)$")
+        if int_str and after_int then
+            local n = tonumber(int_str)
+            if n and n <= 30 then
+                series_index = n
+                stem = after_int
+            end
+        end
+    end
+
+    local title_part, author_part = stem:match("^(.+)%s+%-%s+([^%-]+)$")
+    if not title_part then
+        title_part = stem
+        author_part = ""
+    end
+
+    title_part = title_part:gsub("_%s+", ": "):gsub("^%s+", ""):gsub("%s+$", "")
+    title_part = restoreLeadingArticle(title_part)
+    author_part = author_part:gsub("^%s+", ""):gsub("%s+$", "")
+    if author_part:lower() == "unknown" or author_part:lower() == "unknown author" then
+        author_part = ""
+    end
+
+    return {
+        title = title_part,
+        authors = author_part,
+        series_index = series_index,
+    }
+end
+
 function Scanner.scanLocalBooks(catalog, open_doc_info)
     local seen = {}
     local paths = {}
@@ -197,9 +261,38 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
 
         local title = sdr.title
         local authors = sdr.authors
+        local series = sdr.series
+        local series_index = sdr.series_index
+        local language = sdr.language
         if open_doc_info and open_doc_info.filepath == filepath and open_doc_info.props then
             title = open_doc_info.props.title or title
             authors = open_doc_info.props.authors or authors
+            series = open_doc_info.props.series or series
+            series_index = open_doc_info.props.series_index or series_index
+            language = open_doc_info.props.language or language
+        end
+        if (not title or title == "") or (not authors or authors == "") then
+            local ok_bim, BookInfoManager = pcall(require, "bookinfomanager")
+            if ok_bim and BookInfoManager and BookInfoManager.getBookInfo then
+                local ok_bi, info = pcall(function() return BookInfoManager:getBookInfo(filepath, false) end)
+                if ok_bi and type(info) == "table" then
+                    if not title or title == "" then title = info.title end
+                    if not authors or authors == "" then authors = info.authors end
+                    if not series or series == "" then series = info.series end
+                    if not series_index then series_index = info.series_index end
+                    if not language or language == "" then language = info.language end
+                end
+            end
+        end
+        local parsed_meta = Scanner.parseFilenameMetadata(filename)
+        if not title or title == "" then
+            title = (parsed_meta.title ~= "" and parsed_meta.title) or fallback_title
+        end
+        if not authors or authors == "" then
+            authors = parsed_meta.authors
+        end
+        if not series_index then
+            series_index = parsed_meta.series_index
         end
 
         local pmd5 = getCachedPartialMD5(filepath, sdr.partial_md5)
@@ -246,9 +339,9 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
             last_read_ts = last_read_ts,
             title = (title and title ~= "") and title or fallback_title,
             authors = authors or "",
-            series = sdr.series or (cat_entry and cat_entry.series),
-            series_index = sdr.series_index or (cat_entry and cat_entry.series_index),
-            language = sdr.language or (cat_entry and cat_entry.language),
+            series = series or (cat_entry and cat_entry.series),
+            series_index = series_index or (cat_entry and cat_entry.series_index),
+            language = language or (cat_entry and cat_entry.language),
             isbn = sdr.isbn or (cat_entry and cat_entry.isbn),
             percent = sdr.percent or 0,
             status = sdr.status,

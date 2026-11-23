@@ -289,4 +289,20 @@ describe("nimbus_scanner", function()
         assert.are.equal("Beta", items[3].title)
         _G.G_reader_settings = nil
     end)
+
+    it("parses Calibre-style filenames with series numbers, inverted articles, and copy suffixes", function()
+        local m1 = Scanner.parseFilenameMetadata("1 - Cuckoo's Calling, The - Robert Galbraith.epub")
+        assert.are.equal("The Cuckoo's Calling", m1.title)
+        assert.are.equal("Robert Galbraith", m1.authors)
+        assert.are.equal(1, m1.series_index)
+
+        local m2 = Scanner.parseFilenameMetadata("Frankenstein - Mary Shelley (145).epub")
+        assert.are.equal("Frankenstein", m2.title)
+        assert.are.equal("Mary Shelley", m2.authors)
+        assert.is_nil(m2.series_index)
+
+        local m3 = Scanner.parseFilenameMetadata("farewell to arms, A - Ernest Hemingway (194).epub")
+        assert.are.equal("A farewell to arms", m3.title)
+        assert.are.equal("Ernest Hemingway", m3.authors)
+    end)
 end)

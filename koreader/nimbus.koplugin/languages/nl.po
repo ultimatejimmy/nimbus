@@ -5,6 +5,26 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+# en-hash: c8f78bc28da257b693c5db4485b6ebae
+msgid "%d %s in this folder"
+msgstr "%d %s in deze map"
+
+# en-hash: 695d8c59f85e24fcd8dec0f2d2ed9a1c
+msgid "%d Selected"
+msgstr "%d Geselecteerd"
+
+# en-hash: 2c466ae7a056d4f4726b1c146b45a046
+msgid "%d selected"
+msgstr "%d geselecteerd"
+
+# en-hash: 2c19d5fed88c659e85c74a2086723398
+msgid "%s (Backup)"
+msgstr "%s (Back-up)"
+
+# en-hash: b870d0f61c3b5b78933fba4cde08fc67
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Apparaatback-up en -herstel)"
+
 # en-hash: eb15c8258912980aa6eebaf6c597a474
 msgid "%s Account"
 msgstr "%s-account"
@@ -21,6 +41,10 @@ msgstr "%s-autorisatie mislukt: %s"
 msgid "%s authorization was denied."
 msgstr "%s-autorisatie is geweigerd."
 
+# en-hash: 4bc56877a98a3b5f59735f579cf735a6
+msgid "+ New"
+msgstr "+ Nieuw"
+
 # en-hash: a96af5ecb3f39286a79ee3b23e270a8a
 msgid "0 of %d books"
 msgstr "0 van %d boeken"
@@ -28,6 +52,14 @@ msgstr "0 van %d boeken"
 # en-hash: 08bd40c7543007ad06e4fce31618f6ec
 msgid "Account"
 msgstr "Account"
+
+# en-hash: 42ff290cc493367f85539a0905e6b872
+msgid "Actions…"
+msgstr "Acties…"
+
+# en-hash: b1c94ca2fbc3e78fc30069c8d0f01680
+msgid "All"
+msgstr "Alle"
 
 # en-hash: 71aeed4dbcaef45a2f508e7949c01ba6
 msgid "All Books"
@@ -73,9 +105,9 @@ msgstr "Nieuw toegevoegde cloudboeken automatisch downloaden naar dit apparaat"
 msgid "Back"
 msgstr "Terug"
 
-# en-hash: eb246567736a16525a3d8c167b2dd22e
-msgid "Backup & Restore Auth"
-msgstr "Reservekopie en herstel-auth"
+# en-hash: a9ded1e5ce5d75814730bb4caaf49419
+msgid "Background"
+msgstr "Achtergrond"
 
 # en-hash: 6ce976e8f061b2b5cfe4d0c50c3405dd
 msgid "Binary"
@@ -201,6 +233,26 @@ msgstr "Verbinding verstreken"
 msgid "Contacting %s..."
 msgstr "Contact opnemen met %s..."
 
+# en-hash: d1de4b573af164a165cef4710d30fa8f
+msgid "Copied %d book(s) to clipboard."
+msgstr "%d boek(en) gekopieerd naar klembord."
+
+# en-hash: 8914d68b7fb989a991317d0ac8b87201
+msgid "Copied book to clipboard."
+msgstr "Boek gekopieerd naar klembord."
+
+# en-hash: 686e697538050e4664636337cc3b834f
+msgid "Create"
+msgstr "Maken"
+
+# en-hash: f513267c012197b4764e6dd4e68ee420
+msgid "Create Folder"
+msgstr "Map maken"
+
+# en-hash: 175ea39143192a17339a060740ba6d0d
+msgid "Created '%s'."
+msgstr "'%s' aangemaakt."
+
 # en-hash: 31a3e8770e4a14d334c91ebf73ce5b78
 msgid "CrossPoint / Sink / KOSync"
 msgstr "CrossPoint / Sink / KOSync"
@@ -213,9 +265,65 @@ msgstr "Huidige boek"
 msgid "Currently Reading"
 msgstr "Momenteel aan het lezen"
 
+# en-hash: 5a569485830cef23a74dcd8f07926f30
+msgid "Cut %d book(s) to clipboard."
+msgstr "%d boek(en) geknipt naar klembord."
+
+# en-hash: 8e3b841315923888ef822558296658a9
+msgid "Cut book to clipboard."
+msgstr "Boek geknipt naar klembord."
+
+# en-hash: f2a6c498fb90ee345d997f888fce3b18
+msgid "Delete"
+msgstr "Verwijderen"
+
+# en-hash: 48e8475d31cf2f4379c1e07ecb5a916c
+msgid "Delete %d local book file(s) from this device? Cloud copies and progress remain safe."
+msgstr "Verwijder %d lokale boekbestand(en) van dit apparaat? Cloudkopieën en voortgang blijven veilig."
+
+# en-hash: 8238561daa0942029aa60d8161b2f8cf
+msgid "Delete %d selected book(s) from Nimbus Cloud?"
+msgstr "%d geselecteerde boek(en) verwijderen van Nimbus Cloud?"
+
+# en-hash: 3521e5ca897547752690e1c7627d8e68
+msgid "Delete (%d)"
+msgstr "Verwijderen (%d)"
+
+# en-hash: aeeef3520701d05e23bd70bbeff8431e
+msgid "Delete Cloud (%d)"
+msgstr "Verwijder Cloud (%d)"
+
+# en-hash: 5e603e0ae14ae58e949890e0196076a1
+msgid "Delete Local Books"
+msgstr "Lokale boeken verwijderen"
+
+# en-hash: 39f8bfbc450dad78e48627bbeab8db01
+msgid "Delete from Cloud"
+msgstr "Verwijderen uit cloud"
+
 # en-hash: 067c9daf5725fdabb83883ab066a528c
 msgid "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
 msgstr "Lokaal bestand van dit apparaat verwijderen? Je boek, voortgang en markeringen blijven veilig in Nimbus Cloud."
+
+# en-hash: 3a464fc3ccd09b54db55d7b1835d653c
+msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+msgstr "Dit boek verwijderen uit Nimbus Cloud? Een lokale kopie op uw apparaat blijft behouden."
+
+# en-hash: 36bf7ee8a35b9140dbae7768f0db2021
+msgid "Delete this book from Nimbus Cloud? This cannot be undone."
+msgstr "Dit boek verwijderen uit Nimbus Cloud? Dit kan niet ongedaan worden gemaakt."
+
+# en-hash: ef4efc13d76be429b5d2cf5f9fb797fa
+msgid "Deleted %d book(s) from Cloud."
+msgstr "%d boek(en) verwijderd van Cloud."
+
+# en-hash: 30c5f73e3ac793aa5dfd13364475509e
+msgid "Deleted %d file(s)."
+msgstr "%d bestand(en) verwijderd."
+
+# en-hash: 2259651a5b4431c1119029616a03a741
+msgid "Deleted from Nimbus Cloud."
+msgstr "Verwijderd uit Nimbus Cloud."
 
 # en-hash: c98b66bb93fd0c039e10bc25614414f8
 msgid "Detected Sync Plugins"
@@ -225,6 +333,10 @@ msgstr "Gedetecteerde synchronisatieplugins"
 msgid "Device & About"
 msgstr "Apparaat & Over"
 
+# en-hash: 104eee19fdf357615cfaa253885736c5
+msgid "Device Backup and Restore"
+msgstr "Apparaatback-up en -herstel"
+
 # en-hash: 2e8f11ede1199f48c85453ec3cd462ec
 msgid "Device ID"
 msgstr "Apparaat-ID"
@@ -233,13 +345,21 @@ msgstr "Apparaat-ID"
 msgid "Device: %s"
 msgstr "Apparaat: %s"
 
-# en-hash: 09ab107441789ea7842f5da3b210359f
-msgid "Directory path scanned for local books:"
-msgstr "Middelpunt gescand voor lokale boeken:"
+# en-hash: 42ae25231906c83927831e0ef7c317ac
+msgid "Disconnect"
+msgstr "Verbreken"
 
-# en-hash: 8197c58737018556993c2cc6d04615c5
-msgid "Disconnect/Log Out"
-msgstr "Verbinding verbreken / Uitloggen"
+# en-hash: b709067b60f71eaebcff374f38749fcc
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "%s loskoppelen van Nimbus? Uw instellingen voor Apparaatback-up en -herstel, lokale boeken en cloudbestanden blijven onaangetast."
+
+# en-hash: fd456a63260bc8f43e73094f0d826863
+msgid "Disconnect Account"
+msgstr "Account loskoppelen"
+
+# en-hash: 085c04284f55557544a0fb03abb889ab
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Verbinding met %s verbreken? Opgeslagen inloggegevens worden uit Nimbus verwijderd. Uw lokale boeken en cloudbestanden blijven behouden."
 
 # en-hash: b29490bf0f9a9dd9f84439ee1b9e5c74
 msgid "Disconnected from %s."
@@ -281,6 +401,10 @@ msgstr "Boek downloaden"
 msgid "Dropbox"
 msgstr "Dropbox"
 
+# en-hash: bb649aceb3fd6ba2c79b0aa341af0bb2
+msgid "Edit Server Settings"
+msgstr "Serverinstellingen bewerken"
+
 # en-hash: f755f939257488611a2e2ce699f133cf
 msgid "Enable CrossPoint/KOSync Bridge"
 msgstr "CrossPoint/KOSync Bridge inschakelen"
@@ -289,9 +413,21 @@ msgstr "CrossPoint/KOSync Bridge inschakelen"
 msgid "Enter search term..."
 msgstr "Voer zoekterm in..."
 
+# en-hash: 96310b2cf48706c28110688622ac2cf2
+msgid "Failed to create folder."
+msgstr "Kan map niet aanmaken."
+
+# en-hash: 9af5b79043bac7f965fe05f427b2e757
+msgid "Failed to delete from cloud: "
+msgstr "Verwijderen uit cloud mislukt: "
+
 # en-hash: ad8802154faed7004677d5b3e630cbef
 msgid "Failed to start %s authorization:\n%s"
 msgstr "Starten van %s-autorisatie mislukt:\n%s"
+
+# en-hash: b8c128190e09e6c57a1df2180e8c73fb
+msgid "File Browser"
+msgstr "Bestandsbrowser"
 
 # en-hash: 1351017ac6423911223bc19a8cb7c653
 msgid "Filename"
@@ -305,10 +441,6 @@ msgstr "Boeken filteren"
 msgid "Filter books by title, author, or series:"
 msgstr "Filter boeken op titel, auteur of serie:"
 
-# en-hash: f1f52329b8eac84be605b93a5f1bee4e
-msgid "Finalizing %d of %d..."
-msgstr "%d van %d afronden..."
-
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
 msgstr "Catalogus afronden…"
@@ -316,6 +448,10 @@ msgstr "Catalogus afronden…"
 # en-hash: 8f3d10eb21bd36347c258679eba9e92b
 msgid "Finished"
 msgstr "Voltooid"
+
+# en-hash: 8413c0cea3d5b2e00cb59bc7a6aa0c19
+msgid "Folder name:"
+msgstr "Mapnaam:"
 
 # en-hash: 15e30d22eae32fdb46411b88d59480b4
 msgid "Folder · %d %s"
@@ -329,21 +465,9 @@ msgstr "Formaat: %s"
 msgid "Google Drive"
 msgstr "Google Drive"
 
-# en-hash: ec63674aca1c27c134a3e564563502be
-msgid "Home Screen"
-msgstr "Startscherm"
-
-# en-hash: 72d6d7a1885885bb55a565fd1070581a
-msgid "Import"
-msgstr "Importeren"
-
 # en-hash: 0604c1173fb3b6cccc5527085d251515
 msgid "Imported %s settings!"
 msgstr "%s instellingen geïmporteerd!"
-
-# en-hash: 8f9ce7afe914fca6e9008185b0f3db93
-msgid "Imported %s!"
-msgstr "%s geïmporteerd!"
 
 # en-hash: 0831af0fc1b12bdee77b0e186de35754
 msgid "In Cloud"
@@ -385,9 +509,9 @@ msgstr "Verbonden met KOSync (%s)"
 msgid "KOSync failed: %s"
 msgstr "KOSync mislukt: %s"
 
-# en-hash: 0a248a86c841018a623755f2e08eb0d8
-msgid "Library & Home Screen"
-msgstr "Bibliotheek & Startscherm"
+# en-hash: 4d70254b3a8e2bc38b6147fa6ee813be
+msgid "Library"
+msgstr "Bibliotheek"
 
 # en-hash: 962720e9fdf82d2d1592c5158351f2b2
 msgid "Library Menu"
@@ -400,10 +524,6 @@ msgstr "Bibliotheekcatalogus laden..."
 # en-hash: 509820290d57f333403f490dde7316f4
 msgid "Local"
 msgstr "Lokaal"
-
-# en-hash: 8c7b78915d6e1d411445357525846f3e
-msgid "Local Book Folder"
-msgstr "Lokale boekenmap"
 
 # en-hash: d90baa18ccfcd397dbe0d0b01310f4bb
 msgid "Local Only"
@@ -445,6 +565,10 @@ msgstr "Nimbus"
 msgid "Nimbus Cloud"
 msgstr "Nimbus Cloud"
 
+# en-hash: 37a3785334a9a2b45c00556b1dd9e82e
+msgid "Nimbus Library"
+msgstr "Nimbus-bibliotheek"
+
 # en-hash: be28ae769de6bdf2bbc2a73b39a96656
 msgid "Nimbus Menu"
 msgstr "Nimbus-menu"
@@ -481,6 +605,10 @@ msgstr "Nog geen boeken in de cloud.\n\nSchakel over naar Op apparaat of tik op 
 msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
 msgstr "Geen boeken komen overeen met je zoekopdracht of filter.\n\nTik op ✕ in de zoekbalk of wijzig het filter hierboven."
 
+# en-hash: e26ac5efceda24b4dfbed6477724bc3f
+msgid "No books selected."
+msgstr "Geen boeken geselecteerd."
+
 # en-hash: 72b4ff9b0918412a6c30f00a80d02fc8
 msgid "No cloud provider configured."
 msgstr "Geen cloudprovider geconfigureerd."
@@ -492,6 +620,10 @@ msgstr "Geen opgeslagen account gevonden voor deze provider in backup.koplugin."
 # en-hash: 1308b53360a6ef623fca1d344d1d6a19
 msgid "No saved cloud accounts found in backup.koplugin."
 msgstr "Geen opgeslagen cloudaccounts gevonden in backup.koplugin."
+
+# en-hash: f4f988243b563534fedc321d62514ddf
+msgid "No subfolders"
+msgstr "Geen submappen"
 
 # en-hash: 6adf97f83acf6453d4a6a4b1070f3754
 msgid "None"
@@ -521,6 +653,10 @@ msgstr "Uit"
 msgid "Offload"
 msgstr "Ontlasten"
 
+# en-hash: bb31cd7f602d48e550e9cedca275631d
+msgid "Offload (%d)"
+msgstr "Uitlageren (%d)"
+
 # en-hash: 0a5f441ddba90508f3532c78bd23e849
 msgid "Offload Local"
 msgstr "Lokaal ontlasten"
@@ -528,6 +664,14 @@ msgstr "Lokaal ontlasten"
 # en-hash: 3bdd4dbebdcd66c873ad9df8f4df7aff
 msgid "Offload Local Book"
 msgstr "Lokaal boek ontlasten"
+
+# en-hash: ebc82c886e48de3bab3443bb5b92f63f
+msgid "Offload Local Books"
+msgstr "Lokale boeken uitlageren"
+
+# en-hash: 8df0542c78f062f0a08ca45767c2710f
+msgid "Offloaded %d book(s)."
+msgstr "%d boek(en) uitgelogd."
 
 # en-hash: 55095656af8c3f35dd2aeb6169a3bae3
 msgid "Offloaded from device."
@@ -557,6 +701,14 @@ msgstr "Bestandsbeheer openen"
 msgid "Operation in Progress"
 msgstr "Bezig met uitvoeren"
 
+# en-hash: b8065ad2628f1f82f3167af0947b3e43
+msgid "Page %d of %d"
+msgstr "Pagina %d van %d"
+
+# en-hash: 0293301ed6a54b7e4503e74bba17bf11
+msgid "Parent Folder"
+msgstr "Bovenliggende map"
+
 # en-hash: dc647eb65e6711e155375218212b3964
 msgid "Password"
 msgstr "Wachtwoord"
@@ -564,6 +716,10 @@ msgstr "Wachtwoord"
 # en-hash: 5ba75bed6252ebe2fc1cd59ee5cf6558
 msgid "Password or App Token"
 msgstr "Wachtwoord of app-token"
+
+# en-hash: 8e99511c4316abee6e77b51814a3ec6f
+msgid "Permanently delete %d selected file(s) from this device?"
+msgstr "Geselecteerde %d bestand(en) permanent van dit apparaat verwijderen?"
 
 # en-hash: 4df2abeba5ba0d9428ab6154bb47dc1a
 msgid "Please connect a cloud storage provider in Settings first."
@@ -588,6 +744,10 @@ msgstr "Voortgang: %s"
 # en-hash: ffb5a681cd47e8a182164bed1e0465a2
 msgid "Pull/push progress automatically when opening or closing a book"
 msgstr "Voortgang automatisch synchroniseren bij openen of sluiten van een boek"
+
+# en-hash: 7a1a5f3e79fdc91edf2f5ead9d66abb4
+msgid "Read"
+msgstr "Lezen"
 
 # en-hash: 026e23401eb9b3c0385409fe50ee5767
 msgid "Reading Sync"
@@ -637,6 +797,10 @@ msgstr "Bibliotheek doorzoeken..."
 msgid "Select All"
 msgstr "Alles selecteren"
 
+# en-hash: a7e68c4be7b60fa260cef42c08a259f4
+msgid "Select Book Folder"
+msgstr "Boekenmap selecteren"
+
 # en-hash: 509727ceedc42df08fd636c4f099854b
 msgid "Select Books to Upload"
 msgstr "Boeken selecteren om te uploaden"
@@ -648,6 +812,10 @@ msgstr "Boeken selecteren om te uploaden... (%d op apparaat)"
 # en-hash: d2ff04fff76be199705af758f3bacf5c
 msgid "Select Cloud Provider"
 msgstr "Cloudprovider selecteren"
+
+# en-hash: deffb03a57b0deaf912f04da4575848f
+msgid "Select Folder"
+msgstr "Map selecteren"
 
 # en-hash: f5564925140da7c0fd572d1459befd8d
 msgid "Series: %s"
@@ -661,9 +829,9 @@ msgstr "Server-URL"
 msgid "Set"
 msgstr "Instellen"
 
-# en-hash: 0990277c2b8fc4e26e601c0f9a98dbee
-msgid "Show your library at startup instead of KOReader's file list"
-msgstr "Toon je bibliotheek bij opstarten in plaats van de bestandslijst van KOReader"
+# en-hash: 3d3884120ae09d9e512f6e1b41a5bb46
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Nimbus-bibliotheek tonen in plaats van KOReader-bestandenlijst"
 
 # en-hash: 52e1b8c7bccf297b773cfb345260eb6c
 msgid "Sink / KOSync Server URL"
@@ -765,6 +933,14 @@ msgstr "Niet gesynchroniseerd"
 msgid "Untitled"
 msgstr "Naamloos"
 
+# en-hash: 0091e9be2ca53057daa3cdecbdda97bc
+msgid "Updating cloud catalog..."
+msgstr "Cloudcatalogus bijwerken..."
+
+# en-hash: 62ddb525b756a5480c71a83a87840578
+msgid "Updating cloud covers..."
+msgstr "Cloudomslagen bijwerken..."
+
 # en-hash: 91412465ea9169dfd901dd5e7c96dd99
 msgid "Upload"
 msgstr "Uploaden"
@@ -813,6 +989,10 @@ msgstr "%d van %d boek(en) geüpload naar Nimbus Cloud!"
 msgid "Uploaded '%s' to Nimbus Cloud!"
 msgstr "'%s' geüpload naar Nimbus Cloud!"
 
+# en-hash: b6e882222a68bea11303c8dfd4a04969
+msgid "Uploading %d book(s) in background..."
+msgstr "%d boek(en) uploaden op de achtergrond..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "%d van %d uploaden..."
@@ -821,13 +1001,9 @@ msgstr "%d van %d uploaden..."
 msgid "Uploading to Nimbus Cloud"
 msgstr "Uploaden naar Nimbus Cloud"
 
-# en-hash: 78d639ec11279b706fba724f50d43db9
-msgid "Use Nimbus as Home Screen"
-msgstr "Nimbus gebruiken als startscherm"
-
-# en-hash: 0de3c58a3386f3b56dbe4e140d4ba3d1
-msgid "Use as Home Screen"
-msgstr "Gebruiken als startscherm"
+# en-hash: 41ec51f9bc2256f1b585ba6712ad2df0
+msgid "Use Nimbus as Library"
+msgstr "Nimbus als bibliotheek gebruiken"
 
 # en-hash: f6039d44b29456b20f8f373155ae4973
 msgid "Username"
@@ -885,112 +1061,11 @@ msgstr "· Sync-fout"
 msgid "· Syncing..."
 msgstr "· Synchroniseren..."
 
+# en-hash: 1932ce597d46b0d558099090126e46fc
+msgid "· Uploading (%d/%d)..."
+msgstr "· Uploaden (%d/%d)..."
+
 # en-hash: 57adda7dedc1a318f3bb06fd005867dc
 msgid "‹ Prev"
 msgstr "‹ Vorige"
 
-
-msgid "Delete from Cloud"
-msgstr "Verwijderen uit cloud"
-
-msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
-msgstr "Dit boek verwijderen uit Nimbus Cloud? Een lokale kopie op uw apparaat blijft behouden."
-
-msgid "Delete this book from Nimbus Cloud? This cannot be undone."
-msgstr "Dit boek verwijderen uit Nimbus Cloud? Dit kan niet ongedaan worden gemaakt."
-
-msgid "Deleted from Nimbus Cloud."
-msgstr "Verwijderd uit Nimbus Cloud."
-
-msgid "Failed to delete from cloud: "
-msgstr "Verwijderen uit cloud mislukt: "
-
-msgid "Updating cloud catalog..."
-msgstr "Cloudcatalogus bijwerken..."
-
-msgid "Delete"
-msgstr "Verwijderen"
-
-msgid "%s (Device Backup and Restore)"
-msgstr "%s (Apparaatback-up en -herstel)"
-
-msgid "Device Backup and Restore"
-msgstr "Apparaatback-up en -herstel"
-
-msgid "Disconnect"
-msgstr "Verbreken"
-
-msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
-msgstr "%s loskoppelen van Nimbus? Uw instellingen voor Apparaatback-up en -herstel, lokale boeken en cloudbestanden blijven onaangetast."
-
-msgid "Disconnect Account"
-msgstr "Account loskoppelen"
-
-msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
-msgstr "Verbinding met %s verbreken? Opgeslagen inloggegevens worden uit Nimbus verwijderd. Uw lokale boeken en cloudbestanden blijven behouden."
-
-msgid "Edit Server Settings"
-msgstr "Serverinstellingen bewerken"
-
-msgid "Background"
-msgstr "Achtergrond"
-
-msgid "Uploading %d book(s) in background..."
-msgstr "%d boek(en) uploaden op de achtergrond..."
-
-msgid "· Uploading (%d/%d)..."
-msgstr "· Uploaden (%d/%d)..."
-
-msgid "File Browser"
-msgstr "Bestandsbrowser"
-
-msgid "Library"
-msgstr "Bibliotheek"
-
-msgid "Nimbus Library"
-msgstr "Nimbus-bibliotheek"
-
-msgid "Show Nimbus library instead of KOReader's file list"
-msgstr "Nimbus-bibliotheek tonen in plaats van KOReader-bestandenlijst"
-
-msgid "Use Nimbus as Library"
-msgstr "Nimbus als bibliotheek gebruiken"
-
-msgid "%d %s in this folder"
-msgstr "%d %s in deze map"
-
-msgid "+ New"
-msgstr "+ Nieuw"
-
-msgid "Create"
-msgstr "Maken"
-
-msgid "Create Folder"
-msgstr "Map maken"
-
-msgid "Created '%s'."
-msgstr "'%s' aangemaakt."
-
-msgid "Failed to create folder."
-msgstr "Kan map niet aanmaken."
-
-msgid "Folder name:"
-msgstr "Mapnaam:"
-
-msgid "No subfolders"
-msgstr "Geen submappen"
-
-msgid "Page %d of %d"
-msgstr "Pagina %d van %d"
-
-msgid "Parent Folder"
-msgstr "Bovenliggende map"
-
-msgid "Select Book Folder"
-msgstr "Boekenmap selecteren"
-
-msgid "Select Folder"
-msgstr "Map selecteren"
-
-msgid "%s (Backup)"
-msgstr "%s (Back-up)"

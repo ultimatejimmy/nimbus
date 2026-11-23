@@ -34,16 +34,58 @@ local function makeCacheKey(entry)
     return key:gsub("[^%w%-_]", "_")
 end
 
+local _cache_v2_checked = false
+
+local function ensureCoverCacheVersion(dir)
+    if _cache_v2_checked or not dir or dir == "" then return end
+    _cache_v2_checked = true
+    local marker = dir .. "/.cache_v2"
+    if fileExists(marker) then return end
+    if lfs and lfs.dir then
+        pcall(function()
+            for name in lfs.dir(dir) do
+                if name:sub(-4) == ".jpg" or name:sub(-4) == ".tmp" then
+                    os.remove(dir .. "/" .. name)
+                end
+            end
+        end)
+    end
+    local mf = io.open(marker, "wb")
+    if mf then mf:write("v2\n"); mf:close() end
+    local pf = io.open(dir .. "/.reupload_pending", "wb")
+    if pf then pf:write("1\n"); pf:close() end
+end
+
+function Covers.hasPendingCloudCoverReupload()
+    local dir = Settings.getCoversCacheDir()
+    return fileExists(dir .. "/.reupload_pending")
+end
+
+function Covers.clearPendingCloudCoverReupload()
+    local dir = Settings.getCoversCacheDir()
+    pcall(os.remove, dir .. "/.reupload_pending")
+end
+
+local function mkdirRecursive(dir)
+    if not dir or dir == "" then return end
+    if ok_util and util and util.makePath then
+        util.makePath(dir)
+        return
+    end
+    if not lfs or not lfs.mkdir then return end
+    local acc = dir:sub(1, 1) == "/" and "/" or ""
+    for part in dir:gmatch("[^/]+") do
+        acc = (acc == "" or acc == "/") and (acc .. part) or (acc .. "/" .. part)
+        pcall(lfs.mkdir, acc)
+    end
+end
+
 function Covers.getCoverFilePath(entry)
     local key = makeCacheKey(entry)
     if not key then return nil end
     local dir = Settings.getCoversCacheDir()
-    if ok_util and util and util.makePath then
-        util.makePath(dir)
-    elseif lfs and lfs.mkdir then
-        lfs.mkdir(Settings.getCacheDir())
-        lfs.mkdir(dir)
-    end
+    mkdirRecursive(dir)
+    ensureCoverCacheVersion(dir)
     return dir .. "/" .. key .. ".jpg"
 end
 
@@ -55,6 +97,47 @@ function Covers.getCachedCoverPath(entry)
     return nil
 end
 
+--- Normalizes any BlitBuffer to a tightly-packed TYPE_BBRGB24 buffer (flattening alpha onto white).
+-- Returns (bb, should_free_bb).
+local function normalizeToRGB24(src_bb)
+    if not src_bb then return nil, false end
+    local ok_bb_mod, Blitbuffer = pcall(require, "ffi/blitbuffer")
+    if not ok_bb_mod or not Blitbuffer or not Blitbuffer.new or not Blitbuffer.TYPE_BBRGB24 then
+        return src_bb, false
+    end
+    local w = src_bb.getWidth and src_bb:getWidth()
+    local h = src_bb.getHeight and src_bb:getHeight()
+    if not w or not h or w <= 0 or h <= 0 then
+        return src_bb, false
+    end
+    local bb_type = src_bb.getType and src_bb:getType()
+    local ok_st, stride = pcall(function() return tonumber(src_bb.stride) end)
+    if bb_type == Blitbuffer.TYPE_BBRGB24 and (not ok_st or not stride or stride == w * 3) then
+        return src_bb, false
+    end
+
+    local ok_new, clean_bb = pcall(Blitbuffer.new, w, h, Blitbuffer.TYPE_BBRGB24)
+    if not ok_new or not clean_bb then
+        return src_bb, false
+    end
+    pcall(function() clean_bb:fill(Blitbuffer.COLOR_WHITE) end)
+    local has_alpha = (bb_type == Blitbuffer.TYPE_BBRGB32 or bb_type == Blitbuffer.TYPE_BB8A)
+    local ok_blit = false
+    if has_alpha and clean_bb.alphablitFrom then
+        ok_blit = pcall(function() clean_bb:alphablitFrom(src_bb, 0, 0, 0, 0, w, h) end)
+    end
+    if not ok_blit and clean_bb.blitFrom then
+        ok_blit = pcall(function() clean_bb:blitFrom(src_bb, 0, 0, 0, 0, w, h) end)
+    end
+    if not ok_blit then
+        if clean_bb.free then pcall(function() clean_bb:free() end) end
+        return src_bb, false
+    end
+    return clean_bb, true
+end
+
+Covers._normalizeToRGB24 = normalizeToRGB24
+
 local function writeScaledBlitBuffer(orig_bb, dest_path)
     if not orig_bb or not dest_path then return false end
     local ok_ri, RenderImage = pcall(require, "ui/renderimage")
@@ -64,16 +147,21 @@ local function writeScaledBlitBuffer(orig_bb, dest_path)
         return false
     end
 
-    local target_bb = orig_bb
+    local norm_bb, free_norm = normalizeToRGB24(orig_bb)
+    local target_bb = norm_bb
     local scaled_bb = nil
     if ok_ri and RenderImage and orig_w > 400 then
         local new_w = 400
         local new_h = math.max(1, math.floor(orig_h * (400 / orig_w)))
         local ok_s, res_bb = pcall(function()
-            return RenderImage:scaleBlitBuffer(orig_bb, new_w, new_h, false)
+            return RenderImage:scaleBlitBuffer(norm_bb, new_w, new_h, false)
         end)
         if ok_s and res_bb then
-            scaled_bb = res_bb
+            local s_norm, free_s_norm = normalizeToRGB24(res_bb)
+            if free_s_norm and res_bb.free then
+                pcall(function() res_bb:free() end)
+            end
+            scaled_bb = s_norm
             target_bb = scaled_bb
         end
     end
@@ -93,8 +181,11 @@ local function writeScaledBlitBuffer(orig_bb, dest_path)
         pcall(function() wrote = target_bb:writePNG(tmp) end)
     end
 
-    if scaled_bb and scaled_bb.free then
+    if scaled_bb and scaled_bb ~= norm_bb and scaled_bb.free then
         pcall(function() scaled_bb:free() end)
+    end
+    if free_norm and norm_bb and norm_bb.free then
+        pcall(function() norm_bb:free() end)
     end
 
     if wrote and fileExists(tmp) then
@@ -143,13 +234,21 @@ function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc)
         end
     end
 
-    -- 3. Check KOReader's BookInfoManager cache if available
+    -- 3. Check KOReader's BookInfoManager cache only if it holds a full-color, >=250px buffer
     local ok_bim, BookInfoManager = pcall(require, "bookinfomanager")
     if ok_bim and BookInfoManager and BookInfoManager.getBookInfo then
         local ok_bi, info = pcall(function() return BookInfoManager:getBookInfo(filepath, true) end)
         if ok_bi and type(info) == "table" and info.cover_bb then
-            local ok_w = writeScaledBlitBuffer(info.cover_bb, dest_path)
-            if info.cover_bb.free then pcall(function() info.cover_bb:free() end) end
+            local ok_bb_mod, Blitbuffer = pcall(require, "ffi/blitbuffer")
+            local bb = info.cover_bb
+            local bb_type = bb.getType and bb:getType()
+            local bb_w = bb.getWidth and bb:getWidth() or 0
+            local is_color = ok_bb_mod and Blitbuffer and (bb_type == Blitbuffer.TYPE_BBRGB24 or bb_type == Blitbuffer.TYPE_BBRGB32)
+            local ok_w = false
+            if is_color and bb_w >= 250 then
+                ok_w = writeScaledBlitBuffer(bb, dest_path)
+            end
+            if bb.free then pcall(function() bb:free() end) end
             if ok_w then return true end
         end
     end
@@ -270,10 +369,34 @@ end
 
 local _scaled_bb_cache = {}
 local _scaled_bb_order = {}
-local MAX_BB_CACHE = 12
+local _render_gen = 0
+local MAX_BB_CACHE = 48
+
+function Covers.beginRenderPass()
+    _render_gen = _render_gen + 1
+    return _render_gen
+end
+
+function Covers.pruneMemoryCache()
+    local i = 1
+    while #_scaled_bb_order > MAX_BB_CACHE and i <= #_scaled_bb_order do
+        local key = _scaled_bb_order[i]
+        local entry = _scaled_bb_cache[key]
+        if not entry or (entry.gen or 0) < _render_gen then
+            table.remove(_scaled_bb_order, i)
+            _scaled_bb_cache[key] = nil
+            if entry and entry.bb and entry.bb.free then
+                pcall(function() entry.bb:free() end)
+            end
+        else
+            i = i + 1
+        end
+    end
+end
 
 function Covers.clearMemoryCache()
-    for k, bb in pairs(_scaled_bb_cache) do
+    for k, entry in pairs(_scaled_bb_cache) do
+        local bb = type(entry) == "table" and entry.bb or entry
         if bb and bb.free then
             pcall(function() bb:free() end)
         end
@@ -282,21 +405,32 @@ function Covers.clearMemoryCache()
     _scaled_bb_order = {}
 end
 
+local function touchCacheOrder(key)
+    for idx = #_scaled_bb_order, 1, -1 do
+        if _scaled_bb_order[idx] == key then
+            table.remove(_scaled_bb_order, idx)
+            break
+        end
+    end
+    table.insert(_scaled_bb_order, key)
+end
+
 local function getCachedScaledBB(key)
-    return _scaled_bb_cache[key]
+    local entry = _scaled_bb_cache[key]
+    if not entry then return nil end
+    entry.gen = _render_gen
+    touchCacheOrder(key)
+    return entry.bb
 end
 
 local function putCachedScaledBB(key, bb)
-    if _scaled_bb_cache[key] then return end
-    if #_scaled_bb_order >= MAX_BB_CACHE then
-        local evict = table.remove(_scaled_bb_order, 1)
-        local old_bb = _scaled_bb_cache[evict]
-        _scaled_bb_cache[evict] = nil
-        if old_bb and old_bb.free then
-            pcall(function() old_bb:free() end)
-        end
+    local existing = _scaled_bb_cache[key]
+    if existing then
+        existing.gen = _render_gen
+        touchCacheOrder(key)
+        return
     end
-    _scaled_bb_cache[key] = bb
+    _scaled_bb_cache[key] = { bb = bb, gen = _render_gen }
     table.insert(_scaled_bb_order, key)
 end
 
@@ -330,11 +464,18 @@ function Covers.createCoverImageWidget(file_path, target_w, target_h)
         return nil
     end
 
+    local norm_bb, free_norm = normalizeToRGB24(orig_bb)
+    if free_norm and orig_bb.free then
+        pcall(function() orig_bb:free() end)
+    end
+
     local fit_w, fit_h = Covers.computeFitSize(orig_w, orig_h, target_w, target_h)
     local ok_scale, scaled_bb = pcall(function()
-        return RenderImage:scaleBlitBuffer(orig_bb, fit_w, fit_h, false)
+        return RenderImage:scaleBlitBuffer(norm_bb, fit_w, fit_h, false)
     end)
-    if orig_bb.free then pcall(function() orig_bb:free() end) end
+    if norm_bb and norm_bb ~= scaled_bb and norm_bb.free then
+        pcall(function() norm_bb:free() end)
+    end
     if not ok_scale or not scaled_bb then return nil end
 
     putCachedScaledBB(cache_key, scaled_bb)
@@ -384,52 +525,100 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
     local HorizontalSpan = require("ui/widget/horizontalspan")
     local VerticalGroup = require("ui/widget/verticalgroup")
     local VerticalSpan = require("ui/widget/verticalspan")
-    local LineWidget = require("ui/widget/linewidget")
+    local ImageWidget = require("ui/widget/imagewidget")
     local Geom = require("ui/geometry")
     local Blitbuffer = require("ffi/blitbuffer")
-    local UIManager = require("ui/uimanager")
+    local Widgets = require("nimbus_ui_widgets")
 
     local pad = 5
     local gap = 4
     local inner_w = math.max(20, slot_w - (pad * 2) - 2)
     local inner_h = math.max(20, slot_h - (pad * 2) - 2)
-    local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
-    local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
+    local count = math.min(4, #(sample_books or {}))
 
-    local function makeEmptyTile()
-        return LineWidget:new{
-            dimen = Geom:new{ w = mini_w, h = mini_h },
-            background = Blitbuffer.COLOR_GRAY_E,
+    local function makeTileContainer(book, tile_w, tile_h)
+        local cached = book and Covers.getCachedCoverPath(book)
+        local tile_widget = cached and Covers.createCoverImageWidget(cached, tile_w, tile_h)
+            or VerticalSpan:new{ width = 0 }
+        local cell = CenterContainer:new{
+            dimen = Geom:new{ w = tile_w, h = tile_h },
+            tile_widget,
         }
-    end
-
-    local cells = {}
-    for idx = 1, 4 do
-        local b = sample_books and sample_books[idx]
-        local cell_widget
-        if b then
-            local cached = Covers.getCachedCoverPath(b)
-            cell_widget = cached and Covers.createCoverImageWidget(cached, mini_w, mini_h)
-            if not cell_widget then
-                cell_widget = makeEmptyTile()
-                Covers.enqueueFetchCover(b, function(loaded_path)
-                    if loaded_path and on_async_loaded then
+        if book and not cached then
+            Covers.enqueueFetchCover(book, function(loaded_path)
+                if loaded_path then
+                    local new_img = Covers.createCoverImageWidget(loaded_path, tile_w, tile_h)
+                    if new_img then
+                        cell[1] = new_img
+                    end
+                    if on_async_loaded then
                         on_async_loaded()
                     end
-                end, open_doc)
-            end
-        else
-            cell_widget = makeEmptyTile()
+                end
+            end, open_doc)
         end
-        cells[idx] = CenterContainer:new{
-            dimen = Geom:new{ w = mini_w, h = mini_h },
-            cell_widget,
-        }
+        return cell
     end
 
-    local row1 = HorizontalGroup:new{ align = "center", cells[1], HorizontalSpan:new{ width = gap }, cells[2] }
-    local row2 = HorizontalGroup:new{ align = "center", cells[3], HorizontalSpan:new{ width = gap }, cells[4] }
-    local grid = VerticalGroup:new{ align = "center", row1, VerticalSpan:new{ width = gap }, row2 }
+    local content
+    if count == 0 then
+        local icon_sz = math.max(24, math.floor(math.min(inner_w, inner_h) * 0.42))
+        content = ImageWidget:new{
+            file = Widgets.getAssetPath("folder.svg"),
+            width = icon_sz,
+            height = icon_sz,
+            scale_factor = 0,
+            is_icon = true,
+            alpha = true,
+        }
+    elseif count == 1 then
+        content = makeTileContainer(sample_books[1], inner_w, inner_h)
+    elseif count == 2 then
+        local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
+        content = HorizontalGroup:new{
+            align = "center",
+            makeTileContainer(sample_books[1], mini_w, inner_h),
+            HorizontalSpan:new{ width = gap },
+            makeTileContainer(sample_books[2], mini_w, inner_h),
+        }
+    elseif count == 3 then
+        local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
+        local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
+        local row1 = HorizontalGroup:new{
+            align = "center",
+            makeTileContainer(sample_books[1], mini_w, mini_h),
+            HorizontalSpan:new{ width = gap },
+            makeTileContainer(sample_books[2], mini_w, mini_h),
+        }
+        local row2 = makeTileContainer(sample_books[3], mini_w, mini_h)
+        content = VerticalGroup:new{
+            align = "center",
+            row1,
+            VerticalSpan:new{ width = gap },
+            row2,
+        }
+    else
+        local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
+        local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
+        local row1 = HorizontalGroup:new{
+            align = "center",
+            makeTileContainer(sample_books[1], mini_w, mini_h),
+            HorizontalSpan:new{ width = gap },
+            makeTileContainer(sample_books[2], mini_w, mini_h),
+        }
+        local row2 = HorizontalGroup:new{
+            align = "center",
+            makeTileContainer(sample_books[3], mini_w, mini_h),
+            HorizontalSpan:new{ width = gap },
+            makeTileContainer(sample_books[4], mini_w, mini_h),
+        }
+        content = VerticalGroup:new{
+            align = "center",
+            row1,
+            VerticalSpan:new{ width = gap },
+            row2,
+        }
+    end
 
     return FrameContainer:new{
         bordersize = 1,
@@ -437,10 +626,10 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
         radius = 4,
         padding = pad,
         margin = 0,
-        background = Blitbuffer.COLOR_LIGHT_GRAY,
+        background = Blitbuffer.COLOR_WHITE,
         CenterContainer:new{
             dimen = Geom:new{ w = inner_w, h = inner_h },
-            grid,
+            content,
         },
     }
 end

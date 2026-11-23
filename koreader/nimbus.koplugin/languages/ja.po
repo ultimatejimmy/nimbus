@@ -5,6 +5,26 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+# en-hash: c8f78bc28da257b693c5db4485b6ebae
+msgid "%d %s in this folder"
+msgstr "このフォルダ内に %d %s"
+
+# en-hash: 695d8c59f85e24fcd8dec0f2d2ed9a1c
+msgid "%d Selected"
+msgstr "%d件選択中"
+
+# en-hash: 2c466ae7a056d4f4726b1c146b45a046
+msgid "%d selected"
+msgstr "%d件選択"
+
+# en-hash: 2c19d5fed88c659e85c74a2086723398
+msgid "%s (Backup)"
+msgstr "%s（バックアップ）"
+
+# en-hash: b870d0f61c3b5b78933fba4cde08fc67
+msgid "%s (Device Backup and Restore)"
+msgstr "%s（端末のバックアップと復元）"
+
 # en-hash: eb15c8258912980aa6eebaf6c597a474
 msgid "%s Account"
 msgstr "%s アカウント"
@@ -21,6 +41,10 @@ msgstr "%s の認証に失敗しました: %s"
 msgid "%s authorization was denied."
 msgstr "%s の認証が拒否されました。"
 
+# en-hash: 4bc56877a98a3b5f59735f579cf735a6
+msgid "+ New"
+msgstr "+ 新規"
+
 # en-hash: a96af5ecb3f39286a79ee3b23e270a8a
 msgid "0 of %d books"
 msgstr "%d 冊中 0 冊"
@@ -28,6 +52,14 @@ msgstr "%d 冊中 0 冊"
 # en-hash: 08bd40c7543007ad06e4fce31618f6ec
 msgid "Account"
 msgstr "アカウント"
+
+# en-hash: 42ff290cc493367f85539a0905e6b872
+msgid "Actions…"
+msgstr "アクション…"
+
+# en-hash: b1c94ca2fbc3e78fc30069c8d0f01680
+msgid "All"
+msgstr "すべて"
 
 # en-hash: 71aeed4dbcaef45a2f508e7949c01ba6
 msgid "All Books"
@@ -73,9 +105,9 @@ msgstr "新しく追加されたクラウドの本をこの端末に自動的に
 msgid "Back"
 msgstr "戻る"
 
-# en-hash: eb246567736a16525a3d8c167b2dd22e
-msgid "Backup & Restore Auth"
-msgstr "バックアップと復元の認証"
+# en-hash: a9ded1e5ce5d75814730bb4caaf49419
+msgid "Background"
+msgstr "バックグラウンド"
 
 # en-hash: 6ce976e8f061b2b5cfe4d0c50c3405dd
 msgid "Binary"
@@ -201,6 +233,26 @@ msgstr "接続がタイムアウトしました"
 msgid "Contacting %s..."
 msgstr "%s に接続中..."
 
+# en-hash: d1de4b573af164a165cef4710d30fa8f
+msgid "Copied %d book(s) to clipboard."
+msgstr "%d冊の本をクリップボードにコピーしました。"
+
+# en-hash: 8914d68b7fb989a991317d0ac8b87201
+msgid "Copied book to clipboard."
+msgstr "本をクリップボードにコピーしました。"
+
+# en-hash: 686e697538050e4664636337cc3b834f
+msgid "Create"
+msgstr "作成"
+
+# en-hash: f513267c012197b4764e6dd4e68ee420
+msgid "Create Folder"
+msgstr "フォルダを作成"
+
+# en-hash: 175ea39143192a17339a060740ba6d0d
+msgid "Created '%s'."
+msgstr "「%s」を作成しました。"
+
 # en-hash: 31a3e8770e4a14d334c91ebf73ce5b78
 msgid "CrossPoint / Sink / KOSync"
 msgstr "CrossPoint / Sink / KOSync"
@@ -213,9 +265,65 @@ msgstr "現在の本"
 msgid "Currently Reading"
 msgstr "読書中"
 
+# en-hash: 5a569485830cef23a74dcd8f07926f30
+msgid "Cut %d book(s) to clipboard."
+msgstr "%d冊の本をクリップボードに切り取りました。"
+
+# en-hash: 8e3b841315923888ef822558296658a9
+msgid "Cut book to clipboard."
+msgstr "本をクリップボードに切り取りました。"
+
+# en-hash: f2a6c498fb90ee345d997f888fce3b18
+msgid "Delete"
+msgstr "削除"
+
+# en-hash: 48e8475d31cf2f4379c1e07ecb5a916c
+msgid "Delete %d local book file(s) from this device? Cloud copies and progress remain safe."
+msgstr "この端末からローカルの書籍ファイル %d 件を削除しますか？クラウド上のコピーと読書進捗は保持されます。"
+
+# en-hash: 8238561daa0942029aa60d8161b2f8cf
+msgid "Delete %d selected book(s) from Nimbus Cloud?"
+msgstr "選択した %d冊の本を Nimbus Cloud から削除しますか？"
+
+# en-hash: 3521e5ca897547752690e1c7627d8e68
+msgid "Delete (%d)"
+msgstr "削除 (%d)"
+
+# en-hash: aeeef3520701d05e23bd70bbeff8431e
+msgid "Delete Cloud (%d)"
+msgstr "クラウドから削除 (%d)"
+
+# en-hash: 5e603e0ae14ae58e949890e0196076a1
+msgid "Delete Local Books"
+msgstr "ローカルの本を削除"
+
+# en-hash: 39f8bfbc450dad78e48627bbeab8db01
+msgid "Delete from Cloud"
+msgstr "クラウドから削除"
+
 # en-hash: 067c9daf5725fdabb83883ab066a528c
 msgid "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
 msgstr "この端末からローカルファイルを削除しますか？本、進捗、ハイライトは Nimbus Cloud に安全に保存されます。"
+
+# en-hash: 3a464fc3ccd09b54db55d7b1835d653c
+msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+msgstr "この本を Nimbus Cloud から削除しますか？端末上のローカルコピーは残ります。"
+
+# en-hash: 36bf7ee8a35b9140dbae7768f0db2021
+msgid "Delete this book from Nimbus Cloud? This cannot be undone."
+msgstr "この本を Nimbus Cloud から削除しますか？この操作は取り消せません。"
+
+# en-hash: ef4efc13d76be429b5d2cf5f9fb797fa
+msgid "Deleted %d book(s) from Cloud."
+msgstr "クラウドから %d冊の本を削除しました。"
+
+# en-hash: 30c5f73e3ac793aa5dfd13364475509e
+msgid "Deleted %d file(s)."
+msgstr "%d件のファイルを削除しました。"
+
+# en-hash: 2259651a5b4431c1119029616a03a741
+msgid "Deleted from Nimbus Cloud."
+msgstr "Nimbus Cloud から削除しました。"
 
 # en-hash: c98b66bb93fd0c039e10bc25614414f8
 msgid "Detected Sync Plugins"
@@ -225,6 +333,10 @@ msgstr "検知された同期プラグイン"
 msgid "Device & About"
 msgstr "デバイスと情報"
 
+# en-hash: 104eee19fdf357615cfaa253885736c5
+msgid "Device Backup and Restore"
+msgstr "端末のバックアップと復元"
+
 # en-hash: 2e8f11ede1199f48c85453ec3cd462ec
 msgid "Device ID"
 msgstr "デバイスID"
@@ -233,13 +345,21 @@ msgstr "デバイスID"
 msgid "Device: %s"
 msgstr "デバイス: %s"
 
-# en-hash: 09ab107441789ea7842f5da3b210359f
-msgid "Directory path scanned for local books:"
-msgstr "ローカル書籍のスキャン先ディレクトリ:"
+# en-hash: 42ae25231906c83927831e0ef7c317ac
+msgid "Disconnect"
+msgstr "切断"
 
-# en-hash: 8197c58737018556993c2cc6d04615c5
-msgid "Disconnect/Log Out"
-msgstr "切断 / ログアウト"
+# en-hash: b709067b60f71eaebcff374f38749fcc
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "%s を Nimbus から切断しますか？「端末のバックアップと復元」の設定、ローカルの本、クラウドファイルには影響しません。"
+
+# en-hash: fd456a63260bc8f43e73094f0d826863
+msgid "Disconnect Account"
+msgstr "アカウントを切断"
+
+# en-hash: 085c04284f55557544a0fb03abb889ab
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "%s から切断しますか？保存された認証情報は Nimbus から削除されます。ローカルの本とクラウドファイルはそのまま残ります。"
 
 # en-hash: b29490bf0f9a9dd9f84439ee1b9e5c74
 msgid "Disconnected from %s."
@@ -281,6 +401,10 @@ msgstr "本をダウンロード中"
 msgid "Dropbox"
 msgstr "Dropbox"
 
+# en-hash: bb649aceb3fd6ba2c79b0aa341af0bb2
+msgid "Edit Server Settings"
+msgstr "サーバー設定を編集"
+
 # en-hash: f755f939257488611a2e2ce699f133cf
 msgid "Enable CrossPoint/KOSync Bridge"
 msgstr "CrossPoint / KOSync ブリッジを有効化"
@@ -289,9 +413,21 @@ msgstr "CrossPoint / KOSync ブリッジを有効化"
 msgid "Enter search term..."
 msgstr "検索ワードを入力..."
 
+# en-hash: 96310b2cf48706c28110688622ac2cf2
+msgid "Failed to create folder."
+msgstr "フォルダの作成に失敗しました。"
+
+# en-hash: 9af5b79043bac7f965fe05f427b2e757
+msgid "Failed to delete from cloud: "
+msgstr "クラウドからの削除に失敗しました: "
+
 # en-hash: ad8802154faed7004677d5b3e630cbef
 msgid "Failed to start %s authorization:\n%s"
 msgstr "%s の認証開始に失敗しました:\n%s"
+
+# en-hash: b8c128190e09e6c57a1df2180e8c73fb
+msgid "File Browser"
+msgstr "ファイルブラウザ"
 
 # en-hash: 1351017ac6423911223bc19a8cb7c653
 msgid "Filename"
@@ -305,10 +441,6 @@ msgstr "本を絞り込み"
 msgid "Filter books by title, author, or series:"
 msgstr "タイトル、著者、シリーズで本を絞り込み:"
 
-# en-hash: f1f52329b8eac84be605b93a5f1bee4e
-msgid "Finalizing %d of %d..."
-msgstr "%d / %d を最終処理中..."
-
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
 msgstr "カタログを最終処理中…"
@@ -316,6 +448,10 @@ msgstr "カタログを最終処理中…"
 # en-hash: 8f3d10eb21bd36347c258679eba9e92b
 msgid "Finished"
 msgstr "終了"
+
+# en-hash: 8413c0cea3d5b2e00cb59bc7a6aa0c19
+msgid "Folder name:"
+msgstr "フォルダ名:"
 
 # en-hash: 15e30d22eae32fdb46411b88d59480b4
 msgid "Folder · %d %s"
@@ -329,21 +465,9 @@ msgstr "形式: %s"
 msgid "Google Drive"
 msgstr "Google ドライブ"
 
-# en-hash: ec63674aca1c27c134a3e564563502be
-msgid "Home Screen"
-msgstr "ホーム画面"
-
-# en-hash: 72d6d7a1885885bb55a565fd1070581a
-msgid "Import"
-msgstr "インポート"
-
 # en-hash: 0604c1173fb3b6cccc5527085d251515
 msgid "Imported %s settings!"
 msgstr "%s の設定をインポートしました！"
-
-# en-hash: 8f9ce7afe914fca6e9008185b0f3db93
-msgid "Imported %s!"
-msgstr "%s をインポートしました！"
 
 # en-hash: 0831af0fc1b12bdee77b0e186de35754
 msgid "In Cloud"
@@ -385,9 +509,9 @@ msgstr "KOSync接続済み (%s)"
 msgid "KOSync failed: %s"
 msgstr "KOSync失敗: %s"
 
-# en-hash: 0a248a86c841018a623755f2e08eb0d8
-msgid "Library & Home Screen"
-msgstr "ライブラリ & ホーム画面"
+# en-hash: 4d70254b3a8e2bc38b6147fa6ee813be
+msgid "Library"
+msgstr "ライブラリ"
 
 # en-hash: 962720e9fdf82d2d1592c5158351f2b2
 msgid "Library Menu"
@@ -400,10 +524,6 @@ msgstr "ライブラリカタログを読み込み中..."
 # en-hash: 509820290d57f333403f490dde7316f4
 msgid "Local"
 msgstr "ローカル"
-
-# en-hash: 8c7b78915d6e1d411445357525846f3e
-msgid "Local Book Folder"
-msgstr "ローカル本棚フォルダ"
 
 # en-hash: d90baa18ccfcd397dbe0d0b01310f4bb
 msgid "Local Only"
@@ -445,6 +565,10 @@ msgstr "Nimbus"
 msgid "Nimbus Cloud"
 msgstr "Nimbus Cloud"
 
+# en-hash: 37a3785334a9a2b45c00556b1dd9e82e
+msgid "Nimbus Library"
+msgstr "Nimbus ライブラリ"
+
 # en-hash: be28ae769de6bdf2bbc2a73b39a96656
 msgid "Nimbus Menu"
 msgstr "Nimbus メニュー"
@@ -481,6 +605,10 @@ msgstr "クラウドに本がありません。\n\n「デバイス内」に切�
 msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
 msgstr "検索またはフィルターに一致する本がありません。\n\n検索バーの ✕ をタップするか、上のフィルターを変更してください。"
 
+# en-hash: e26ac5efceda24b4dfbed6477724bc3f
+msgid "No books selected."
+msgstr "本が選択されていません。"
+
 # en-hash: 72b4ff9b0918412a6c30f00a80d02fc8
 msgid "No cloud provider configured."
 msgstr "クラウドプロバイダが設定されていません。"
@@ -492,6 +620,10 @@ msgstr "backup.koplugin内にこのプロバイダの保存されたアカウン
 # en-hash: 1308b53360a6ef623fca1d344d1d6a19
 msgid "No saved cloud accounts found in backup.koplugin."
 msgstr "backup.koplugin内に保存されたクラウドアカウントが見つかりません。"
+
+# en-hash: f4f988243b563534fedc321d62514ddf
+msgid "No subfolders"
+msgstr "サブフォルダはありません"
 
 # en-hash: 6adf97f83acf6453d4a6a4b1070f3754
 msgid "None"
@@ -521,6 +653,10 @@ msgstr "オフ"
 msgid "Offload"
 msgstr "オフロード"
 
+# en-hash: bb31cd7f602d48e550e9cedca275631d
+msgid "Offload (%d)"
+msgstr "オフロード (%d)"
+
 # en-hash: 0a5f441ddba90508f3532c78bd23e849
 msgid "Offload Local"
 msgstr "ローカルをオフロード"
@@ -528,6 +664,14 @@ msgstr "ローカルをオフロード"
 # en-hash: 3bdd4dbebdcd66c873ad9df8f4df7aff
 msgid "Offload Local Book"
 msgstr "ローカルの本をオフロード"
+
+# en-hash: ebc82c886e48de3bab3443bb5b92f63f
+msgid "Offload Local Books"
+msgstr "ローカルの本をオフロード"
+
+# en-hash: 8df0542c78f062f0a08ca45767c2710f
+msgid "Offloaded %d book(s)."
+msgstr "%d冊の本をオフロードしました。"
 
 # en-hash: 55095656af8c3f35dd2aeb6169a3bae3
 msgid "Offloaded from device."
@@ -557,6 +701,14 @@ msgstr "ファイルブラウザを開く"
 msgid "Operation in Progress"
 msgstr "処理中"
 
+# en-hash: b8065ad2628f1f82f3167af0947b3e43
+msgid "Page %d of %d"
+msgstr "%d / %d ページ"
+
+# en-hash: 0293301ed6a54b7e4503e74bba17bf11
+msgid "Parent Folder"
+msgstr "親フォルダ"
+
 # en-hash: dc647eb65e6711e155375218212b3964
 msgid "Password"
 msgstr "パスワード"
@@ -564,6 +716,10 @@ msgstr "パスワード"
 # en-hash: 5ba75bed6252ebe2fc1cd59ee5cf6558
 msgid "Password or App Token"
 msgstr "パスワードまたはアプリトークン"
+
+# en-hash: 8e99511c4316abee6e77b51814a3ec6f
+msgid "Permanently delete %d selected file(s) from this device?"
+msgstr "選択した %d件のファイルをこの端末から完全に削除しますか？"
 
 # en-hash: 4df2abeba5ba0d9428ab6154bb47dc1a
 msgid "Please connect a cloud storage provider in Settings first."
@@ -588,6 +744,10 @@ msgstr "進捗：%s"
 # en-hash: ffb5a681cd47e8a182164bed1e0465a2
 msgid "Pull/push progress automatically when opening or closing a book"
 msgstr "本の開閉時に進捗を自動で同期する"
+
+# en-hash: 7a1a5f3e79fdc91edf2f5ead9d66abb4
+msgid "Read"
+msgstr "既読"
 
 # en-hash: 026e23401eb9b3c0385409fe50ee5767
 msgid "Reading Sync"
@@ -637,6 +797,10 @@ msgstr "ライブラリを検索..."
 msgid "Select All"
 msgstr "すべて選択"
 
+# en-hash: a7e68c4be7b60fa260cef42c08a259f4
+msgid "Select Book Folder"
+msgstr "本のフォルダを選択"
+
 # en-hash: 509727ceedc42df08fd636c4f099854b
 msgid "Select Books to Upload"
 msgstr "アップロードする本を選択"
@@ -648,6 +812,10 @@ msgstr "アップロードする本を選択... (端末内 %d 冊)"
 # en-hash: d2ff04fff76be199705af758f3bacf5c
 msgid "Select Cloud Provider"
 msgstr "クラウドプロバイダを選択"
+
+# en-hash: deffb03a57b0deaf912f04da4575848f
+msgid "Select Folder"
+msgstr "フォルダを選択"
 
 # en-hash: f5564925140da7c0fd572d1459befd8d
 msgid "Series: %s"
@@ -661,9 +829,9 @@ msgstr "サーバー URL"
 msgid "Set"
 msgstr "設定"
 
-# en-hash: 0990277c2b8fc4e26e601c0f9a98dbee
-msgid "Show your library at startup instead of KOReader's file list"
-msgstr "KOReaderのファイルリストの代わりに起動時ライブラリを表示する"
+# en-hash: 3d3884120ae09d9e512f6e1b41a5bb46
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "KOReader のファイル一覧の代わりに Nimbus ライブラリを表示する"
 
 # en-hash: 52e1b8c7bccf297b773cfb345260eb6c
 msgid "Sink / KOSync Server URL"
@@ -765,6 +933,14 @@ msgstr "未同期"
 msgid "Untitled"
 msgstr "無題"
 
+# en-hash: 0091e9be2ca53057daa3cdecbdda97bc
+msgid "Updating cloud catalog..."
+msgstr "クラウドカタログを更新中..."
+
+# en-hash: 62ddb525b756a5480c71a83a87840578
+msgid "Updating cloud covers..."
+msgstr "クラウドの表紙を更新中..."
+
 # en-hash: 91412465ea9169dfd901dd5e7c96dd99
 msgid "Upload"
 msgstr "アップロード"
@@ -813,6 +989,10 @@ msgstr "%d / %d 冊の本を Nimbus Cloud にアップロードしました！"
 msgid "Uploaded '%s' to Nimbus Cloud!"
 msgstr "'%s' を Nimbus Cloud にアップロードしました！"
 
+# en-hash: b6e882222a68bea11303c8dfd4a04969
+msgid "Uploading %d book(s) in background..."
+msgstr "%d 冊をバックグラウンドでアップロード中..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "%d / %d 冊目をアップロード中..."
@@ -821,13 +1001,9 @@ msgstr "%d / %d 冊目をアップロード中..."
 msgid "Uploading to Nimbus Cloud"
 msgstr "Nimbus Cloud へアップロード中"
 
-# en-hash: 78d639ec11279b706fba724f50d43db9
-msgid "Use Nimbus as Home Screen"
-msgstr "Nimbus をホーム画面として使用"
-
-# en-hash: 0de3c58a3386f3b56dbe4e140d4ba3d1
-msgid "Use as Home Screen"
-msgstr "ホーム画面として使用"
+# en-hash: 41ec51f9bc2256f1b585ba6712ad2df0
+msgid "Use Nimbus as Library"
+msgstr "Nimbus をライブラリとして使用"
 
 # en-hash: f6039d44b29456b20f8f373155ae4973
 msgid "Username"
@@ -885,112 +1061,11 @@ msgstr "· 同期エラー"
 msgid "· Syncing..."
 msgstr "· 同期中..."
 
+# en-hash: 1932ce597d46b0d558099090126e46fc
+msgid "· Uploading (%d/%d)..."
+msgstr "· アップロード中 (%d/%d)..."
+
 # en-hash: 57adda7dedc1a318f3bb06fd005867dc
 msgid "‹ Prev"
 msgstr "‹ 前へ"
 
-
-msgid "Delete from Cloud"
-msgstr "クラウドから削除"
-
-msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
-msgstr "この本を Nimbus Cloud から削除しますか？端末上のローカルコピーは残ります。"
-
-msgid "Delete this book from Nimbus Cloud? This cannot be undone."
-msgstr "この本を Nimbus Cloud から削除しますか？この操作は取り消せません。"
-
-msgid "Deleted from Nimbus Cloud."
-msgstr "Nimbus Cloud から削除しました。"
-
-msgid "Failed to delete from cloud: "
-msgstr "クラウドからの削除に失敗しました: "
-
-msgid "Updating cloud catalog..."
-msgstr "クラウドカタログを更新中..."
-
-msgid "Delete"
-msgstr "削除"
-
-msgid "%s (Device Backup and Restore)"
-msgstr "%s（端末のバックアップと復元）"
-
-msgid "Device Backup and Restore"
-msgstr "端末のバックアップと復元"
-
-msgid "Disconnect"
-msgstr "切断"
-
-msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
-msgstr "%s を Nimbus から切断しますか？「端末のバックアップと復元」の設定、ローカルの本、クラウドファイルには影響しません。"
-
-msgid "Disconnect Account"
-msgstr "アカウントを切断"
-
-msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
-msgstr "%s から切断しますか？保存された認証情報は Nimbus から削除されます。ローカルの本とクラウドファイルはそのまま残ります。"
-
-msgid "Edit Server Settings"
-msgstr "サーバー設定を編集"
-
-msgid "Background"
-msgstr "バックグラウンド"
-
-msgid "Uploading %d book(s) in background..."
-msgstr "%d 冊をバックグラウンドでアップロード中..."
-
-msgid "· Uploading (%d/%d)..."
-msgstr "· アップロード中 (%d/%d)..."
-
-msgid "File Browser"
-msgstr "ファイルブラウザ"
-
-msgid "Library"
-msgstr "ライブラリ"
-
-msgid "Nimbus Library"
-msgstr "Nimbus ライブラリ"
-
-msgid "Show Nimbus library instead of KOReader's file list"
-msgstr "KOReader のファイル一覧の代わりに Nimbus ライブラリを表示する"
-
-msgid "Use Nimbus as Library"
-msgstr "Nimbus をライブラリとして使用"
-
-msgid "%d %s in this folder"
-msgstr "このフォルダ内に %d %s"
-
-msgid "+ New"
-msgstr "+ 新規"
-
-msgid "Create"
-msgstr "作成"
-
-msgid "Create Folder"
-msgstr "フォルダを作成"
-
-msgid "Created '%s'."
-msgstr "「%s」を作成しました。"
-
-msgid "Failed to create folder."
-msgstr "フォルダの作成に失敗しました。"
-
-msgid "Folder name:"
-msgstr "フォルダ名:"
-
-msgid "No subfolders"
-msgstr "サブフォルダはありません"
-
-msgid "Page %d of %d"
-msgstr "%d / %d ページ"
-
-msgid "Parent Folder"
-msgstr "親フォルダ"
-
-msgid "Select Book Folder"
-msgstr "本のフォルダを選択"
-
-msgid "Select Folder"
-msgstr "フォルダを選択"
-
-msgid "%s (Backup)"
-msgstr "%s（バックアップ）"

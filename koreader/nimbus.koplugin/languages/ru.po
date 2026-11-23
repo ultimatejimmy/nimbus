@@ -5,6 +5,26 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+# en-hash: c8f78bc28da257b693c5db4485b6ebae
+msgid "%d %s in this folder"
+msgstr "%d %s в этой папке"
+
+# en-hash: 695d8c59f85e24fcd8dec0f2d2ed9a1c
+msgid "%d Selected"
+msgstr "Выбрано: %d"
+
+# en-hash: 2c466ae7a056d4f4726b1c146b45a046
+msgid "%d selected"
+msgstr "выбрано: %d"
+
+# en-hash: 2c19d5fed88c659e85c74a2086723398
+msgid "%s (Backup)"
+msgstr "%s (Резервная копия)"
+
+# en-hash: b870d0f61c3b5b78933fba4cde08fc67
+msgid "%s (Device Backup and Restore)"
+msgstr "%s (Резервное копирование и восстановление устройства)"
+
 # en-hash: eb15c8258912980aa6eebaf6c597a474
 msgid "%s Account"
 msgstr "Учетная запись %s"
@@ -21,6 +41,10 @@ msgstr "Ошибка авторизации %s: %s"
 msgid "%s authorization was denied."
 msgstr "В авторизации %s было отказано."
 
+# en-hash: 4bc56877a98a3b5f59735f579cf735a6
+msgid "+ New"
+msgstr "+ Создать"
+
 # en-hash: a96af5ecb3f39286a79ee3b23e270a8a
 msgid "0 of %d books"
 msgstr "0 из %d книг"
@@ -28,6 +52,14 @@ msgstr "0 из %d книг"
 # en-hash: 08bd40c7543007ad06e4fce31618f6ec
 msgid "Account"
 msgstr "Учетная запись"
+
+# en-hash: 42ff290cc493367f85539a0905e6b872
+msgid "Actions…"
+msgstr "Действия…"
+
+# en-hash: b1c94ca2fbc3e78fc30069c8d0f01680
+msgid "All"
+msgstr "Все"
 
 # en-hash: 71aeed4dbcaef45a2f508e7949c01ba6
 msgid "All Books"
@@ -73,9 +105,9 @@ msgstr "Автоматически загружать новые книги из
 msgid "Back"
 msgstr "Назад"
 
-# en-hash: eb246567736a16525a3d8c167b2dd22e
-msgid "Backup & Restore Auth"
-msgstr "Авторизация резервного копирования"
+# en-hash: a9ded1e5ce5d75814730bb4caaf49419
+msgid "Background"
+msgstr "В фоне"
 
 # en-hash: 6ce976e8f061b2b5cfe4d0c50c3405dd
 msgid "Binary"
@@ -201,6 +233,26 @@ msgstr "Время ожидания подключения истекло"
 msgid "Contacting %s..."
 msgstr "Связь с %s..."
 
+# en-hash: d1de4b573af164a165cef4710d30fa8f
+msgid "Copied %d book(s) to clipboard."
+msgstr "Скопировано книг в буфер обмена: %d."
+
+# en-hash: 8914d68b7fb989a991317d0ac8b87201
+msgid "Copied book to clipboard."
+msgstr "Книга скопирована в буфер обмена."
+
+# en-hash: 686e697538050e4664636337cc3b834f
+msgid "Create"
+msgstr "Создать"
+
+# en-hash: f513267c012197b4764e6dd4e68ee420
+msgid "Create Folder"
+msgstr "Создать папку"
+
+# en-hash: 175ea39143192a17339a060740ba6d0d
+msgid "Created '%s'."
+msgstr "Создано «%s»."
+
 # en-hash: 31a3e8770e4a14d334c91ebf73ce5b78
 msgid "CrossPoint / Sink / KOSync"
 msgstr "CrossPoint / Sink / KOSync"
@@ -213,9 +265,65 @@ msgstr "Текущая книга"
 msgid "Currently Reading"
 msgstr "Читаю сейчас"
 
+# en-hash: 5a569485830cef23a74dcd8f07926f30
+msgid "Cut %d book(s) to clipboard."
+msgstr "Вырезано книг в буфер обмена: %d."
+
+# en-hash: 8e3b841315923888ef822558296658a9
+msgid "Cut book to clipboard."
+msgstr "Книга вырезана в буфер обмена."
+
+# en-hash: f2a6c498fb90ee345d997f888fce3b18
+msgid "Delete"
+msgstr "Удалить"
+
+# en-hash: 48e8475d31cf2f4379c1e07ecb5a916c
+msgid "Delete %d local book file(s) from this device? Cloud copies and progress remain safe."
+msgstr "Удалить %d локальных файл(ов) книг с этого устройства? Копии в облаке и прогресс останутся в безопасности."
+
+# en-hash: 8238561daa0942029aa60d8161b2f8cf
+msgid "Delete %d selected book(s) from Nimbus Cloud?"
+msgstr "Удалить %d выбранных книг(и) из Nimbus Cloud?"
+
+# en-hash: 3521e5ca897547752690e1c7627d8e68
+msgid "Delete (%d)"
+msgstr "Удалить (%d)"
+
+# en-hash: aeeef3520701d05e23bd70bbeff8431e
+msgid "Delete Cloud (%d)"
+msgstr "Удалить из облака (%d)"
+
+# en-hash: 5e603e0ae14ae58e949890e0196076a1
+msgid "Delete Local Books"
+msgstr "Удалить локальные книги"
+
+# en-hash: 39f8bfbc450dad78e48627bbeab8db01
+msgid "Delete from Cloud"
+msgstr "Удалить из облака"
+
 # en-hash: 067c9daf5725fdabb83883ab066a528c
 msgid "Delete the local file from this device? Your book, progress, and highlights remain safe in Nimbus Cloud."
 msgstr "Удалить локальный файл с этого устройства? Ваша книга, прогресс и заметки останутся в безопасности в облаке Nimbus."
+
+# en-hash: 3a464fc3ccd09b54db55d7b1835d653c
+msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
+msgstr "Удалить эту книгу из Nimbus Cloud? Локальная копия на устройстве сохранится."
+
+# en-hash: 36bf7ee8a35b9140dbae7768f0db2021
+msgid "Delete this book from Nimbus Cloud? This cannot be undone."
+msgstr "Удалить эту книгу из Nimbus Cloud? Это действие нельзя отменить."
+
+# en-hash: ef4efc13d76be429b5d2cf5f9fb797fa
+msgid "Deleted %d book(s) from Cloud."
+msgstr "Удалено книг из облака: %d."
+
+# en-hash: 30c5f73e3ac793aa5dfd13364475509e
+msgid "Deleted %d file(s)."
+msgstr "Удалено файлов: %d."
+
+# en-hash: 2259651a5b4431c1119029616a03a741
+msgid "Deleted from Nimbus Cloud."
+msgstr "Удалено из Nimbus Cloud."
 
 # en-hash: c98b66bb93fd0c039e10bc25614414f8
 msgid "Detected Sync Plugins"
@@ -225,6 +333,10 @@ msgstr "Обнаруженные плагины синхронизации"
 msgid "Device & About"
 msgstr "Устройство и о программе"
 
+# en-hash: 104eee19fdf357615cfaa253885736c5
+msgid "Device Backup and Restore"
+msgstr "Резервное копирование и восстановление устройства"
+
 # en-hash: 2e8f11ede1199f48c85453ec3cd462ec
 msgid "Device ID"
 msgstr "Идентификатор устройства"
@@ -233,13 +345,21 @@ msgstr "Идентификатор устройства"
 msgid "Device: %s"
 msgstr "Устройство: %s"
 
-# en-hash: 09ab107441789ea7842f5da3b210359f
-msgid "Directory path scanned for local books:"
-msgstr "Путь к каталогу для поиска локальных книг:"
+# en-hash: 42ae25231906c83927831e0ef7c317ac
+msgid "Disconnect"
+msgstr "Отключить"
 
-# en-hash: 8197c58737018556993c2cc6d04615c5
-msgid "Disconnect/Log Out"
-msgstr "Отключиться / Выйти"
+# en-hash: b709067b60f71eaebcff374f38749fcc
+msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
+msgstr "Отключить %s от Nimbus? Настройки резервного копирования и восстановления устройства, локальные книги и файлы в облаке не пострадают."
+
+# en-hash: fd456a63260bc8f43e73094f0d826863
+msgid "Disconnect Account"
+msgstr "Отключить аккаунт"
+
+# en-hash: 085c04284f55557544a0fb03abb889ab
+msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
+msgstr "Отключиться от %s? Сохранённые учётные данные будут удалены из Nimbus. Локальные книги и файлы в облаке останутся нетронутыми."
 
 # en-hash: b29490bf0f9a9dd9f84439ee1b9e5c74
 msgid "Disconnected from %s."
@@ -281,6 +401,10 @@ msgstr "Загрузка книги"
 msgid "Dropbox"
 msgstr "Dropbox"
 
+# en-hash: bb649aceb3fd6ba2c79b0aa341af0bb2
+msgid "Edit Server Settings"
+msgstr "Изменить настройки сервера"
+
 # en-hash: f755f939257488611a2e2ce699f133cf
 msgid "Enable CrossPoint/KOSync Bridge"
 msgstr "Включить мост CrossPoint/KOSync"
@@ -289,9 +413,21 @@ msgstr "Включить мост CrossPoint/KOSync"
 msgid "Enter search term..."
 msgstr "Введите поисковый запрос..."
 
+# en-hash: 96310b2cf48706c28110688622ac2cf2
+msgid "Failed to create folder."
+msgstr "Не удалось создать папку."
+
+# en-hash: 9af5b79043bac7f965fe05f427b2e757
+msgid "Failed to delete from cloud: "
+msgstr "Не удалось удалить из облака: "
+
 # en-hash: ad8802154faed7004677d5b3e630cbef
 msgid "Failed to start %s authorization:\n%s"
 msgstr "Не удалось запустить авторизацию %s:\n%s"
+
+# en-hash: b8c128190e09e6c57a1df2180e8c73fb
+msgid "File Browser"
+msgstr "Файловый менеджер"
 
 # en-hash: 1351017ac6423911223bc19a8cb7c653
 msgid "Filename"
@@ -305,10 +441,6 @@ msgstr "Фильтровать книги"
 msgid "Filter books by title, author, or series:"
 msgstr "Фильтрация книг по названию, автору или серии:"
 
-# en-hash: f1f52329b8eac84be605b93a5f1bee4e
-msgid "Finalizing %d of %d..."
-msgstr "Завершение %d из %d..."
-
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
 msgstr "Завершение каталога…"
@@ -316,6 +448,10 @@ msgstr "Завершение каталога…"
 # en-hash: 8f3d10eb21bd36347c258679eba9e92b
 msgid "Finished"
 msgstr "Готово"
+
+# en-hash: 8413c0cea3d5b2e00cb59bc7a6aa0c19
+msgid "Folder name:"
+msgstr "Имя папки:"
 
 # en-hash: 15e30d22eae32fdb46411b88d59480b4
 msgid "Folder · %d %s"
@@ -329,21 +465,9 @@ msgstr "Формат: %s"
 msgid "Google Drive"
 msgstr "Google Drive"
 
-# en-hash: ec63674aca1c27c134a3e564563502be
-msgid "Home Screen"
-msgstr "Главный экран"
-
-# en-hash: 72d6d7a1885885bb55a565fd1070581a
-msgid "Import"
-msgstr "Импорт"
-
 # en-hash: 0604c1173fb3b6cccc5527085d251515
 msgid "Imported %s settings!"
 msgstr "Настройки %s импортированы!"
-
-# en-hash: 8f9ce7afe914fca6e9008185b0f3db93
-msgid "Imported %s!"
-msgstr "Импортировано: %s!"
 
 # en-hash: 0831af0fc1b12bdee77b0e186de35754
 msgid "In Cloud"
@@ -385,9 +509,9 @@ msgstr "KOSync подключен (%s)"
 msgid "KOSync failed: %s"
 msgstr "Ошибка KOSync: %s"
 
-# en-hash: 0a248a86c841018a623755f2e08eb0d8
-msgid "Library & Home Screen"
-msgstr "Библиотека и главный экран"
+# en-hash: 4d70254b3a8e2bc38b6147fa6ee813be
+msgid "Library"
+msgstr "Библиотека"
 
 # en-hash: 962720e9fdf82d2d1592c5158351f2b2
 msgid "Library Menu"
@@ -400,10 +524,6 @@ msgstr "Загрузка каталога библиотеки..."
 # en-hash: 509820290d57f333403f490dde7316f4
 msgid "Local"
 msgstr "Локально"
-
-# en-hash: 8c7b78915d6e1d411445357525846f3e
-msgid "Local Book Folder"
-msgstr "Папка с локальными книгами"
 
 # en-hash: d90baa18ccfcd397dbe0d0b01310f4bb
 msgid "Local Only"
@@ -445,6 +565,10 @@ msgstr "Nimbus"
 msgid "Nimbus Cloud"
 msgstr "Nimbus Cloud"
 
+# en-hash: 37a3785334a9a2b45c00556b1dd9e82e
+msgid "Nimbus Library"
+msgstr "Библиотека Nimbus"
+
 # en-hash: be28ae769de6bdf2bbc2a73b39a96656
 msgid "Nimbus Menu"
 msgstr "Меню Nimbus"
@@ -481,6 +605,10 @@ msgstr "В облаке пока нет книг.\n\nПереключитесь 
 msgid "No books match your search or filter.\n\nTap ✕ in the search bar or change the filter above."
 msgstr "Нет книг, соответствующих вашему поиску или фильтру.\n\nНажмите ✕ в строке поиска или измените фильтр выше."
 
+# en-hash: e26ac5efceda24b4dfbed6477724bc3f
+msgid "No books selected."
+msgstr "Книги не выбраны."
+
 # en-hash: 72b4ff9b0918412a6c30f00a80d02fc8
 msgid "No cloud provider configured."
 msgstr "Облачный провайдер не настроен."
@@ -492,6 +620,10 @@ msgstr "Для этого провайдера не найдено сохран�
 # en-hash: 1308b53360a6ef623fca1d344d1d6a19
 msgid "No saved cloud accounts found in backup.koplugin."
 msgstr "В backup.koplugin не найдено сохраненных облачных аккаунтов."
+
+# en-hash: f4f988243b563534fedc321d62514ddf
+msgid "No subfolders"
+msgstr "Нет подпапок"
 
 # en-hash: 6adf97f83acf6453d4a6a4b1070f3754
 msgid "None"
@@ -521,6 +653,10 @@ msgstr "Выкл"
 msgid "Offload"
 msgstr "Выгрузить"
 
+# en-hash: bb31cd7f602d48e550e9cedca275631d
+msgid "Offload (%d)"
+msgstr "Выгрузить (%d)"
+
 # en-hash: 0a5f441ddba90508f3532c78bd23e849
 msgid "Offload Local"
 msgstr "Выгрузить локально"
@@ -528,6 +664,14 @@ msgstr "Выгрузить локально"
 # en-hash: 3bdd4dbebdcd66c873ad9df8f4df7aff
 msgid "Offload Local Book"
 msgstr "Выгрузить локальную книгу"
+
+# en-hash: ebc82c886e48de3bab3443bb5b92f63f
+msgid "Offload Local Books"
+msgstr "Выгрузить локальные книги"
+
+# en-hash: 8df0542c78f062f0a08ca45767c2710f
+msgid "Offloaded %d book(s)."
+msgstr "Выгружено книг: %d."
 
 # en-hash: 55095656af8c3f35dd2aeb6169a3bae3
 msgid "Offloaded from device."
@@ -557,6 +701,14 @@ msgstr "Открыть файловый менеджер"
 msgid "Operation in Progress"
 msgstr "Операция выполняется"
 
+# en-hash: b8065ad2628f1f82f3167af0947b3e43
+msgid "Page %d of %d"
+msgstr "Страница %d из %d"
+
+# en-hash: 0293301ed6a54b7e4503e74bba17bf11
+msgid "Parent Folder"
+msgstr "Родительская папка"
+
 # en-hash: dc647eb65e6711e155375218212b3964
 msgid "Password"
 msgstr "Пароль"
@@ -564,6 +716,10 @@ msgstr "Пароль"
 # en-hash: 5ba75bed6252ebe2fc1cd59ee5cf6558
 msgid "Password or App Token"
 msgstr "Пароль или токен приложения"
+
+# en-hash: 8e99511c4316abee6e77b51814a3ec6f
+msgid "Permanently delete %d selected file(s) from this device?"
+msgstr "Безвозвратно удалить %d выбранных файл(ов) с этого устройства?"
 
 # en-hash: 4df2abeba5ba0d9428ab6154bb47dc1a
 msgid "Please connect a cloud storage provider in Settings first."
@@ -588,6 +744,10 @@ msgstr "Прогресс: %s"
 # en-hash: ffb5a681cd47e8a182164bed1e0465a2
 msgid "Pull/push progress automatically when opening or closing a book"
 msgstr "Автоматически синхронизировать прогресс при открытии или закрытии книги"
+
+# en-hash: 7a1a5f3e79fdc91edf2f5ead9d66abb4
+msgid "Read"
+msgstr "Читать"
 
 # en-hash: 026e23401eb9b3c0385409fe50ee5767
 msgid "Reading Sync"
@@ -637,6 +797,10 @@ msgstr "Поиск по библиотеке..."
 msgid "Select All"
 msgstr "Выбрать все"
 
+# en-hash: a7e68c4be7b60fa260cef42c08a259f4
+msgid "Select Book Folder"
+msgstr "Выберите папку с книгами"
+
 # en-hash: 509727ceedc42df08fd636c4f099854b
 msgid "Select Books to Upload"
 msgstr "Выбрать книги для загрузки"
@@ -648,6 +812,10 @@ msgstr "Выбрать книги для загрузки... (на устрой�
 # en-hash: d2ff04fff76be199705af758f3bacf5c
 msgid "Select Cloud Provider"
 msgstr "Выберите облачного провайдера"
+
+# en-hash: deffb03a57b0deaf912f04da4575848f
+msgid "Select Folder"
+msgstr "Выбрать папку"
 
 # en-hash: f5564925140da7c0fd572d1459befd8d
 msgid "Series: %s"
@@ -661,9 +829,9 @@ msgstr "URL сервера"
 msgid "Set"
 msgstr "Задать"
 
-# en-hash: 0990277c2b8fc4e26e601c0f9a98dbee
-msgid "Show your library at startup instead of KOReader's file list"
-msgstr "Показывать библиотеку при запуске вместо списка файлов KOReader"
+# en-hash: 3d3884120ae09d9e512f6e1b41a5bb46
+msgid "Show Nimbus library instead of KOReader's file list"
+msgstr "Показывать библиотеку Nimbus вместо списка файлов KOReader"
 
 # en-hash: 52e1b8c7bccf297b773cfb345260eb6c
 msgid "Sink / KOSync Server URL"
@@ -765,6 +933,14 @@ msgstr "Не синхронизировано"
 msgid "Untitled"
 msgstr "Без названия"
 
+# en-hash: 0091e9be2ca53057daa3cdecbdda97bc
+msgid "Updating cloud catalog..."
+msgstr "Обновление облачного каталога..."
+
+# en-hash: 62ddb525b756a5480c71a83a87840578
+msgid "Updating cloud covers..."
+msgstr "Обновление обложек в облаке..."
+
 # en-hash: 91412465ea9169dfd901dd5e7c96dd99
 msgid "Upload"
 msgstr "Загрузить"
@@ -813,6 +989,10 @@ msgstr "Загружено книг: %d из %d в Nimbus Cloud!"
 msgid "Uploaded '%s' to Nimbus Cloud!"
 msgstr "Книга '%s' загружена в Nimbus Cloud!"
 
+# en-hash: b6e882222a68bea11303c8dfd4a04969
+msgid "Uploading %d book(s) in background..."
+msgstr "Загрузка %d книг(и) в фоне..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "Загрузка %d из %d..."
@@ -821,13 +1001,9 @@ msgstr "Загрузка %d из %d..."
 msgid "Uploading to Nimbus Cloud"
 msgstr "Загрузка в Nimbus Cloud"
 
-# en-hash: 78d639ec11279b706fba724f50d43db9
-msgid "Use Nimbus as Home Screen"
-msgstr "Использовать Nimbus как главный экран"
-
-# en-hash: 0de3c58a3386f3b56dbe4e140d4ba3d1
-msgid "Use as Home Screen"
-msgstr "Использовать как главный экран"
+# en-hash: 41ec51f9bc2256f1b585ba6712ad2df0
+msgid "Use Nimbus as Library"
+msgstr "Использовать Nimbus как библиотеку"
 
 # en-hash: f6039d44b29456b20f8f373155ae4973
 msgid "Username"
@@ -885,112 +1061,11 @@ msgstr "· Ошибка синхронизации"
 msgid "· Syncing..."
 msgstr "· Синхронизация..."
 
+# en-hash: 1932ce597d46b0d558099090126e46fc
+msgid "· Uploading (%d/%d)..."
+msgstr "· Загрузка (%d/%d)..."
+
 # en-hash: 57adda7dedc1a318f3bb06fd005867dc
 msgid "‹ Prev"
 msgstr "‹ Назад"
 
-
-msgid "Delete from Cloud"
-msgstr "Удалить из облака"
-
-msgid "Delete this book from Nimbus Cloud? Any local copy on your device will stay."
-msgstr "Удалить эту книгу из Nimbus Cloud? Локальная копия на устройстве сохранится."
-
-msgid "Delete this book from Nimbus Cloud? This cannot be undone."
-msgstr "Удалить эту книгу из Nimbus Cloud? Это действие нельзя отменить."
-
-msgid "Deleted from Nimbus Cloud."
-msgstr "Удалено из Nimbus Cloud."
-
-msgid "Failed to delete from cloud: "
-msgstr "Не удалось удалить из облака: "
-
-msgid "Updating cloud catalog..."
-msgstr "Обновление облачного каталога..."
-
-msgid "Delete"
-msgstr "Удалить"
-
-msgid "%s (Device Backup and Restore)"
-msgstr "%s (Резервное копирование и восстановление устройства)"
-
-msgid "Device Backup and Restore"
-msgstr "Резервное копирование и восстановление устройства"
-
-msgid "Disconnect"
-msgstr "Отключить"
-
-msgid "Disconnect %s from Nimbus? Your Device Backup and Restore setup, local books, and cloud files will not be affected."
-msgstr "Отключить %s от Nimbus? Настройки резервного копирования и восстановления устройства, локальные книги и файлы в облаке не пострадают."
-
-msgid "Disconnect Account"
-msgstr "Отключить аккаунт"
-
-msgid "Disconnect from %s? Saved credentials will be removed from Nimbus. Your local books and cloud files will remain untouched."
-msgstr "Отключиться от %s? Сохранённые учётные данные будут удалены из Nimbus. Локальные книги и файлы в облаке останутся нетронутыми."
-
-msgid "Edit Server Settings"
-msgstr "Изменить настройки сервера"
-
-msgid "Background"
-msgstr "В фоне"
-
-msgid "Uploading %d book(s) in background..."
-msgstr "Загрузка %d книг(и) в фоне..."
-
-msgid "· Uploading (%d/%d)..."
-msgstr "· Загрузка (%d/%d)..."
-
-msgid "File Browser"
-msgstr "Файловый менеджер"
-
-msgid "Library"
-msgstr "Библиотека"
-
-msgid "Nimbus Library"
-msgstr "Библиотека Nimbus"
-
-msgid "Show Nimbus library instead of KOReader's file list"
-msgstr "Показывать библиотеку Nimbus вместо списка файлов KOReader"
-
-msgid "Use Nimbus as Library"
-msgstr "Использовать Nimbus как библиотеку"
-
-msgid "%d %s in this folder"
-msgstr "%d %s в этой папке"
-
-msgid "+ New"
-msgstr "+ Создать"
-
-msgid "Create"
-msgstr "Создать"
-
-msgid "Create Folder"
-msgstr "Создать папку"
-
-msgid "Created '%s'."
-msgstr "Создано «%s»."
-
-msgid "Failed to create folder."
-msgstr "Не удалось создать папку."
-
-msgid "Folder name:"
-msgstr "Имя папки:"
-
-msgid "No subfolders"
-msgstr "Нет подпапок"
-
-msgid "Page %d of %d"
-msgstr "Страница %d из %d"
-
-msgid "Parent Folder"
-msgstr "Родительская папка"
-
-msgid "Select Book Folder"
-msgstr "Выберите папку с книгами"
-
-msgid "Select Folder"
-msgstr "Выбрать папку"
-
-msgid "%s (Backup)"
-msgstr "%s (Резервная копия)"

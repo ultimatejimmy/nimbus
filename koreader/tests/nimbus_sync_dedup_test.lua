@@ -99,4 +99,80 @@ describe("nimbus_sync deduplication", function()
         assert.is_nil(catalog.books.b7.deleted)
         assert.is_true(catalog.books.b8.deleted)
     end)
+
+    it("matches Title+Author vs raw 'Title - Author' filename, restores clean deleted copy, and repairs metadata", function()
+        local catalog = {
+            books = {
+                ah_num = {
+                    id = "ah_num",
+                    title = "Alexander Hamilton",
+                    authors = { "Ron Chernow" },
+                    filename = "Alexander Hamilton - Ron Chernow (169).epub",
+                    folder = "Books/Ron Chernow - Alexander Hamilton [ah_num]",
+                    has_cover = true,
+                    hashes = { partial_md5 = "p1", sha256 = "s1" },
+                    added_at = "2026-11-21T08:12:00Z",
+                },
+                ah_clean = {
+                    id = "ah_clean",
+                    title = "Alexander Hamilton - Ron Chernow",
+                    authors = {},
+                    filename = "Alexander Hamilton - Ron Chernow.epub",
+                    folder = "Books/Unknown - Alexander Hamilton - Ron Chernow [ah_clean]",
+                    has_cover = true,
+                    hashes = { partial_md5 = "p2", sha256 = "s2" },
+                    added_at = "2026-11-21T13:12:00Z",
+                },
+                fr_num = {
+                    id = "fr_num",
+                    title = "Frankenstein - Mary Shelley (145)",
+                    authors = {},
+                    filename = "Frankenstein - Mary Shelley (145).epub",
+                    folder = "Books/Unknown - Frankenstein (145) [fr_num]",
+                    has_cover = true,
+                    hashes = { partial_md5 = "fp1", sha256 = "fs1" },
+                    added_at = "2026-11-21T08:12:00Z",
+                },
+                fr_clean = {
+                    id = "fr_clean",
+                    title = "Frankenstein - Mary Shelley",
+                    authors = {},
+                    filename = "Frankenstein - Mary Shelley.epub",
+                    folder = "Books/Unknown - Frankenstein [fr_clean]",
+                    has_cover = true,
+                    deleted = true,
+                    hashes = { partial_md5 = "fp2", sha256 = "fs2" },
+                    added_at = "2026-11-21T13:12:00Z",
+                },
+                cc_raw = {
+                    id = "cc_raw",
+                    title = "1 - Cuckoo's Calling, The - Robert Galbraith",
+                    authors = {},
+                    filename = "1 - Cuckoo's Calling, The - Robert Galbraith.epub",
+                    folder = "Books/Unknown - Cuckoo [cc_raw]",
+                    has_cover = true,
+                    hashes = { partial_md5 = "cc1", sha256 = "ccs1" },
+                    added_at = "2026-11-21T08:00:00Z",
+                },
+            },
+        }
+
+        local removed, dup_folders, repaired = Sync.deduplicateCatalog(catalog)
+        assert.are.equal(2, removed)
+        assert.are.equal(2, #dup_folders)
+        assert.is_true(repaired > 0)
+        assert.is_true(catalog.books.ah_num.deleted)
+        assert.is_nil(catalog.books.ah_clean.deleted)
+        assert.are.equal("Alexander Hamilton", catalog.books.ah_clean.title)
+        assert.are.equal("Ron Chernow", catalog.books.ah_clean.authors[1])
+
+        assert.is_true(catalog.books.fr_num.deleted)
+        assert.is_false(catalog.books.fr_clean.deleted)
+        assert.are.equal("Frankenstein", catalog.books.fr_clean.title)
+        assert.are.equal("Mary Shelley", catalog.books.fr_clean.authors[1])
+
+        assert.are.equal("The Cuckoo's Calling", catalog.books.cc_raw.title)
+        assert.are.equal("Robert Galbraith", catalog.books.cc_raw.authors[1])
+        assert.are.equal(1, catalog.books.cc_raw.series_index)
+    end)
 end)

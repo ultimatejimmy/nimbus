@@ -43,6 +43,7 @@ local UISettings = require("nimbus_ui_settings")
 local UILibrary = {}
 Widgets.applyMixin(UILibrary, require("nimbus_ui_book_card"))
 Widgets.applyMixin(UILibrary, require("nimbus_ui_upload"))
+Widgets.applyMixin(UILibrary, require("nimbus_ui_select"))
 
 local sc = theme.sc
 local active_shelf_overlay = nil
@@ -76,23 +77,20 @@ local function openKOReaderTopMenu(embedded_fm)
     return false
 end
 
-local function getLocalCloudBookPath(entry, device_books)
-    for _, b in ipairs(device_books or {}) do
-        if b.cloud_id == entry.id and b.local_path then
-            return b.local_path, b.all_local_paths
-        end
+local function getLocalCloudBookPath(entry, device_by_cloud_id, links, download_dir)
+    local b = device_by_cloud_id and device_by_cloud_id[entry.id]
+    if b and b.local_path then
+        return b.local_path, b.all_local_paths, b
     end
-    local links = Settings.loadBookLinks()
-    local linked = links.by_id[entry.id]
+    local linked = links and links.by_id and links.by_id[entry.id]
     if linked and fileExists(linked) then
-        return linked, { linked }
+        return linked, { linked }, nil
     end
-    local cfg = Settings.load()
-    local candidate = cfg.download_dir .. "/" .. (entry.filename or (entry.id .. "." .. (entry.format or "epub")))
-    if fileExists(candidate) then
-        return candidate, { candidate }
+    local candidate = (download_dir or "") .. "/" .. (entry.filename or (entry.id .. "." .. (entry.format or "epub")))
+    if candidate ~= "/" and fileExists(candidate) then
+        return candidate, { candidate }, nil
     end
-    return nil, nil
+    return nil, nil, nil
 end
 
 local function showSearchDialog(search_query, on_apply_query)
@@ -164,13 +162,42 @@ function UILibrary.buildView(on_open_book, opts)
     local sw, sh = theme.resolveHomeViewport(opts, is_home)
 
     local current_page = 1
+    local total_pages = 1
     local current_folder = nil
     local current_cloud_dir = ""
+    local shelf_cache = {
+        folder_page_stack = { device = {}, cloud = {} },
+        cloud_books = {},
+        folder_info = nil,
+        display_books = {},
+        data_dirty = true,
+    }
     local search_query = ""
+    local select_state = { active = false, map = {} }
     local catalog_data, merged_progress, catalog_saved_at = Sync.loadCachedCatalog()
     if Sync.deduplicateCatalog and Sync.deduplicateCatalog(catalog_data) > 0 then
         Sync.saveCachedCatalog(catalog_data, merged_progress)
     end
+    function shelf_cache.mergeLocalProgressIntoMerged()
+        local local_st = Sync.loadLocalState()
+        if type(local_st) == "table" and type(local_st.progress) == "table" then
+            merged_progress = merged_progress or {}
+            for cid, rec in pairs(local_st.progress) do
+                if type(rec) == "table" then
+                    local cur = merged_progress[cid]
+                    local r_ts = tonumber(rec.updated_at) or 0
+                    local c_ts = cur and (tonumber(cur.updated_at) or 0) or 0
+                    local r_pct = tonumber(rec.percent) or 0
+                    local c_pct = cur and (tonumber(cur.percent) or 0) or 0
+                    if not cur or r_ts > c_ts or (r_ts == c_ts and r_pct > c_pct) then
+                        merged_progress[cid] = rec
+                    end
+                end
+            end
+        end
+    end
+    shelf_cache.mergeLocalProgressIntoMerged()
+
     local device_books = {}
     local sync_error = nil
     local bg_syncing = false
@@ -198,8 +225,7 @@ function UILibrary.buildView(on_open_book, opts)
         local target = embedded_fm or active_shelf_overlay
         if target then
             UIManager:setDirty(target, "ui")
-        end
-        if isAlive() then
+        elseif isAlive() then
             UIManager:setDirty("all", "ui")
         end
     end
@@ -215,6 +241,7 @@ function UILibrary.buildView(on_open_book, opts)
                 b.is_in_cloud = false
             end
         end
+        shelf_cache.data_dirty = true
     end
 
     local renderShelf
@@ -227,6 +254,7 @@ function UILibrary.buildView(on_open_book, opts)
             bg_syncing = false
             if ok then
                 catalog_data, merged_progress = Sync.loadCachedCatalog()
+                shelf_cache.mergeLocalProgressIntoMerged()
                 sync_error = nil
                 local dl_n = tonumber(info) or 0
                 refreshLocalBooks(dl_n > 0)
@@ -295,14 +323,21 @@ function UILibrary.buildView(on_open_book, opts)
             end
 
             if not prog_dlg:isCanceled() then
-                prog_dlg:setProgress(92, _("Scanning local books..."))
+                prog_dlg:setProgress(88, _("Scanning local books..."))
                 refreshLocalBooks(true)
-                if not sync_error and Sync.backfillRelativeDirs(catalog_data, device_books) then
-                    Sync.saveCatalog(catalog_data, function() end)
+                if not sync_error then
+                    merged_progress = Sync.collectAndUploadLocalProgress(catalog_data, device_books, merged_progress)
+                    if Sync.reuploadFixedCovers and Covers.hasPendingCloudCoverReupload and Covers.hasPendingCloudCoverReupload() then
+                        prog_dlg:setProgress(93, _("Updating cloud covers..."))
+                        pcall(Sync.reuploadFixedCovers, catalog_data, device_books)
+                    end
+                    if Sync.backfillRelativeDirs(catalog_data, device_books) then
+                        Sync.saveCatalog(catalog_data, function() end)
+                    end
                     Sync.saveCachedCatalog(catalog_data, merged_progress)
-                end
-                if not sync_error and Sync.cleanupCloudBookFolders then
-                    pcall(Sync.cleanupCloudBookFolders, catalog_data)
+                    if Sync.cleanupCloudBookFolders then
+                        pcall(Sync.cleanupCloudBookFolders, catalog_data)
+                    end
                 end
                 prog_dlg:setProgress(100, _("Sync complete"))
             end
@@ -314,58 +349,61 @@ function UILibrary.buildView(on_open_book, opts)
         end)
     end
 
-    renderShelf = function()
-        if not isAlive() then return end
-        render_gen = render_gen + 1
-        local my_gen = render_gen
-        Covers.clearFetchQueue()
-        sw, sh = theme.resolveHomeViewport(opts, is_home)
-        if host_container.dimen then
-            host_container.dimen.w = sw
-            host_container.dimen.h = sh
-        end
+    function shelf_cache.rebuildDisplayData()
         local cfg = Settings.load()
         local active_tab = cfg.library_active_tab or "device"
-        local view_mode = cfg.library_view_mode or "cover"
         local current_filter = cfg.library_filter or "all"
-        local configured = Cloud.isConfigured()
         local q_lower = tostring(search_query or ""):lower()
+        local links = Settings.loadBookLinks()
+        local download_dir = cfg.download_dir
 
-        -- Build Cloud list
-        local cloud_books = {}
+        local device_by_cloud_id = {}
+        for _, b in ipairs(device_books or {}) do
+            if b.cloud_id and b.local_path and not device_by_cloud_id[b.cloud_id] then
+                device_by_cloud_id[b.cloud_id] = b
+            end
+        end
+
+        -- Build Cloud list in O(N)
+        shelf_cache.cloud_books = {}
         for _, entry in pairs((catalog_data and catalog_data.books) or {}) do
             if not entry.deleted then
-                local lp, all_lp = getLocalCloudBookPath(entry, device_books)
+                local lp, all_lp, dev_b = getLocalCloudBookPath(entry, device_by_cloud_id, links, download_dir)
                 local copy = {}
                 for k, v in pairs(entry) do copy[k] = v end
                 copy.local_path = lp
                 copy.all_local_paths = all_lp
                 copy.is_in_cloud = true
                 copy.cloud_id = entry.id
+                if dev_b then
+                    if not copy.percent or copy.percent == 0 then copy.percent = dev_b.percent end
+                    if not copy.status or copy.status == "unread" then copy.status = dev_b.status end
+                    if not copy.last_read_ts then copy.last_read_ts = dev_b.last_read_ts end
+                end
                 if (not copy.relative_dir or copy.relative_dir == "") and lp then
                     copy.relative_dir = Scanner.getRelativeDir(lp)
                 end
-                table.insert(cloud_books, copy)
+                table.insert(shelf_cache.cloud_books, copy)
             end
         end
 
-        local folder_info = nil
-        local display_books = {}
+        shelf_cache.folder_info = nil
+        shelf_cache.display_books = {}
         local use_folders = (q_lower == "" and current_filter == "all")
 
         if use_folders then
             if active_tab == "device" then
-                folder_info = Scanner.listFolderContents(current_folder, device_books, nil, merged_progress)
-                current_folder = folder_info.current_dir
+                shelf_cache.folder_info = Scanner.listFolderContents(current_folder, device_books, nil, merged_progress)
+                current_folder = shelf_cache.folder_info.current_dir
             else
-                folder_info = Scanner.listCloudFolderContents(current_cloud_dir, cloud_books, merged_progress)
-                current_cloud_dir = folder_info.current_dir
+                shelf_cache.folder_info = Scanner.listCloudFolderContents(current_cloud_dir, shelf_cache.cloud_books, merged_progress)
+                current_cloud_dir = shelf_cache.folder_info.current_dir
             end
-            for _, entry in ipairs(folder_info.items or {}) do
-                table.insert(display_books, entry)
+            for _, entry in ipairs(shelf_cache.folder_info.items or {}) do
+                table.insert(shelf_cache.display_books, entry)
             end
         else
-            local source_list = (active_tab == "device") and device_books or cloud_books
+            local source_list = (active_tab == "device") and device_books or shelf_cache.cloud_books
             for _, item in ipairs(source_list) do
                 local prog = merged_progress[item.cloud_id or item.id]
                 local status = (prog and prog.status) or item.status or "unread"
@@ -373,18 +411,45 @@ function UILibrary.buildView(on_open_book, opts)
                     or (current_filter == "device" and item.local_path ~= nil)
                     or (current_filter == "cloud" and item.local_path == nil)
                     or (current_filter == "reading" and status == "reading")
-                    or (current_filter == "finished" and status == "finished")
+                    or (current_filter == "finished" and (status == "finished" or status == "complete"))
 
                 local authors_str = type(item.authors) == "table" and table.concat(item.authors, ", ") or tostring(item.authors or "")
                 local hay = (tostring(item.title or "") .. " " .. authors_str .. " " .. tostring(item.series or "")):lower()
                 local pass_search = (q_lower == "") or hay:find(q_lower, 1, true) ~= nil
                 if pass_filter and pass_search then
-                    table.insert(display_books, item)
+                    table.insert(shelf_cache.display_books, item)
                 end
             end
 
-            Scanner.sortItems(display_books, merged_progress)
+            Scanner.sortItems(shelf_cache.display_books, merged_progress)
         end
+        shelf_cache.data_dirty = false
+    end
+
+    renderShelf = function()
+        if not isAlive() then return end
+        render_gen = render_gen + 1
+        local my_gen = render_gen
+        Covers.clearFetchQueue()
+        if Covers.beginRenderPass then Covers.beginRenderPass() end
+        sw, sh = theme.resolveHomeViewport(opts, is_home)
+        if host_container.dimen then
+            host_container.dimen.w = sw
+            host_container.dimen.h = sh
+        end
+        if shelf_cache.data_dirty then
+            shelf_cache.rebuildDisplayData()
+        end
+        local cfg = Settings.load()
+        local active_tab = cfg.library_active_tab or "device"
+        local view_mode = cfg.library_view_mode or "cover"
+        local current_filter = cfg.library_filter or "all"
+        local configured = Cloud.isConfigured()
+        local q_lower = tostring(search_query or ""):lower()
+        local use_folders = (q_lower == "" and current_filter == "all")
+        local cloud_books = shelf_cache.cloud_books
+        local folder_info = shelf_cache.folder_info
+        local display_books = shelf_cache.display_books
 
         local function showMoreMenu()
             Widgets.showCardDialog{
@@ -432,7 +497,9 @@ function UILibrary.buildView(on_open_book, opts)
                                     merged_progress = {}
                                     sync_error = nil
                                     current_cloud_dir = ""
+                                    shelf_cache.folder_page_stack.cloud = {}
                                 end
+                                shelf_cache.data_dirty = true
                                 refreshLocalBooks(local_dirs_changed)
                                 if isAlive() then renderShelf() end
                                 if cloud_changed and now_conn then
@@ -534,31 +601,16 @@ function UILibrary.buildView(on_open_book, opts)
             max_width = search_text_w,
         }
         local search_inner_h = math.max(sc(24), search_label:getSize().h + sc(2))
-        local search_tap_target = Widgets.makeTapItem(
-            FrameContainer:new{
-                padding = 0,
-                bordersize = 0,
-                width = search_inner_w - clear_btn_w,
+        local search_content = OverlapGroup:new{
+            dimen = Geom:new{ w = search_inner_w, h = search_inner_h },
+            LeftContainer:new{
+                dimen = Geom:new{ w = search_inner_w, h = search_inner_h },
                 HorizontalGroup:new{
                     align = "center",
                     search_icon,
                     HorizontalSpan:new{ width = sc(8) },
                     search_label,
                 },
-            },
-            function()
-                showSearchDialog(search_query, function(next_q)
-                    search_query = next_q
-                    current_page = 1
-                    renderShelf()
-                end)
-            end
-        )
-        local search_content = OverlapGroup:new{
-            dimen = Geom:new{ w = search_inner_w, h = search_inner_h },
-            LeftContainer:new{
-                dimen = Geom:new{ w = search_inner_w, h = search_inner_h },
-                search_tap_target,
             },
         }
         if has_query then
@@ -571,22 +623,35 @@ function UILibrary.buildView(on_open_book, opts)
                     callback = function()
                         search_query = ""
                         current_page = 1
+                        shelf_cache.folder_page_stack[active_tab] = {}
+                        shelf_cache.data_dirty = true
                         renderShelf()
                     end,
                 },
             })
         end
-        local search_bar = FrameContainer:new{
-            padding = sc(5),
-            padding_left = sc(9),
-            padding_right = sc(9),
-            bordersize = sc(1),
-            color = has_query and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY,
-            radius = theme.radius_btn or sc(4),
-            background = Blitbuffer.COLOR_WHITE,
-            width = search_bar_w,
-            search_content,
-        }
+        local search_bar = Widgets.makeTapItem(
+            FrameContainer:new{
+                padding = sc(5),
+                padding_left = sc(9),
+                padding_right = sc(9),
+                bordersize = sc(1),
+                color = has_query and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY,
+                radius = theme.radius_btn or sc(4),
+                background = Blitbuffer.COLOR_WHITE,
+                width = search_bar_w,
+                search_content,
+            },
+            function()
+                showSearchDialog(search_query, function(next_q)
+                    search_query = next_q
+                    current_page = 1
+                    shelf_cache.folder_page_stack[active_tab] = {}
+                    shelf_cache.data_dirty = true
+                    renderShelf()
+                end)
+            end
+        )
 
         local header_row_h = math.max(left_btn:getSize().h, search_bar:getSize().h, right_group:getSize().h)
         local header_row = OverlapGroup:new{
@@ -627,12 +692,107 @@ function UILibrary.buildView(on_open_book, opts)
             c.library_active_tab = next_tab
             Settings.save(c)
             current_page = 1
+            shelf_cache.data_dirty = true
             renderShelf()
         end)
 
-        -- Sub-toolbar: Filter dropdown / Folder Up breadcrumb on left; Grid/List + Sync on right
+        -- Sub-toolbar: Selection bar (when select_mode) or Filter/Folder Up + Grid/List + Sync
         local sub_icon_sz = theme.icon and theme.icon(20) or sc(20)
-        local sub_tools = HorizontalGroup:new{
+        local sub_tools
+        local sub_left_items = { align = "center" }
+
+        if select_state.active then
+            local sel_count = UILibrary.countSelected(select_state)
+            table.insert(sub_left_items, TextWidget:new{
+                text = string.format(_("%d selected"), sel_count),
+                face = Font:getFace("cfont", is_sui and theme.fs("body") or 15),
+                bold = true,
+                fgcolor = Blitbuffer.COLOR_BLACK,
+            })
+            sub_tools = HorizontalGroup:new{
+                align = "center",
+                Widgets.createButton{
+                    text = _("All"),
+                    padding = sc(3),
+                    padding_h = sc(8),
+                    text_font_size = theme.fs and theme.fs("detail") or 14,
+                    callback = function()
+                        for _, it in ipairs(display_books) do
+                            local k = UILibrary.getSelectionKey(it)
+                            if k then select_state.map[k] = it end
+                        end
+                        renderShelf()
+                    end,
+                },
+                HorizontalSpan:new{ width = sc(6) },
+                Widgets.createButton{
+                    text = _("Actions…"),
+                    is_primary = true,
+                    padding = sc(3),
+                    padding_h = sc(8),
+                    text_font_size = theme.fs and theme.fs("detail") or 14,
+                    callback = function()
+                        UILibrary.showBatchActionsDialog(UILibrary.getSelectedList(select_state), {
+                            current_folder = (active_tab == "device") and (current_folder or (Scanner.getEffectiveBooksDirs()[1])) or nil,
+                            on_exit_select = function() UILibrary.exitSelectMode(select_state) end,
+                            on_refresh = function(force_rescan)
+                                refreshLocalBooks(force_rescan)
+                                if isAlive() then renderShelf() end
+                            end,
+                            on_upload_batch = function(batch_list)
+                                UILibrary.uploadBookBatch(batch_list, opts.open_doc_info and opts.open_doc_info.open_doc, function(ok, _, toast_msg)
+                                    if ok then
+                                        catalog_data, merged_progress = Sync.loadCachedCatalog()
+                                        shelf_cache.mergeLocalProgressIntoMerged()
+                                        refreshLocalBooks(false)
+                                        if isAlive() then renderShelf() end
+                                    end
+                                    if toast_msg then Widgets.showToast(toast_msg, 3) end
+                                end)
+                            end,
+                            on_offload_batch = function(off_list)
+                                for _, offloaded in ipairs(off_list) do
+                                    local paths = offloaded.all_local_paths or { offloaded.local_path }
+                                    local target_path = offloaded.local_path
+                                    local target_cloud_id = offloaded.cloud_id or offloaded.id
+                                    for _, p in ipairs(paths) do pcall(os.remove, p) end
+                                    Settings.unlinkBook(target_cloud_id, target_path)
+                                end
+                                refreshLocalBooks(true)
+                                if isAlive() then renderShelf() end
+                                Widgets.showToast(string.format(_("Offloaded %d book(s)."), #off_list), 2.5)
+                            end,
+                            on_delete_cloud_batch = function(cloud_list)
+                                for _, target_item in ipairs(cloud_list) do
+                                    local target_id = target_item.cloud_id or target_item.id
+                                    Sync.deleteCloudBook(target_id, target_item, function(ok)
+                                        if ok and catalog_data and catalog_data.books and catalog_data.books[target_id] then
+                                            catalog_data.books[target_id].deleted = true
+                                        end
+                                    end)
+                                end
+                                Sync.saveCachedCatalog(catalog_data, merged_progress)
+                                refreshLocalBooks(false)
+                                if isAlive() then renderShelf() end
+                                Widgets.showToast(string.format(_("Deleted %d book(s) from Cloud."), #cloud_list), 2.5)
+                            end,
+                        })
+                    end,
+                },
+                HorizontalSpan:new{ width = sc(6) },
+                Widgets.createButton{
+                    text = _("Done"),
+                    padding = sc(3),
+                    padding_h = sc(8),
+                    text_font_size = theme.fs and theme.fs("detail") or 14,
+                    callback = function()
+                        UILibrary.exitSelectMode(select_state)
+                        renderShelf()
+                    end,
+                },
+            }
+        else
+        sub_tools = HorizontalGroup:new{
             align = "center",
             Widgets.createIconButton{
                 icon = (view_mode == "cover") and "list.svg" or "grid.svg",
@@ -656,8 +816,6 @@ function UILibrary.buildView(on_open_book, opts)
                 end,
             },
         }
-
-        local sub_left_items = { align = "center" }
         if use_folders and folder_info and folder_info.can_go_up then
             local up_btn = Widgets.makeTapItem(
                 FrameContainer:new{
@@ -690,7 +848,8 @@ function UILibrary.buildView(on_open_book, opts)
                     else
                         current_cloud_dir = folder_info.parent_dir or ""
                     end
-                    current_page = 1
+                    current_page = table.remove(shelf_cache.folder_page_stack[active_tab]) or 1
+                    shelf_cache.data_dirty = true
                     renderShelf()
                 end
             )
@@ -716,6 +875,8 @@ function UILibrary.buildView(on_open_book, opts)
                         c.library_filter = next_f
                         Settings.save(c)
                         current_page = 1
+                        shelf_cache.folder_page_stack[active_tab] = {}
+                        shelf_cache.data_dirty = true
                         renderShelf()
                     end)
                 end
@@ -723,26 +884,29 @@ function UILibrary.buildView(on_open_book, opts)
             table.insert(sub_left_items, filter_btn)
         end
 
-        local status_suffix
-        local active_up = UILibrary.getActiveJob and UILibrary.getActiveJob()
-        if active_up then
-            status_suffix = string.format(_("· Uploading (%d/%d)..."), active_up.current or 1, active_up.total or 1)
-        elseif bg_syncing then
-            status_suffix = _("· Syncing...")
-        elseif not configured then
-            status_suffix = _("· Offline")
-        elseif sync_error then
-            status_suffix = _("· Sync error")
-        else
-            status_suffix = string.format("· %d %s", #display_books, #display_books == 1 and _("item") or _("items"))
+        if not select_state.active then
+            local status_suffix
+            local active_up = UILibrary.getActiveJob and UILibrary.getActiveJob()
+            if active_up then
+                status_suffix = string.format(_("· Uploading (%d/%d)..."), active_up.current or 1, active_up.total or 1)
+            elseif bg_syncing then
+                status_suffix = _("· Syncing...")
+            elseif not configured then
+                status_suffix = _("· Offline")
+            elseif sync_error then
+                status_suffix = _("· Sync error")
+            else
+                status_suffix = string.format("· %d %s", #display_books, #display_books == 1 and _("item") or _("items"))
+            end
+            local left_fixed_w = sub_left_items[1]:getSize().w
+            table.insert(sub_left_items, TextWidget:new{
+                text = status_suffix,
+                face = Font:getFace("cfont", is_sui and theme.fs("detail") or 13),
+                fgcolor = theme.color_label_dim,
+                max_width = math.max(sc(60), sw - sc(24) - left_fixed_w - sub_tools:getSize().w - sc(8)),
+            })
         end
-        local left_fixed_w = sub_left_items[1]:getSize().w
-        table.insert(sub_left_items, TextWidget:new{
-            text = status_suffix,
-            face = Font:getFace("cfont", is_sui and theme.fs("detail") or 13),
-            fgcolor = theme.color_label_dim,
-            max_width = math.max(sc(60), sw - sc(24) - left_fixed_w - sub_tools:getSize().w - sc(8)),
-        })
+        end
         local sub_left = HorizontalGroup:new(sub_left_items)
 
         local sub_toolbar = FrameContainer:new{
@@ -769,15 +933,20 @@ function UILibrary.buildView(on_open_book, opts)
             background = theme.color_bg_dim,
         }
 
-        local total_pages = 1
         local prev_btn = Widgets.createButton{
             text = _("‹ Prev"),
+            padding = sc(8),
+            padding_h = sc(14),
+            consume_hold = true,
             callback = function()
                 if current_page > 1 then current_page = current_page - 1; renderShelf() end
             end,
         }
         local next_btn = Widgets.createButton{
             text = _("Next ›"),
+            padding = sc(8),
+            padding_h = sc(14),
+            consume_hold = true,
             callback = function()
                 if current_page < total_pages then current_page = current_page + 1; renderShelf() end
             end,
@@ -930,8 +1099,43 @@ function UILibrary.buildView(on_open_book, opts)
                         end)
                     end)
                 end,
-                on_refresh = function()
-                    refreshLocalBooks()
+                on_progress_changed = function()
+                    shelf_cache.mergeLocalProgressIntoMerged()
+                    shelf_cache.data_dirty = true
+                    if isAlive() then renderShelf() end
+                end,
+                current_folder = (active_tab == "device") and (current_folder or (Scanner.getEffectiveBooksDirs()[1])) or nil,
+                on_start_select = function(start_item)
+                    select_state.active = true
+                    select_state.map = {}
+                    local k = UILibrary.getSelectionKey(start_item)
+                    if k then select_state.map[k] = start_item end
+                    if isAlive() then renderShelf() end
+                end,
+                on_show_folder = function(target_path)
+                    if embedded_fm and embedded_fm._nimbus_orig_fc then
+                        local slot = (embedded_fm._navbar_inner and embedded_fm._navbar_inner[1])
+                            and embedded_fm._navbar_inner or embedded_fm[1]
+                        embedded_fm._nimbus_browsing_files = true
+                        slot[1] = embedded_fm._nimbus_orig_fc
+                        embedded_fm.layout = embedded_fm._nimbus_orig_fc.layout
+                        if embedded_fm.file_chooser and embedded_fm.file_chooser.changeToPath then
+                            local dir = target_path:match("^(.*)[/\\][^/\\]+$") or target_path
+                            embedded_fm.file_chooser:changeToPath(dir, target_path)
+                        end
+                        UIManager:setDirty(embedded_fm, "ui")
+                    else
+                        UILibrary.close()
+                        local ok_fm_mod, FM = pcall(require, "apps/filemanager/filemanager")
+                        local inst = ok_fm_mod and FM and FM.instance
+                        if inst and inst.file_chooser and inst.file_chooser.changeToPath then
+                            local dir = target_path:match("^(.*)[/\\][^/\\]+$") or target_path
+                            inst.file_chooser:changeToPath(dir, target_path)
+                        end
+                    end
+                end,
+                on_refresh = function(force_rescan)
+                    refreshLocalBooks(force_rescan)
                     if isAlive() then renderShelf() end
                 end,
             }
@@ -939,12 +1143,19 @@ function UILibrary.buildView(on_open_book, opts)
 
         local function handlePrimaryTap(item)
             if item.is_folder then
+                table.insert(shelf_cache.folder_page_stack[active_tab], current_page)
                 if active_tab == "device" then
                     current_folder = item.path
                 else
                     current_cloud_dir = item.path
                 end
                 current_page = 1
+                shelf_cache.data_dirty = true
+                renderShelf()
+                return
+            end
+            if select_state.active then
+                UILibrary.toggleItemSelection(select_state, item)
                 renderShelf()
                 return
             end
@@ -959,6 +1170,20 @@ function UILibrary.buildView(on_open_book, opts)
         local function openActionsMenu(item)
             if item.is_folder then
                 handlePrimaryTap(item)
+                return
+            end
+            if select_state.active then
+                if not UILibrary.isItemSelected(select_state, item) then
+                    UILibrary.toggleItemSelection(select_state, item)
+                end
+                UILibrary.showBatchActionsDialog(UILibrary.getSelectedList(select_state), {
+                    current_folder = (active_tab == "device") and (current_folder or (Scanner.getEffectiveBooksDirs()[1])) or nil,
+                    on_exit_select = function() UILibrary.exitSelectMode(select_state) end,
+                    on_refresh = function(force_rescan)
+                        refreshLocalBooks(force_rescan)
+                        if isAlive() then renderShelf() end
+                    end,
+                })
                 return
             end
             UILibrary.showBookActionsMenu(item, merged_progress[item.cloud_id or item.id], makeBookActionOpts())
@@ -1072,27 +1297,40 @@ function UILibrary.buildView(on_open_book, opts)
                     local authors_str = type(item.authors) == "table" and table.concat(item.authors, ", ") or tostring(item.authors or "")
                     sub_line = (authors_str ~= "" and (authors_str .. "  ·  ") or "") .. tostring(item.format or ""):upper()
                 end
-                local row_left = HorizontalGroup:new{
-                    thumb_frame,
-                    HorizontalSpan:new{ width = sc(10) },
-                    VerticalGroup:new{
-                        align = "left",
-                        TextWidget:new{
-                            text = tostring(item.title or _("Untitled")),
-                            face = Font:getFace("cfont", is_sui and theme.fs("subtitle") or 18),
-                            bold = true,
-                            fgcolor = Blitbuffer.COLOR_BLACK,
-                            max_width = text_w,
-                        },
-                        VerticalSpan:new{ width = sc(2) },
-                        TextWidget:new{
-                            text = sub_line,
-                            face = Font:getFace("cfont", is_sui and (theme.fs("detail") + 1) or 15),
-                            fgcolor = theme.color_label_dim,
-                            max_width = text_w,
-                        },
+                local sel_cb_w = (select_state.active and not item.is_folder) and ImageWidget:new{
+                    file = Widgets.getAssetPath(UILibrary.isItemSelected(select_state, item) and "check-square.svg" or "square.svg"),
+                    width = theme.icon and theme.icon(20) or sc(20),
+                    height = theme.icon and theme.icon(20) or sc(20),
+                    scale_factor = 0,
+                    is_icon = true,
+                    alpha = true,
+                } or nil
+                local sel_extra_w = sel_cb_w and (sel_cb_w:getSize().w + sc(8)) or 0
+                local row_left_items = { align = "center" }
+                if sel_cb_w then
+                    table.insert(row_left_items, sel_cb_w)
+                    table.insert(row_left_items, HorizontalSpan:new{ width = sc(8) })
+                end
+                table.insert(row_left_items, thumb_frame)
+                table.insert(row_left_items, HorizontalSpan:new{ width = sc(10) })
+                table.insert(row_left_items, VerticalGroup:new{
+                    align = "left",
+                    TextWidget:new{
+                        text = tostring(item.title or _("Untitled")),
+                        face = Font:getFace("cfont", is_sui and theme.fs("subtitle") or 18),
+                        bold = true,
+                        fgcolor = Blitbuffer.COLOR_BLACK,
+                        max_width = math.max(sc(60), text_w - sel_extra_w),
                     },
-                }
+                    VerticalSpan:new{ width = sc(2) },
+                    TextWidget:new{
+                        text = sub_line,
+                        face = Font:getFace("cfont", is_sui and (theme.fs("detail") + 1) or 15),
+                        fgcolor = theme.color_label_dim,
+                        max_width = math.max(sc(60), text_w - sel_extra_w),
+                    },
+                })
+                local row_left = HorizontalGroup:new(row_left_items)
                 local total_h = math.max(row_left:getSize().h, right_cluster:getSize().h)
                 local tap_left = Widgets.makeTapItem(
                     FrameContainer:new{ padding = 0, bordersize = 0, width = content_inner - right_reserve, row_left },
@@ -1127,7 +1365,7 @@ function UILibrary.buildView(on_open_book, opts)
                         cover_slot_w,
                         cover_slot_h,
                         function()
-                            if my_gen == render_gen and isAlive() then renderShelf() end
+                            if my_gen == render_gen and isAlive() then dirtyHost() end
                         end,
                         opts.open_doc_info and opts.open_doc_info.open_doc
                     )
@@ -1225,6 +1463,17 @@ function UILibrary.buildView(on_open_book, opts)
                             },
                         })
                     end
+                    if select_state.active and UILibrary.isItemSelected(select_state, item) then
+                        local sel_badge = Widgets.createCircleBadge{ icon = "check-white.svg" }
+                        table.insert(cover_with_badge, LeftContainer:new{
+                            dimen = Geom:new{ w = cover_slot_w, h = sel_badge:getSize().h + sc(12) },
+                            FrameContainer:new{
+                                padding = sc(6),
+                                bordersize = 0,
+                                sel_badge,
+                            },
+                        })
+                    end
                 end
 
                 local cell_content = Widgets.makeTapItem(
@@ -1260,8 +1509,8 @@ function UILibrary.buildView(on_open_book, opts)
             face = Font:getFace("cfont", page_label_fs),
             fgcolor = theme.color_label_dim,
         }
-        local prev_w, next_w, label_w = prev_btn:getSize().w, next_btn:getSize().w, page_label:getSize().w
-        local mid_spacer = math.max(sc(8), (sw - sc(40) - prev_w - next_w - label_w) / 2)
+        local prev_w, next_w = prev_btn:getSize().w, next_btn:getSize().w
+        local nav_gap = sc(20)
         local footer_frame = FrameContainer:new{
             padding_top = sc(4),
             padding_bottom = sc(6),
@@ -1274,10 +1523,11 @@ function UILibrary.buildView(on_open_book, opts)
             CenterContainer:new{
                 dimen = Geom:new{ w = sw - sc(20), h = footer_h - sc(10) },
                 HorizontalGroup:new{
+                    align = "center",
                     current_page > 1 and prev_btn or HorizontalSpan:new{ width = prev_w },
-                    HorizontalSpan:new{ width = mid_spacer },
+                    HorizontalSpan:new{ width = nav_gap },
                     page_label,
-                    HorizontalSpan:new{ width = mid_spacer },
+                    HorizontalSpan:new{ width = nav_gap },
                     current_page < total_pages and next_btn or HorizontalSpan:new{ width = next_w },
                 },
             },
@@ -1311,6 +1561,7 @@ function UILibrary.buildView(on_open_book, opts)
         if host_container[1] and host_container[1].free then
             pcall(function() host_container[1]:free() end)
         end
+        if Covers.pruneMemoryCache then Covers.pruneMemoryCache() end
         host_container[1] = shelf_bg
         host_container.layout = Widgets.collectFocusableLayout(shelf_bg)
         if #host_container.layout > 0 then
@@ -1351,7 +1602,13 @@ function UILibrary.buildView(on_open_book, opts)
         Swipe = {
             GestureRange:new{
                 ges = "swipe",
-                range = function() return Geom:new{ x = 0, y = 0, w = sw, h = sh } end,
+                range = function()
+                    local d = host_container.dimen
+                    if d then
+                        return Geom:new{ x = d.x or 0, y = d.y or 0, w = d.w or sw, h = d.h or sh }
+                    end
+                    return Geom:new{ x = 0, y = 0, w = sw, h = sh }
+                end,
             },
         },
     }
@@ -1369,12 +1626,19 @@ function UILibrary.buildView(on_open_book, opts)
         if ges.direction == "south" and ges.pos and ges.pos.y <= math.floor(sh * 0.15) then
             return openKOReaderTopMenu(embedded_fm)
         elseif ges.direction == "west" then
-            return host_container:onNextPage()
+            host_container:onNextPage()
+            return true
         elseif ges.direction == "east" then
-            return host_container:onPrevPage()
+            host_container:onPrevPage()
+            return true
         end
     end
     host_container.onClose = function()
+        if select_state.active then
+            UILibrary.exitSelectMode(select_state)
+            renderShelf()
+            return true
+        end
         if is_home then return true end
         UILibrary.close()
         return true
@@ -1420,6 +1684,7 @@ function UILibrary.buildView(on_open_book, opts)
 
     host_container.refreshView = function()
         if isAlive() then
+            shelf_cache.data_dirty = true
             renderShelf()
         end
     end

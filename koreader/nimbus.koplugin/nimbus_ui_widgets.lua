@@ -168,11 +168,11 @@ function Widgets.makeTapItem(widget, callback, hold_callback, opts)
         if callback then callback() end
         return true
     end
-    if hold_callback then
+    if hold_callback or opts.consume_hold then
         item.ges_events.Hold = { GestureRange:new{ ges = "hold", range = getRange } }
         item.onHold = function()
             Widgets.clearKeyboardFocus()
-            hold_callback()
+            if hold_callback then hold_callback() end
             return true
         end
     end
@@ -259,17 +259,18 @@ function Widgets.createIconButton(opts)
         radius = (opts.is_focused and (theme.radius_focus or sc(4))) or opts.radius or 0,
         icon,
     }
-    return Widgets.makeTapItem(frame, opts.callback)
+    return Widgets.makeTapItem(frame, opts.callback, nil, { consume_hold = opts.consume_hold })
 end
 
 --- Creates a Storefront/Libbee-styled primary (black) or secondary (bordered white) button.
 function Widgets.createButton(opts)
-    local is_primary = opts.is_primary == true
+    local is_enabled = (opts.enabled ~= false)
+    local is_primary = is_enabled and (opts.is_primary == true)
     local border_w = opts.bordersize or sc(1)
     local pad_v = opts.padding or sc(7)
     local pad_h = opts.padding_h or sc(10)
     local font_sz = opts.text_font_size or (theme.isSimpleUIActive and theme.isSimpleUIActive() and theme.fs("body") or 15)
-    local is_bold = (opts.bold ~= nil) and opts.bold or is_primary
+    local is_bold = is_enabled and ((opts.bold ~= nil) and opts.bold or is_primary)
 
     local max_tw = opts.width and math.max(sc(40), opts.width - (pad_h * 2) - (border_w * 2)) or nil
     local label = TextWidget:new{
@@ -291,12 +292,79 @@ function Widgets.createButton(opts)
         padding_left = pad_h,
         padding_right = pad_h,
         bordersize = border_w,
-        color = Blitbuffer.COLOR_BLACK,
+        color = is_enabled and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY,
         background = is_primary and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
         radius = opts.radius or theme.radius_btn or sc(4),
         content,
     }
-    return Widgets.makeTapItem(frame, opts.callback)
+    if not is_enabled then
+        return Widgets.makeTapItem(frame, nil, nil, { focusable = false, consume_hold = true })
+    end
+    return Widgets.makeTapItem(frame, opts.callback, nil, { consume_hold = opts.consume_hold })
+end
+
+--- Groups flat action specs into rows of `cols` (default 2) for grid menus.
+function Widgets.buildActionGridRows(items, cols)
+    cols = math.max(1, tonumber(cols) or 2)
+    local rows = {}
+    local cur = {}
+    for _, item in ipairs(items or {}) do
+        if type(item) == "table" and item.text and item.text ~= "" then
+            table.insert(cur, item)
+            if #cur == cols then
+                table.insert(rows, cur)
+                cur = {}
+            end
+        end
+    end
+    if #cur > 0 then
+        table.insert(rows, cur)
+    end
+    return rows
+end
+
+--- Renders a 2-column (or `opts.cols`) grid of action buttons inside `inner_w`.
+-- Accepts either pre-grouped `grid_rows` (when `opts.is_grouped = true`) or flat `items`.
+function Widgets.createActionGrid(items_or_rows, inner_w, opts)
+    opts = opts or {}
+    local cols = math.max(1, tonumber(opts.cols) or 2)
+    local gap = opts.gap or sc(8)
+    local gap_v = opts.gap_v or gap
+    local pad_v = opts.padding or sc(7)
+    local pad_h = opts.padding_h or sc(6)
+    local font_sz = opts.text_font_size or (theme.isSimpleUIActive and theme.isSimpleUIActive() and theme.fs("detail") or 14)
+
+    local rows = opts.is_grouped and (items_or_rows or {}) or Widgets.buildActionGridRows(items_or_rows, cols)
+    local vg = VerticalGroup:new{ align = "left" }
+    for r_idx, row in ipairs(rows) do
+        if r_idx > 1 then
+            table.insert(vg, VerticalSpan:new{ width = gap_v })
+        end
+        local n = #row
+        local btn_w = (n == 1) and inner_w or math.floor((inner_w - (gap * (n - 1))) / n)
+        local hg_items = { align = "center" }
+        local used_w = 0
+        for c_idx, spec in ipairs(row) do
+            if c_idx > 1 then
+                table.insert(hg_items, HorizontalSpan:new{ width = gap })
+                used_w = used_w + gap
+            end
+            local w = (c_idx == n) and math.max(sc(40), inner_w - used_w) or btn_w
+            used_w = used_w + w
+            table.insert(hg_items, Widgets.createButton{
+                text = spec.text,
+                is_primary = spec.is_primary,
+                enabled = spec.enabled,
+                width = w,
+                padding = pad_v,
+                padding_h = pad_h,
+                text_font_size = font_sz,
+                callback = spec.callback,
+            })
+        end
+        table.insert(vg, HorizontalGroup:new(hg_items))
+    end
+    return vg
 end
 
 function Widgets.createBadge(text, is_highlighted, opts)
@@ -764,17 +832,38 @@ function Widgets.showCardDialog(opts)
         local btn_gap = sc(8)
         local n = #opts.buttons
         local avail_btn_w = inner_w - btn_gap * (n - 1)
-        local nat_widths = {}
-        local sum_nat = 0
-        for i, b in ipairs(opts.buttons) do
-            local tw = TextWidget:new{
-                text = b.text or "",
-                face = Font:getFace("cfont", 15),
-                bold = (b.is_primary == true),
-            }
-            local w = tw:getSize().w + sc(20)
-            nat_widths[i] = w
-            sum_nat = sum_nat + w
+        local base_fs = (theme.isSimpleUIActive and theme.isSimpleUIActive() and theme.fs("body")) or 15
+        local border_w = sc(1)
+
+        local function measureButtons(fs, pad_h)
+            local widths = {}
+            local total = 0
+            for i, b in ipairs(opts.buttons) do
+                local tw = TextWidget:new{
+                    text = b.text or "",
+                    face = Font:getFace("cfont", fs),
+                    bold = (b.is_primary == true),
+                }
+                local w = tw:getSize().w + (pad_h * 2) + (border_w * 2) + sc(4)
+                if tw.free then tw:free() end
+                widths[i] = w
+                total = total + w
+            end
+            return widths, total
+        end
+
+        local chosen_fs = base_fs
+        local chosen_pad_h = sc(8)
+        local nat_widths, sum_nat = measureButtons(chosen_fs, chosen_pad_h)
+        if sum_nat > avail_btn_w then
+            local compact_fs = math.max(12, base_fs - 2)
+            local compact_pad_h = sc(6)
+            local c_widths, c_sum = measureButtons(compact_fs, compact_pad_h)
+            if c_sum <= avail_btn_w or c_sum < sum_nat then
+                chosen_fs = compact_fs
+                chosen_pad_h = compact_pad_h
+                nat_widths, sum_nat = c_widths, c_sum
+            end
         end
 
         local btn_widths = {}
@@ -785,8 +874,14 @@ function Widgets.showCardDialog(opts)
                 btn_widths[i] = nat_widths[i] + extra + (i == 1 and rem or 0)
             end
         else
-            local equal_w = math.floor(avail_btn_w / n)
-            for i = 1, n do btn_widths[i] = equal_w end
+            local used = 0
+            for i = 1, n do
+                local w = (i == n)
+                    and math.max(sc(40), avail_btn_w - used)
+                    or math.max(sc(40), math.floor((avail_btn_w * nat_widths[i]) / math.max(1, sum_nat)))
+                btn_widths[i] = w
+                used = used + w
+            end
         end
 
         local btn_row = {}
@@ -795,7 +890,8 @@ function Widgets.showCardDialog(opts)
             table.insert(btn_row, Widgets.createButton{
                 text = b.text,
                 is_primary = b.is_primary,
-                padding_h = sc(8),
+                padding_h = chosen_pad_h,
+                text_font_size = chosen_fs,
                 width = btn_widths[i],
                 callback = function()
                     if not b.keep_open then closeDlg() end
@@ -840,6 +936,20 @@ function Widgets.showCardDialog(opts)
     overlay.key_events.Close = { { "Back" }, { "Escape" } }
     if Device and Device.input and Device.input.group and Device.input.group.Back then
         table.insert(overlay.key_events.Close, { Device.input.group.Back })
+    end
+    if opts.on_prev_page or opts.on_next_page then
+        overlay.key_events.PrevPage = { { "PgUp" }, { "Prev" }, { "LPgBack" }, { "RPgBack" } }
+        overlay.key_events.NextPage = { { "PgDn" }, { "Next" }, { "LPgFwd" }, { "RPgFwd" } }
+        if Device and Device.input and Device.input.group then
+            if Device.input.group.PgBack then table.insert(overlay.key_events.PrevPage, { Device.input.group.PgBack }) end
+            if Device.input.group.PgFwd then table.insert(overlay.key_events.NextPage, { Device.input.group.PgFwd }) end
+        end
+        overlay.onPrevPage = function()
+            if opts.on_prev_page then return opts.on_prev_page() end
+        end
+        overlay.onNextPage = function()
+            if opts.on_next_page then return opts.on_next_page() end
+        end
     end
     if BaseClass == FocusManager then
         Widgets.installLazyFocus(overlay)

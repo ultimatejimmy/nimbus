@@ -30,6 +30,38 @@ local theme = require("nimbus_theme")
 local BookCardMixin = {}
 local sc = theme.sc
 
+local function applyCloudProgressToSidecar(dest, item, merged_prog)
+    local prog = merged_prog
+    if not prog and item then
+        local _, cached_mp = Sync.loadCachedCatalog()
+        prog = cached_mp and cached_mp[item.cloud_id or item.id]
+    end
+    if type(prog) ~= "table" then return end
+    local pct = tonumber(prog.percent) or 0
+    local status = prog.status
+    if pct <= 0 and (not status or status == "unread") and not prog.xpointer then
+        return
+    end
+    local ok_ds, DocSettings = pcall(require, "docsettings")
+    if not ok_ds or not DocSettings or not DocSettings.open then return end
+    pcall(function()
+        local ds = DocSettings:open(dest)
+        if pct > 0 then
+            ds:saveSetting("percent_finished", pct)
+        end
+        if status and status ~= "unread" then
+            local kor_status = (status == "finished") and "complete" or status
+            local summary = ds:readSetting("summary") or {}
+            summary.status = kor_status
+            ds:saveSetting("summary", summary)
+        end
+        if prog.xpointer and prog.xpointer ~= "" then
+            ds:saveSetting("last_xpointer", prog.xpointer)
+        end
+        ds:flush()
+    end)
+end
+
 function BookCardMixin.downloadBook(item, open_after, opts)
     opts = opts or {}
     local cfg = Settings.load()
@@ -55,6 +87,7 @@ function BookCardMixin.downloadBook(item, open_after, opts)
             prog_dlg:close()
             if ok then
                 Settings.linkBook(dest, item.id)
+                applyCloudProgressToSidecar(dest, item, opts.merged_prog)
                 if open_after and opts.on_open_book then
                     opts.on_open_book(dest)
                 else
@@ -128,14 +161,23 @@ local function promptDeleteFromCloud(item, opts)
 end
 
 local function getNativeFileContext(local_path)
-    if not local_path or local_path == "" then return nil end
     local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
     local ok_fmu, filemanagerutil = pcall(require, "apps/filemanager/filemanagerutil")
+    local ok_dev, Device = pcall(require, "device")
+    local fm = ok_fm and FileManager and FileManager.instance or nil
+    if not local_path or local_path == "" then
+        return {
+            file = nil,
+            fm = fm,
+            filemanagerutil = ok_fmu and filemanagerutil or nil,
+            Device = ok_dev and Device or nil,
+        }
+    end
     local ok_bl, BookList = pcall(require, "ui/widget/booklist")
     local ok_ds, DocSettings = pcall(require, "docsettings")
     local ok_dr, DocumentRegistry = pcall(require, "document/documentregistry")
     local ok_bi, FileManagerBookInfo = pcall(require, "apps/filemanager/filemanagerbookinfo")
-    local fm = ok_fm and FileManager and FileManager.instance or nil
+    local ok_conv, FileManagerConverter = pcall(require, "apps/filemanager/filemanagerconverter")
     local has_provider = ok_dr and DocumentRegistry and DocumentRegistry:hasProvider(local_path) or false
     local been_opened = ok_bl and BookList and BookList.hasBookBeenOpened(local_path) or false
     local doc_settings_or_file = local_path
@@ -156,6 +198,8 @@ local function getNativeFileContext(local_path)
         filemanagerutil = ok_fmu and filemanagerutil or nil,
         BookList = ok_bl and BookList or nil,
         DocSettings = ok_ds and DocSettings or nil,
+        Converter = ok_conv and FileManagerConverter or nil,
+        Device = ok_dev and Device or nil,
         has_provider = has_provider,
         been_opened = been_opened,
         doc_settings_or_file = doc_settings_or_file,
@@ -165,9 +209,12 @@ local function getNativeFileContext(local_path)
 end
 
 local function buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, opts)
-    if not (ctx and ctx.DocSettings) then return nil end
+    local is_in_cloud = item.is_in_cloud or (item.folder ~= nil)
+    local has_local_ds = (ctx and ctx.DocSettings ~= nil)
+    if not has_local_ds and not is_in_cloud then return nil end
+
     local current_status
-    if ctx.been_opened and type(ctx.doc_settings_or_file) == "table" and ctx.doc_settings_or_file.readSetting then
+    if has_local_ds and ctx.been_opened and type(ctx.doc_settings_or_file) == "table" and ctx.doc_settings_or_file.readSetting then
         local summary = ctx.doc_settings_or_file:readSetting("summary")
         current_status = summary and summary.status
     end
@@ -195,18 +242,61 @@ local function buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, op
             padding_h = sc(4),
             text_font_size = theme.fs and theme.fs("detail") or 14,
             callback = function()
-                local ds = ctx.DocSettings:open(ctx.file)
-                local summary = ds:readSetting("summary") or {}
-                summary.status = st.id
-                ds:saveSetting("summary", summary)
-                ds:flush()
-                if ctx.BookList and ctx.BookList.setBookInfoCacheProperty then
-                    ctx.BookList.setBookInfoCacheProperty(ctx.file, "status", st.id)
+                if has_local_ds then
+                    local ds = ctx.DocSettings:open(ctx.file)
+                    local summary = ds:readSetting("summary") or {}
+                    summary.status = st.id
+                    ds:saveSetting("summary", summary)
+                    if st.id == "complete" then
+                        local cur_p = ds:readSetting("percent_finished") or 0
+                        if cur_p < 0.99 then ds:saveSetting("percent_finished", 1) end
+                    end
+                    ds:flush()
+                    if ctx.BookList and ctx.BookList.setBookInfoCacheProperty then
+                        ctx.BookList.setBookInfoCacheProperty(ctx.file, "status", st.id)
+                    end
                 end
-                item.status = st.id
-                if merged_prog then merged_prog.status = st.id end
+                local cloud_status = (st.id == "complete") and "finished" or st.id
+                item.status = cloud_status
+                if merged_prog then
+                    merged_prog.status = cloud_status
+                    if cloud_status == "finished" and (tonumber(merged_prog.percent) or 0) < 0.99 then
+                        merged_prog.percent = 1
+                    end
+                end
+                local cid = item.cloud_id or (is_in_cloud and item.id) or nil
+                if cid and Cloud.isConfigured() then
+                    local cfg = Settings.load()
+                    local local_st = Sync.loadLocalState()
+                    local cur_rec = local_st.progress[cid] or {}
+                    local cur_pct = tonumber(cur_rec.percent) or (merged_prog and tonumber(merged_prog.percent)) or tonumber(item.percent) or 0
+                    if cloud_status == "finished" and cur_pct < 0.99 then cur_pct = 1 end
+                    local updated_rec = {
+                        book_id = cid,
+                        partial_md5 = (item.hashes and item.hashes.partial_md5) or item.partial_md5 or cur_rec.partial_md5,
+                        percent = cur_pct,
+                        status = cloud_status,
+                        xpointer = cur_rec.xpointer or (merged_prog and merged_prog.xpointer),
+                        updated_at = os.time(),
+                        device_id = cfg.device_id,
+                    }
+                    local_st.progress[cid] = updated_rec
+                    Sync.saveLocalState(local_st)
+                    local cached_cat, cached_mp = Sync.loadCachedCatalog()
+                    cached_mp = cached_mp or {}
+                    cached_mp[cid] = updated_rec
+                    Sync.saveCachedCatalog(cached_cat, cached_mp)
+                    local upload_prog = local_st.progress
+                    Sync.runInBackground(function()
+                        Sync.uploadDeviceProgress(upload_prog)
+                    end, nil, { priority = "interactive_bg" })
+                end
                 closeDlg()
-                if opts.on_refresh then opts.on_refresh() end
+                if opts.on_progress_changed then
+                    opts.on_progress_changed(cid, cloud_status)
+                elseif opts.on_refresh then
+                    opts.on_refresh()
+                end
             end,
         }
         table.insert(row_items, btn)
@@ -222,83 +312,291 @@ local function addNativeRow(rows, btn, chevron, inner_w, closeDlg)
     end))
 end
 
+local function addNativeAction(actions, btn, closeDlg)
+    if not btn or btn.enabled == false or not btn.text or not btn.callback then return end
+    table.insert(actions, {
+        text = btn.text,
+        callback = function()
+            if closeDlg then closeDlg() end
+            btn.callback()
+        end,
+    })
+end
+
+local function buildClipboardButtonsRow(ctx, item, inner_w, closeDlg, opts)
+    local local_path = item.local_path
+    local fm = ctx and ctx.fm
+    local can_select = type(opts.on_start_select) == "function"
+    local can_cut_copy = (local_path ~= nil and fm ~= nil)
+    local can_paste = (fm ~= nil and fm.clipboard ~= nil and fm.pasteFileFromClipboard ~= nil
+        and (local_path ~= nil or (opts.current_folder ~= nil and opts.current_folder ~= "")))
+    if not (can_select or can_cut_copy or can_paste) then
+        return nil
+    end
+
+    local specs = {
+        {
+            text = ko_gettext("Select"),
+            enabled = can_select,
+            callback = function()
+                closeDlg()
+                if opts.on_start_select then opts.on_start_select(item) end
+            end,
+        },
+        {
+            text = ko_gettext("Cut"),
+            enabled = can_cut_copy and fm.cutFile ~= nil,
+            callback = function()
+                closeDlg()
+                fm:cutFile(local_path)
+                Widgets.showToast(_("Cut book to clipboard."), 2)
+            end,
+        },
+        {
+            text = ko_gettext("Copy"),
+            enabled = can_cut_copy and fm.copyFile ~= nil,
+            callback = function()
+                closeDlg()
+                fm:copyFile(local_path)
+                Widgets.showToast(_("Copied book to clipboard."), 2)
+            end,
+        },
+        {
+            text = ko_gettext("Paste"),
+            enabled = can_paste,
+            callback = function()
+                closeDlg()
+                fm:pasteFileFromClipboard(opts.current_folder or local_path)
+                if opts.on_refresh then opts.on_refresh(true) end
+            end,
+        },
+    }
+
+    local gap = sc(6)
+    local n = #specs
+    local btn_w = math.floor((inner_w - (gap * (n - 1))) / n)
+    local row_items = { align = "center" }
+    local used_w = 0
+    for idx, sp in ipairs(specs) do
+        if idx > 1 then
+            table.insert(row_items, HorizontalSpan:new{ width = gap })
+            used_w = used_w + gap
+        end
+        local w = (idx == n) and math.max(sc(40), inner_w - used_w) or btn_w
+        used_w = used_w + w
+        table.insert(row_items, Widgets.createButton{
+            text = sp.text,
+            enabled = sp.enabled,
+            width = w,
+            padding = sc(6),
+            padding_h = sc(3),
+            text_font_size = theme.fs and theme.fs("detail") or 14,
+            callback = sp.callback,
+        })
+    end
+    return HorizontalGroup:new(row_items)
+end
+
 local function showMoreBookActionsMenu(item, merged_prog, opts, ctx)
     local local_path = item.local_path
     local is_in_cloud = item.is_in_cloud or (item.folder ~= nil)
-    local chevron = function()
-        return TextWidget:new{ text = "›", face = Font:getFace("cfont", theme.fs and theme.fs("subtitle") or 18), fgcolor = theme.color_label_dim }
-    end
+    local page = 1
 
-    Widgets.showCardDialog{
-        title = tostring(item.title or _("Book Actions")),
-        body_widget = function(inner_w, closeDlg)
-            local rows = {}
-            local noop = function() end
-            local refresh_cb = function()
-                if opts.on_refresh then opts.on_refresh() end
+    local function renderMorePage()
+        local total_pages = 1
+        local prev_page_fn = function()
+            if page > 1 then
+                page = page - 1
+                renderMorePage()
+                return true
             end
-            local close_and_refresh = function()
-                closeDlg()
-                refresh_cb()
+        end
+        local next_page_fn = function()
+            if page < total_pages then
+                page = page + 1
+                renderMorePage()
+                return true
             end
+        end
 
-            if ctx and ctx.fm and ctx.filemanagerutil then
-                if ctx.has_provider then
-                    addNativeRow(rows, ctx.filemanagerutil.genBookCoverButton(local_path, ctx.book_props, noop), chevron, inner_w, closeDlg)
-                    addNativeRow(rows, ctx.filemanagerutil.genBookDescriptionButton(local_path, ctx.book_props, noop), chevron, inner_w, closeDlg)
+        Widgets.showCardDialog{
+            title = tostring(item.title or _("Book Actions")),
+            on_prev_page = prev_page_fn,
+            on_next_page = next_page_fn,
+            body_widget = function(inner_w, closeDlg)
+                local actions = {}
+                local noop = function() end
+                local refresh_cb = function(force)
+                    if opts.on_refresh then opts.on_refresh(force) end
                 end
-                if ctx.annotations and #ctx.annotations > 0 and ctx.fm.collections and ctx.fm.collections.genExportHighlightsButton then
-                    addNativeRow(rows, ctx.fm.collections:genExportHighlightsButton({ [local_path] = true }, noop), chevron, inner_w, closeDlg)
+                local force_refresh_cb = function()
+                    refresh_cb(true)
                 end
-                if ctx.fm.showOpenWithDialog then
-                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Open with…"), chevron(), inner_w, function()
-                        closeDlg()
-                        ctx.fm:showOpenWithDialog(local_path)
-                    end))
+                local close_and_refresh = function()
+                    closeDlg()
+                    refresh_cb(true)
                 end
-                if ctx.has_provider or ctx.been_opened then
-                    addNativeRow(rows, ctx.filemanagerutil.genResetSettingsButton(ctx.doc_settings_or_file, refresh_cb), chevron, inner_w, closeDlg)
-                end
-                if ctx.fm.file_dialog_added_buttons then
-                    for _, row_func in ipairs(ctx.fm.file_dialog_added_buttons) do
-                        local row = row_func(local_path, true, ctx.book_props)
-                        if type(row) == "table" then
-                            for _, btn in ipairs(row) do
-                                addNativeRow(rows, btn, chevron, inner_w, closeDlg)
+
+                if local_path and ctx and ctx.fm and ctx.filemanagerutil then
+                    if ctx.has_provider then
+                        addNativeAction(actions, ctx.filemanagerutil.genBookCoverButton(local_path, ctx.book_props, noop), closeDlg)
+                        addNativeAction(actions, ctx.filemanagerutil.genBookDescriptionButton(local_path, ctx.book_props, noop), closeDlg)
+                    end
+                    if ctx.fm.showOpenWithDialog then
+                        table.insert(actions, {
+                            text = ko_gettext("Open with…"),
+                            callback = function()
+                                closeDlg()
+                                ctx.fm:showOpenWithDialog(local_path)
+                            end,
+                        })
+                    end
+                    if opts.on_show_folder then
+                        table.insert(actions, {
+                            text = ko_gettext("Show folder"),
+                            callback = function()
+                                closeDlg()
+                                opts.on_show_folder(local_path)
+                            end,
+                        })
+                    elseif ctx.filemanagerutil.genShowFolderButton then
+                        addNativeAction(actions, ctx.filemanagerutil.genShowFolderButton(local_path, noop), closeDlg)
+                    end
+                    if ctx.has_provider or ctx.been_opened then
+                        addNativeAction(actions, ctx.filemanagerutil.genResetSettingsButton(ctx.doc_settings_or_file, force_refresh_cb), closeDlg)
+                    end
+                    if ctx.Converter and ctx.Converter.isSupported and ctx.Converter:isSupported(local_path) then
+                        addNativeAction(actions, ctx.Converter:genConvertButton(local_path, noop, force_refresh_cb), closeDlg)
+                    end
+                    if ctx.annotations and #ctx.annotations > 0 and ctx.fm.collections and ctx.fm.collections.genExportHighlightsButton then
+                        addNativeAction(actions, ctx.fm.collections:genExportHighlightsButton({ [local_path] = true }, noop), closeDlg)
+                    end
+                    if ctx.Device and ctx.Device.canExecuteScript and ctx.Device:canExecuteScript(local_path) then
+                        addNativeAction(actions, ctx.filemanagerutil.genExecuteScriptButton(local_path, noop), closeDlg)
+                    end
+                    if ctx.fm.file_dialog_added_buttons then
+                        for _, row_func in ipairs(ctx.fm.file_dialog_added_buttons) do
+                            local ok_r, row = pcall(row_func, local_path, true, ctx.book_props, close_and_refresh)
+                            if ok_r and type(row) == "table" then
+                                for _, btn in ipairs(row) do
+                                    addNativeAction(actions, btn, closeDlg)
+                                end
                             end
                         end
                     end
+                    if ctx.fm.showRenameFileDialog then
+                        table.insert(actions, {
+                            text = ko_gettext("Rename"),
+                            callback = function()
+                                closeDlg()
+                                ctx.fm:showRenameFileDialog(local_path, true)
+                            end,
+                        })
+                    end
+                    if ctx.fm.showDeleteFileDialog then
+                        table.insert(actions, {
+                            text = ko_gettext("Delete"),
+                            callback = function()
+                                closeDlg()
+                                ctx.fm:showDeleteFileDialog(local_path, force_refresh_cb)
+                            end,
+                        })
+                    end
                 end
-                if ctx.fm.showRenameFileDialog then
-                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Rename"), chevron(), inner_w, function()
+
+                table.insert(actions, {
+                    text = _("Book Details"),
+                    callback = function()
                         closeDlg()
-                        ctx.fm:showRenameFileDialog(local_path, true)
-                    end))
+                        BookCardMixin.showBookDetailModal(item, merged_prog, opts)
+                    end,
+                })
+
+                if is_in_cloud then
+                    table.insert(actions, {
+                        text = _("Delete from Cloud"),
+                        callback = function()
+                            closeDlg()
+                            promptDeleteFromCloud(item, opts)
+                        end,
+                    })
                 end
-                if ctx.fm.showDeleteFileDialog then
-                    table.insert(rows, Widgets.createMenuRow(ko_gettext("Delete"), chevron(), inner_w, function()
+
+                local grid_rows = Widgets.buildActionGridRows(actions, 2)
+                local sh = (ctx and ctx.Device and ctx.Device.screen and ctx.Device.screen.getHeight and ctx.Device.screen:getHeight()) or 800
+                local max_rows = math.max(4, math.floor((sh - sc(210)) / sc(46)))
+                total_pages = math.max(1, math.ceil(#grid_rows / max_rows))
+                if page > total_pages then page = total_pages end
+
+                local start_r = (page - 1) * max_rows + 1
+                local end_r = math.min(#grid_rows, start_r + max_rows - 1)
+                local page_rows = {}
+                for i = start_r, end_r do
+                    table.insert(page_rows, grid_rows[i])
+                end
+
+                local grid_w = Widgets.createActionGrid(page_rows, inner_w, {
+                    is_grouped = true,
+                    cols = 2,
+                    gap = sc(8),
+                    gap_v = sc(8),
+                    padding = sc(7),
+                    padding_h = sc(6),
+                })
+
+                if total_pages <= 1 then
+                    return grid_w
+                end
+
+                local prev_btn = Widgets.createButton{
+                    text = _("‹ Prev"),
+                    enabled = page > 1,
+                    padding = sc(4),
+                    padding_h = sc(10),
+                    text_font_size = theme.fs and theme.fs("detail") or 14,
+                    callback = function()
                         closeDlg()
-                        ctx.fm:showDeleteFileDialog(local_path, refresh_cb)
-                    end))
-                end
-            end
+                        page = page - 1
+                        renderMorePage()
+                    end,
+                }
+                local next_btn = Widgets.createButton{
+                    text = _("Next ›"),
+                    enabled = page < total_pages,
+                    padding = sc(4),
+                    padding_h = sc(10),
+                    text_font_size = theme.fs and theme.fs("detail") or 14,
+                    callback = function()
+                        closeDlg()
+                        page = page + 1
+                        renderMorePage()
+                    end,
+                }
+                local page_lbl = TextWidget:new{
+                    text = string.format("%d / %d", page, total_pages),
+                    face = Font:getFace("cfont", theme.fs and theme.fs("detail") or 14),
+                    fgcolor = theme.color_label_dim,
+                }
+                local spacer_w = math.max(sc(8), math.floor((inner_w - prev_btn:getSize().w - next_btn:getSize().w - page_lbl:getSize().w) / 2))
+                return VerticalGroup:new{
+                    align = "left",
+                    grid_w,
+                    VerticalSpan:new{ width = sc(10) },
+                    HorizontalGroup:new{
+                        align = "center",
+                        prev_btn,
+                        HorizontalSpan:new{ width = spacer_w },
+                        page_lbl,
+                        HorizontalSpan:new{ width = spacer_w },
+                        next_btn,
+                    },
+                }
+            end,
+            buttons = { { text = _("Close") } },
+        }
+    end
 
-            if is_in_cloud then
-                table.insert(rows, Widgets.createMenuRow(_("Delete from Cloud"), chevron(), inner_w, function()
-                    closeDlg()
-                    promptDeleteFromCloud(item, opts)
-                end))
-            end
-
-            table.insert(rows, Widgets.createMenuRow(_("Book Details"), chevron(), inner_w, function()
-                closeDlg()
-                BookCardMixin.showBookDetailModal(item, merged_prog, opts)
-            end))
-
-            return Widgets.createMenuList(rows, inner_w)
-        end,
-        buttons = { { text = _("Close") } },
-    }
+    renderMorePage()
 end
 
 function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
@@ -336,17 +634,20 @@ function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
                     end))
                 end
             elseif is_in_cloud then
+                local dl_opts = {}
+                for k, v in pairs(opts) do dl_opts[k] = v end
+                dl_opts.merged_prog = merged_prog
                 table.insert(rows, Widgets.createMenuRow(_("Download & Open"), chevron(), inner_w, function()
                     closeDlg()
-                    BookCardMixin.downloadBook(item, true, opts)
+                    BookCardMixin.downloadBook(item, true, dl_opts)
                 end))
                 table.insert(rows, Widgets.createMenuRow(_("Download"), chevron(), inner_w, function()
                     closeDlg()
-                    BookCardMixin.downloadBook(item, false, opts)
+                    BookCardMixin.downloadBook(item, false, dl_opts)
                 end))
             end
 
-            if ctx and ctx.fm and ctx.filemanagerutil then
+            if local_path and ctx and ctx.fm and ctx.filemanagerutil then
                 if ctx.has_provider or ctx.been_opened then
                     if ctx.fm.collections and ctx.fm.collections.genAddToCollectionButton then
                         addNativeRow(rows, ctx.fm.collections:genAddToCollectionButton(local_path, noop, refresh_cb), chevron, inner_w, closeDlg)
@@ -372,13 +673,19 @@ function BookCardMixin.showBookActionsMenu(item, merged_prog, opts)
 
             local menu_list = Widgets.createMenuList(rows, inner_w)
             local status_row = buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, opts)
-            if status_row then
-                return VerticalGroup:new{
-                    align = "left",
-                    status_row,
-                    VerticalSpan:new{ width = sc(10) },
-                    menu_list,
-                }
+            local clip_row = buildClipboardButtonsRow(ctx, item, inner_w, closeDlg, opts)
+            if status_row or clip_row then
+                local vg = VerticalGroup:new{ align = "left" }
+                if status_row then
+                    table.insert(vg, status_row)
+                    table.insert(vg, VerticalSpan:new{ width = sc(8) })
+                end
+                if clip_row then
+                    table.insert(vg, clip_row)
+                    table.insert(vg, VerticalSpan:new{ width = sc(10) })
+                end
+                table.insert(vg, menu_list)
+                return vg
             end
             return menu_list
         end,
@@ -423,17 +730,20 @@ function BookCardMixin.showBookDetailModal(item, merged_prog, opts)
             })
         end
     elseif is_in_cloud then
+        local dl_opts = {}
+        for k, v in pairs(opts) do dl_opts[k] = v end
+        dl_opts.merged_prog = merged_prog
         table.insert(buttons, {
-            text = _("Download & Open"),
+            text = _("Read"),
             is_primary = true,
             callback = function()
-                BookCardMixin.downloadBook(item, true, opts)
+                BookCardMixin.downloadBook(item, true, dl_opts)
             end,
         })
         table.insert(buttons, {
             text = _("Download"),
             callback = function()
-                BookCardMixin.downloadBook(item, false, opts)
+                BookCardMixin.downloadBook(item, false, dl_opts)
             end,
         })
     end

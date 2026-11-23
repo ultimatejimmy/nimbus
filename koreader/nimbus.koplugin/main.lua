@@ -304,8 +304,16 @@ function Nimbus:getCurrentProgressState(book_id, partial_md5)
     if ui.toc and ui.toc.getTocTitleByPage and page then
         pcall(function() chapter = ui.toc:getTocTitleByPage(page) end)
     end
+    local summary = ds and ds:readSetting("summary")
+    local raw_status = summary and summary.status
     local status = "reading"
-    if pct >= 0.99 then status = "finished" elseif pct <= 0 then status = "unread" end
+    if raw_status == "complete" or raw_status == "finished" or pct >= 0.99 then
+        status = "finished"
+    elseif raw_status == "abandoned" then
+        status = "abandoned"
+    elseif pct <= 0 then
+        status = "unread"
+    end
     return {
         book_id = book_id,
         partial_md5 = partial_md5,
@@ -545,13 +553,17 @@ function Nimbus:onCloseDocument()
     local kosync_ok = KOSync.isConfigured()
     local upload_progress = nil
     if cloud_ok then
-        local cached_cat = Sync.loadCachedCatalog()
+        local cached_cat, merged_prog = Sync.loadCachedCatalog()
         local book_id = Matcher.resolve(filepath, cached_cat, props)
         if book_id then
             local_prog.book_id = book_id
+            local_prog.device_id = cfg.device_id
             local st = Sync.loadLocalState()
             st.progress[book_id] = local_prog
             Sync.saveLocalState(st)
+            merged_prog = merged_prog or {}
+            merged_prog[book_id] = local_prog
+            Sync.saveCachedCatalog(cached_cat, merged_prog)
             upload_progress = st.progress
         end
     end
