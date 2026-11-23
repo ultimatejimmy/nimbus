@@ -54,4 +54,52 @@ describe("nimbus_progress and streaming HTTP progress", function()
         assert.are.equal("helloworld", content)
         assert.are.equal("done", calls[#calls].phase)
     end)
+
+    it("tracks active job and notifies status listener with progress-only flag", function()
+        local mods = {
+            "ffi/blitbuffer", "device", "ui/font",
+            "ui/widget/container/framecontainer", "ui/widget/container/centercontainer",
+            "ui/widget/container/inputcontainer", "ui/widget/verticalgroup",
+            "ui/widget/verticalspan", "ui/widget/horizontalgroup",
+            "ui/widget/horizontalspan", "ui/widget/textwidget",
+            "ui/uimanager", "ui/widget/buttontable", "ui/widget/button",
+            "ui/widget/progresswidget", "ui/size", "ui/time",
+        }
+        local saved = {}
+        for _, m in ipairs(mods) do
+            saved[m] = package.loaded[m]
+            package.loaded[m] = {}
+        end
+        package.loaded["ffi/blitbuffer"] = { COLOR_BLACK = 0, COLOR_WHITE = 1 }
+        package.loaded["device"] = { screen = {} }
+
+        package.loaded["nimbus_progress"] = nil
+        local NimbusProgress = require("nimbus_progress")
+        local events = {}
+        NimbusProgress.setStatusListener(function(is_prog_only)
+            table.insert(events, is_prog_only)
+        end)
+
+        local job = { kind = "sync", pct = 10, reopen = function() end }
+        NimbusProgress.setActiveJob(job)
+        assert.are.equal(job, NimbusProgress.getActiveJob())
+        assert.are.equal(false, events[1])
+
+        NimbusProgress.notifyStatus(true)
+        assert.are.equal(true, events[2])
+
+        -- Clearing a non-matching job does not clear the active job
+        NimbusProgress.clearActiveJob({ kind = "other" })
+        assert.are.equal(job, NimbusProgress.getActiveJob())
+
+        NimbusProgress.clearActiveJob(job)
+        assert.is_nil(NimbusProgress.getActiveJob())
+        assert.are.equal(false, events[3])
+        NimbusProgress.setStatusListener(nil)
+
+        package.loaded["nimbus_progress"] = nil
+        for _, m in ipairs(mods) do
+            package.loaded[m] = saved[m]
+        end
+    end)
 end)

@@ -56,6 +56,16 @@ local FILTER_LABELS = {
     cloud = _("Cloud Only"),
 }
 
+function UILibrary.formatActiveJobStatus(active_job)
+    if not active_job then return nil end
+    if active_job.kind == "sync" then
+        return string.format(_("· Syncing (%d%%)..."), active_job.pct or 0)
+    elseif active_job.kind == "download" then
+        return string.format(_("· Downloading (%d%%)..."), active_job.pct or 0)
+    end
+    return string.format(_("· Uploading (%d/%d)..."), active_job.current or 1, active_job.total or 1)
+end
+
 local function fileExists(path)
     if not path then return false end
     local f = io.open(path, "rb")
@@ -283,71 +293,164 @@ function UILibrary.buildView(on_open_book, opts)
             return
         end
 
-        local prog_dlg = NimbusProgress:new{
-            title = _("Syncing Library"),
+        local existing_job = NimbusProgress.getActiveJob()
+        if existing_job then
+            if existing_job.reopen then existing_job.reopen() end
+            return
+        end
+
+        local active_cancel_fn = nil
+        local finished = false
+        local is_canceled = false
+        local prog_dlg
+        local provider_label = Cloud.getProviderLabel(Settings.load().provider)
+
+        local job = {
+            kind = "sync",
+            pct = 5,
             subtitle = _("Connecting to cloud storage..."),
-            detail = Cloud.getProviderLabel(Settings.load().provider),
-            progress = 5,
+            detail = provider_label,
+            is_background = false,
         }
-        prog_dlg:show()
+        NimbusProgress.setActiveJob(job)
+
+        local function cleanupAndClose()
+            if prog_dlg and not prog_dlg.is_closed then
+                prog_dlg:close()
+            end
+            NimbusProgress.clearActiveJob(job)
+        end
+
+        local function cancelSync()
+            if finished then return end
+            finished = true
+            is_canceled = true
+            if active_cancel_fn then
+                local c_fn = active_cancel_fn
+                active_cancel_fn = nil
+                pcall(c_fn)
+            end
+            cleanupAndClose()
+            Widgets.showToast(_("Sync canceled."), 2)
+        end
+
+        local function openProgressDialog()
+            if finished then return end
+            if prog_dlg and not prog_dlg.is_closed then return end
+            job.is_background = false
+            prog_dlg = NimbusProgress:new{
+                title = _("Syncing Library"),
+                subtitle = job.subtitle,
+                detail = job.detail,
+                progress = job.pct,
+                background_text = _("Background"),
+                on_background = function()
+                    if finished then return end
+                    job.is_background = true
+                    NimbusProgress.notifyStatus(false)
+                    Widgets.showToast(_("Syncing library in background..."), 2.5)
+                end,
+                on_cancel = cancelSync,
+            }
+            prog_dlg:show()
+            NimbusProgress.notifyStatus(false)
+        end
+
+        job.reopen = openProgressDialog
+        job.cancel = cancelSync
+
+        openProgressDialog()
+
+        local function updateJobProgress(pct, subtitle, detail)
+            if pct ~= nil then job.pct = pct end
+            if subtitle ~= nil then job.subtitle = subtitle end
+            if detail ~= nil then job.detail = detail end
+            if prog_dlg and not prog_dlg.is_closed then
+                prog_dlg:setProgress(job.pct, job.subtitle, job.detail)
+            end
+            if job.is_background then
+                NimbusProgress.notifyStatus(true)
+            end
+        end
 
         UIManager:nextTick(function()
+            if finished or is_canceled then return end
             if run_extra_sync and opts.on_sync_now then
-                prog_dlg:setProgress(20, _("Syncing device progress & stats..."))
+                updateJobProgress(15, _("Syncing device progress & stats..."))
                 opts.on_sync_now()
             end
+            if finished or is_canceled then return end
 
-            if not prog_dlg:isCanceled() then
-                prog_dlg:setProgress(45, _("Loading library catalog..."))
+            updateJobProgress(25, _("Scanning local books..."))
+            refreshLocalBooks(true)
+            local local_snapshot = device_books
+
+            local _started, cancel_fn = Sync.runInBackground(function(report_progress)
+                if report_progress then report_progress(40, _("Loading library catalog..."), provider_label) end
                 local ok_cat, cat_or_err = false, nil
                 Sync.loadCatalog(function(ok, res)
                     ok_cat = ok
                     cat_or_err = res
                 end)
-                if ok_cat then
-                    catalog_data = cat_or_err or { books = {} }
-                    sync_error = nil
-                else
-                    sync_error = tostring(cat_or_err)
+                if not ok_cat or type(cat_or_err) ~= "table" then
+                    return { ok = false, err = tostring(cat_or_err or "sync_error") }
                 end
-            end
 
-            if not prog_dlg:isCanceled() and not sync_error then
-                prog_dlg:setProgress(75, _("Merging reading progress..."))
+                if report_progress then report_progress(70, _("Merging reading progress..."), provider_label) end
+                local merged = {}
                 Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
                     if ok_p then
-                        merged_progress = Merge.mergeProgress(shards)
+                        merged = Merge.mergeProgress(shards)
                     end
                 end)
-                Sync.saveCachedCatalog(catalog_data, merged_progress)
-            end
 
-            if not prog_dlg:isCanceled() then
-                prog_dlg:setProgress(88, _("Scanning local books..."))
-                refreshLocalBooks(true)
-                if not sync_error then
-                    merged_progress = Sync.collectAndUploadLocalProgress(catalog_data, device_books, merged_progress)
-                    if Sync.reuploadFixedCovers then
-                        pcall(Sync.reuploadFixedCovers, catalog_data, device_books, function(idx, total, title)
-                            prog_dlg:setProgress(math.min(97, 92 + math.floor((idx / math.max(1, total)) * 5)),
-                                string.format(_("Upgrading cloud covers (%d/%d)..."), idx, total))
-                        end, function() return prog_dlg:isCanceled() end)
-                    end
-                    if Sync.backfillRelativeDirs(catalog_data, device_books) then
-                        Sync.saveCatalog(catalog_data, function() end)
-                    end
-                    Sync.saveCachedCatalog(catalog_data, merged_progress)
-                    if Sync.cleanupCloudBookFolders then
-                        pcall(Sync.cleanupCloudBookFolders, catalog_data)
-                    end
+                merged = Sync.collectAndUploadLocalProgress(cat_or_err, local_snapshot, merged)
+                if Sync.reuploadFixedCovers then
+                    pcall(Sync.reuploadFixedCovers, cat_or_err, local_snapshot, function(idx, total)
+                        if report_progress then
+                            local p = math.min(96, 82 + math.floor((idx / math.max(1, total)) * 14))
+                            report_progress(p, string.format(_("Upgrading cloud covers (%d/%d)..."), idx, total), provider_label)
+                        end
+                    end)
                 end
-                prog_dlg:setProgress(100, _("Sync complete"))
-            end
-            prog_dlg:close()
-            if isAlive() then renderShelf() end
-            if post_toast_msg then
-                Widgets.showToast(post_toast_msg, 3)
-            end
+                if Sync.backfillRelativeDirs(cat_or_err, local_snapshot) then
+                    Sync.saveCatalog(cat_or_err, function() end)
+                end
+                Sync.saveCachedCatalog(cat_or_err, merged)
+                if Sync.cleanupCloudBookFolders then
+                    pcall(Sync.cleanupCloudBookFolders, cat_or_err)
+                end
+                if report_progress then report_progress(100, _("Sync complete"), provider_label) end
+                return { ok = true }
+            end, function(ok_bg, res)
+                active_cancel_fn = nil
+                if finished or is_canceled then return end
+                finished = true
+                cleanupAndClose()
+                if ok_bg and type(res) == "table" and res.ok then
+                    catalog_data, merged_progress = Sync.loadCachedCatalog()
+                    shelf_cache.mergeLocalProgressIntoMerged()
+                    sync_error = nil
+                    refreshLocalBooks(false)
+                else
+                    sync_error = tostring((type(res) == "table" and res.err) or res or "sync_error")
+                end
+                if isAlive() then renderShelf() end
+                if post_toast_msg then
+                    Widgets.showToast(post_toast_msg, 3)
+                elseif sync_error then
+                    Widgets.showToast(_("Sync failed: ") .. tostring(sync_error), 3.5)
+                end
+            end, {
+                user_initiated = true,
+                priority = "interactive_bg",
+                on_progress = function(pct, sub, det)
+                    if not finished and not is_canceled then
+                        updateJobProgress(pct, sub, det)
+                    end
+                end,
+            })
+            active_cancel_fn = cancel_fn
         end)
     end
 
@@ -886,11 +989,12 @@ function UILibrary.buildView(on_open_book, opts)
             table.insert(sub_left_items, filter_btn)
         end
 
+        shelf_cache.active_status_widget = nil
         if not select_state.active then
             local status_suffix
-            local active_up = UILibrary.getActiveJob and UILibrary.getActiveJob()
-            if active_up then
-                status_suffix = string.format(_("· Uploading (%d/%d)..."), active_up.current or 1, active_up.total or 1)
+            local active_job = NimbusProgress.getActiveJob and NimbusProgress.getActiveJob()
+            if active_job then
+                status_suffix = UILibrary.formatActiveJobStatus(active_job)
             elseif bg_syncing then
                 status_suffix = _("· Syncing...")
             elseif not configured then
@@ -901,12 +1005,37 @@ function UILibrary.buildView(on_open_book, opts)
                 status_suffix = string.format("· %d %s", #display_books, #display_books == 1 and _("item") or _("items"))
             end
             local left_fixed_w = sub_left_items[1]:getSize().w
-            table.insert(sub_left_items, TextWidget:new{
+            local status_max_w = math.max(sc(60), sw - sc(24) - left_fixed_w - sub_tools:getSize().w - sc(8))
+            local is_tappable = (active_job ~= nil and type(active_job.reopen) == "function") or sync_error ~= nil
+            local status_lbl = TextWidget:new{
                 text = status_suffix,
                 face = Font:getFace("cfont", is_sui and theme.fs("detail") or 13),
-                fgcolor = theme.color_label_dim,
-                max_width = math.max(sc(60), sw - sc(24) - left_fixed_w - sub_tools:getSize().w - sc(8)),
-            })
+                bold = active_job ~= nil,
+                fgcolor = (active_job ~= nil) and Blitbuffer.COLOR_BLACK or theme.color_label_dim,
+                max_width = status_max_w,
+            }
+            shelf_cache.active_status_widget = status_lbl
+            if is_tappable then
+                table.insert(sub_left_items, Widgets.makeTapItem(
+                    FrameContainer:new{
+                        padding = sc(3),
+                        padding_left = sc(4),
+                        padding_right = sc(4),
+                        bordersize = 0,
+                        status_lbl,
+                    },
+                    function()
+                        local cur_job = NimbusProgress.getActiveJob and NimbusProgress.getActiveJob()
+                        if cur_job and cur_job.reopen then
+                            cur_job.reopen()
+                        elseif sync_error then
+                            fetchCloudWithBar(true)
+                        end
+                    end
+                ))
+            else
+                table.insert(sub_left_items, status_lbl)
+            end
         end
         end
         local sub_left = HorizontalGroup:new(sub_left_items)
@@ -1264,7 +1393,8 @@ function UILibrary.buildView(on_open_book, opts)
                     }
                 else
                     local cached_cover = Covers.getCachedCoverPath(item)
-                    local thumb_widget = cached_cover and Covers.createCoverImageWidget(cached_cover, thumb_w, thumb_h)
+                    local in_ram = cached_cover and Covers.hasMemoryCachedCover and Covers.hasMemoryCachedCover(cached_cover, thumb_w, thumb_h)
+                    local thumb_widget = in_ram and Covers.createCoverImageWidget(cached_cover, thumb_w, thumb_h)
                         or Covers.createPlaceholderWidget(thumb_w, thumb_h, item.title)
                     thumb_frame = FrameContainer:new{
                         bordersize = 0,
@@ -1276,14 +1406,17 @@ function UILibrary.buildView(on_open_book, opts)
                             thumb_widget,
                         },
                     }
-                    if not cached_cover then
+                    local function applyListThumb(new_img)
+                        if my_gen ~= render_gen or not new_img or not isAlive() or not thumb_frame or not thumb_frame[1] then return end
+                        thumb_frame[1][1] = new_img
+                        dirtyHost()
+                    end
+                    if cached_cover and not in_ram then
+                        Covers.enqueueDecodeCover(cached_cover, thumb_w, thumb_h, applyListThumb)
+                    elseif not cached_cover then
                         Covers.enqueueFetchCover(item, function(loaded_path)
-                            if my_gen ~= render_gen or not loaded_path or not isAlive() or not thumb_frame or not thumb_frame[1] then return end
-                            local new_img = Covers.createCoverImageWidget(loaded_path, thumb_w, thumb_h)
-                            if new_img then
-                                thumb_frame[1][1] = new_img
-                                dirtyHost()
-                            end
+                            if my_gen ~= render_gen or not loaded_path or not isAlive() then return end
+                            Covers.enqueueDecodeCover(loaded_path, thumb_w, thumb_h, applyListThumb)
                         end, opts.open_doc_info and opts.open_doc_info.open_doc)
                     end
                 end
@@ -1376,20 +1509,24 @@ function UILibrary.buildView(on_open_book, opts)
                     }
                 else
                     local cached_cover = Covers.getCachedCoverPath(item)
-                    local cover_img = cached_cover and Covers.createCoverImageWidget(cached_cover, cover_slot_w, cover_slot_h)
+                    local in_ram = cached_cover and Covers.hasMemoryCachedCover and Covers.hasMemoryCachedCover(cached_cover, cover_slot_w, cover_slot_h)
+                    local cover_img = in_ram and Covers.createCoverImageWidget(cached_cover, cover_slot_w, cover_slot_h)
                         or Covers.createPlaceholderWidget(cover_slot_w, cover_slot_h, item.title)
                     cover_slot = BottomContainer:new{
                         dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
                         cover_img,
                     }
-                    if not cached_cover then
+                    local function applyGridCover(new_img)
+                        if my_gen ~= render_gen or not new_img or not isAlive() or not cover_slot then return end
+                        cover_slot[1] = new_img
+                        dirtyHost()
+                    end
+                    if cached_cover and not in_ram then
+                        Covers.enqueueDecodeCover(cached_cover, cover_slot_w, cover_slot_h, applyGridCover)
+                    elseif not cached_cover then
                         Covers.enqueueFetchCover(item, function(loaded_path)
-                            if my_gen ~= render_gen or not loaded_path or not isAlive() or not cover_slot then return end
-                            local new_img = Covers.createCoverImageWidget(loaded_path, cover_slot_w, cover_slot_h)
-                            if new_img then
-                                cover_slot[1] = new_img
-                                dirtyHost()
-                            end
+                            if my_gen ~= render_gen or not loaded_path or not isAlive() then return end
+                            Covers.enqueueDecodeCover(loaded_path, cover_slot_w, cover_slot_h, applyGridCover)
                         end, opts.open_doc_info and opts.open_doc_info.open_doc)
                     end
                 end
@@ -1670,13 +1807,20 @@ function UILibrary.buildView(on_open_book, opts)
         collectgarbage("collect")
     end
 
-    if UILibrary.setStatusListener then
-        UILibrary.setStatusListener(function()
-            if isAlive() and renderShelf then
-                renderShelf()
+    NimbusProgress.setStatusListener(function(is_progress_only)
+        if not isAlive() then return end
+        if is_progress_only and shelf_cache.active_status_widget then
+            local active_job = NimbusProgress.getActiveJob()
+            if active_job then
+                shelf_cache.active_status_widget:setText(UILibrary.formatActiveJobStatus(active_job))
+                dirtyHost()
+                return
             end
-        end)
-    end
+        end
+        if renderShelf then
+            renderShelf()
+        end
+    end)
     refreshLocalBooks(false)
     renderShelf()
 

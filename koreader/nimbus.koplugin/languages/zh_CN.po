@@ -377,6 +377,10 @@ msgstr "下载"
 msgid "Download & Open"
 msgstr "下载并打开"
 
+# en-hash: e454c2e4912f1534340282bc2a17bbf1
+msgid "Download canceled."
+msgstr "下载已取消。"
+
 # en-hash: 59d30102eb8d3c0c8b031e08a28acd28
 msgid "Download failed: "
 msgstr "下载失败："
@@ -392,6 +396,10 @@ msgstr "已从 Nimbus Cloud 下载 %d 本新书。"
 # en-hash: d0823558291ef268fed478a0369da5e8
 msgid "Downloaded '%s'."
 msgstr "已下载“%s”。"
+
+# en-hash: c0105b4a79272685ba1eb94618ffdbe4
+msgid "Downloading '%s' in background..."
+msgstr "正在后台下载“%s”..."
 
 # en-hash: 6f4ae97857f62d9269358fd71663be7c
 msgid "Downloading Book"
@@ -440,6 +448,10 @@ msgstr "筛选图书"
 # en-hash: 166fc1b0c6bd096fa7235863a8bdb0e9
 msgid "Filter books by title, author, or series:"
 msgstr "按书名、作者或丛书筛选图书："
+
+# en-hash: f1f52329b8eac84be605b93a5f1bee4e
+msgid "Finalizing %d of %d..."
+msgstr "正在完成第 %d 项，共 %d 项..."
 
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
@@ -865,6 +877,10 @@ msgstr "立即同步"
 msgid "Sync Reading Statistics"
 msgstr "同步阅读统计"
 
+# en-hash: be576564addeba72493580a65914079c
+msgid "Sync canceled."
+msgstr "同步已取消。"
+
 # en-hash: e57f4816285d9b4b90e1e66aecb855b9
 msgid "Sync complete"
 msgstr "同步完成"
@@ -872,6 +888,10 @@ msgstr "同步完成"
 # en-hash: 29d70df09a61d88c3f2ecaaa5f479848
 msgid "Sync error: "
 msgstr "同步错误："
+
+# en-hash: 8cb025116cf18b2ea16a86344ee7e8eb
+msgid "Sync failed: "
+msgstr "同步失败："
 
 # en-hash: a22c1c4f6157fcb89a6fab8de530e257
 msgid "Sync on Book Open/Close"
@@ -892,6 +912,10 @@ msgstr "正在同步书库"
 # en-hash: be633d065af8047fb567a2000cb18275
 msgid "Syncing device progress & stats..."
 msgstr "正在同步设备进度与统计数据..."
+
+# en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
+msgid "Syncing library in background..."
+msgstr "正在后台同步书库..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"
@@ -993,6 +1017,10 @@ msgstr "已将 '%s' 上传到 Nimbus Cloud！"
 msgid "Uploading %d book(s) in background..."
 msgstr "正在后台上传 %d 本书..."
 
+# en-hash: dc81c1b2fe7b5f9409135a18c176b3b5
+msgid "Uploading %d of %d (%d%%)..."
+msgstr "正在上传 %d/%d (%d%%)..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "正在上传第 %d/%d 个..."
@@ -1049,6 +1077,10 @@ msgstr "个项目"
 msgid "items"
 msgstr "个项目"
 
+# en-hash: 6f76d7f71863996f4095d5322d06d290
+msgid "· Downloading (%d%%)..."
+msgstr "· 正在下载 (%d%%)..."
+
 # en-hash: 4b7edb48409266950a05418e080ab2c1
 msgid "· Offline"
 msgstr "· 离线"
@@ -1056,6 +1088,10 @@ msgstr "· 离线"
 # en-hash: 7507b4c2337968b7fc7cdda1398f36e1
 msgid "· Sync error"
 msgstr "· 同步出错"
+
+# en-hash: 036a791a530a0f910ae787fc98cbb436
+msgid "· Syncing (%d%%)..."
+msgstr "· 正在同步 (%d%%)..."
 
 # en-hash: 2d8ad8668093592f584b2a0f447e2165
 msgid "· Syncing..."

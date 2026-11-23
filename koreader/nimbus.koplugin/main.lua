@@ -376,28 +376,30 @@ function Nimbus:uploadCurrentBook(on_done)
     }
     prog_dlg:show()
 
-    Sync.uploadBook(filepath, props, nil, function(ok, res)
-        prog_dlg:close()
-        if ok then
-            Logger.info("Uploaded book to Nimbus Cloud: " .. tostring(res.title))
-            Widgets.showToast(string.format(_("Uploaded '%s' to Nimbus Cloud!"), tostring(res.title)), 3)
-        elseif res ~= "canceled" then
-            Logger.err("Upload failed for " .. filename .. ": " .. tostring(res))
-            Widgets.showToast(_("Upload failed: ") .. tostring(res), 4)
-        else
-            Logger.info("Upload canceled by user: " .. filename)
-        end
-        if on_done then on_done(ok) end
-    end, {
-        is_canceled = function() return prog_dlg:isCanceled() end,
-        on_progress = function(sent, total, phase)
-            local pct = (total and total > 0) and math.floor((sent / total) * 100) or 0
-            local sub = (phase == "finalizing")
-                and _("Finalizing catalog…")
-                or string.format("%s / %s (%d%%)", NimbusProgress.formatBytes(sent), NimbusProgress.formatBytes(total), pct)
-            prog_dlg:setProgress(pct, sub)
-        end,
-    })
+    UIManager:nextTick(function()
+        Sync.uploadBook(filepath, props, nil, function(ok, res)
+            prog_dlg:close()
+            if ok then
+                Logger.info("Uploaded book to Nimbus Cloud: " .. tostring(res.title))
+                Widgets.showToast(string.format(_("Uploaded '%s' to Nimbus Cloud!"), tostring(res.title)), 3)
+            elseif res ~= "canceled" then
+                Logger.err("Upload failed for " .. filename .. ": " .. tostring(res))
+                Widgets.showToast(_("Upload failed: ") .. tostring(res), 4)
+            else
+                Logger.info("Upload canceled by user: " .. filename)
+            end
+            if on_done then on_done(ok) end
+        end, {
+            is_canceled = function() return prog_dlg:isCanceled() end,
+            on_progress = function(sent, total, phase)
+                local pct = (total and total > 0) and math.floor((sent / total) * 100) or 0
+                local sub = (phase == "finalizing")
+                    and _("Finalizing catalog…")
+                    or string.format("%s / %s (%d%%)", NimbusProgress.formatBytes(sent), NimbusProgress.formatBytes(total), pct)
+                prog_dlg:setProgress(pct, sub)
+            end,
+        })
+    end)
 end
 
 function Nimbus:syncCurrentBook(interactive)

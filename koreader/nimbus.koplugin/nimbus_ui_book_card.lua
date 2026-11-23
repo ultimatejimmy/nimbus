@@ -64,6 +64,11 @@ end
 
 function BookCardMixin.downloadBook(item, open_after, opts)
     opts = opts or {}
+    local existing_job = NimbusProgress.getActiveJob()
+    if existing_job then
+        if existing_job.reopen then existing_job.reopen() end
+        return
+    end
     local cfg = Settings.load()
     local ok_sc, Scanner = pcall(require, "nimbus_scanner")
     local dirs = (ok_sc and Scanner and Scanner.getEffectiveBooksDirs) and Scanner.getEffectiveBooksDirs() or {}
@@ -74,21 +79,97 @@ function BookCardMixin.downloadBook(item, open_after, opts)
         util.makePath(target_dir)
     end
     local dest = target_dir .. "/" .. (item.filename or (item.id .. "." .. (item.format or "epub")))
-    local prog_dlg = NimbusProgress:new{
-        title = _("Downloading Book"),
+    local book_title = tostring(item.title or item.filename or _("Book"))
+    local active_cancel_fn = nil
+    local finished = false
+    local is_canceled = false
+    local prog_dlg
+
+    local job = {
+        kind = "download",
+        pct = 0,
         subtitle = _("Connecting to cloud storage..."),
         detail = item.filename or item.title,
-        progress = 0,
+        is_background = false,
     }
-    prog_dlg:show()
+    NimbusProgress.setActiveJob(job)
+
+    local function cleanupAndClose()
+        if prog_dlg and not prog_dlg.is_closed then
+            prog_dlg:close()
+        end
+        NimbusProgress.clearActiveJob(job)
+    end
+
+    local function cancelDownload()
+        if finished then return end
+        finished = true
+        is_canceled = true
+        if active_cancel_fn then
+            local c_fn = active_cancel_fn
+            active_cancel_fn = nil
+            pcall(c_fn)
+        end
+        cleanupAndClose()
+        Widgets.showToast(_("Download canceled."), 2)
+    end
+
+    local function openProgressDialog()
+        if finished then return end
+        if prog_dlg and not prog_dlg.is_closed then return end
+        job.is_background = false
+        prog_dlg = NimbusProgress:new{
+            title = _("Downloading Book"),
+            subtitle = job.subtitle,
+            detail = job.detail,
+            progress = job.pct,
+            background_text = _("Background"),
+            on_background = function()
+                if finished then return end
+                job.is_background = true
+                NimbusProgress.notifyStatus(false)
+                Widgets.showToast(string.format(_("Downloading '%s' in background..."), book_title), 2.5)
+            end,
+            on_cancel = cancelDownload,
+        }
+        prog_dlg:show()
+        NimbusProgress.notifyStatus(false)
+    end
+
+    job.reopen = openProgressDialog
+    job.cancel = cancelDownload
+
+    openProgressDialog()
 
     UIManager:nextTick(function()
-        Cloud.downloadFile(item.folder .. "/" .. item.filename, dest, function(ok, err)
-            prog_dlg:close()
+        if finished or is_canceled then return end
+        local _started, cancel_fn = Sync.runInBackground(function(report_progress)
+            local ok_dl, err_dl = false, nil
+            Cloud.downloadFile(item.folder .. "/" .. item.filename, dest, function(ok, err)
+                ok_dl = ok
+                err_dl = err
+            end, {
+                expected_size = item.size_bytes,
+                on_progress = function(rec, total)
+                    local p = (total and total > 0) and math.floor((rec / total) * 100) or 0
+                    if report_progress then
+                        report_progress(p, string.format("%s/%s (%d%%)",
+                            NimbusProgress.formatBytes(rec), NimbusProgress.formatBytes(total), p))
+                    end
+                end,
+            })
+            return { ok = ok_dl, err = err_dl and tostring(err_dl) or nil }
+        end, function(ok_bg, res)
+            active_cancel_fn = nil
+            if finished or is_canceled then return end
+            finished = true
+            cleanupAndClose()
+            local ok = ok_bg and type(res) == "table" and res.ok == true
+            local err = (type(res) == "table" and res.err) or res
             if ok then
                 Settings.linkBook(dest, item.id)
                 applyCloudProgressToSidecar(dest, item, opts.merged_prog)
-                if open_after and opts.on_open_book then
+                if open_after and not job.is_background and opts.on_open_book then
                     opts.on_open_book(dest)
                 else
                     if opts.on_downloaded then opts.on_downloaded(item, dest) end
@@ -98,14 +179,21 @@ function BookCardMixin.downloadBook(item, open_after, opts)
                 Widgets.showToast(_("Download failed: ") .. tostring(err), 4)
             end
         end, {
-            expected_size = item.size_bytes,
-            is_canceled = function() return prog_dlg:isCanceled() end,
-            on_progress = function(rec, total)
-                local p = (total and total > 0) and math.floor((rec / total) * 100) or 0
-                prog_dlg:setProgress(p, string.format("%s/%s (%d%%)",
-                    NimbusProgress.formatBytes(rec), NimbusProgress.formatBytes(total), p))
+            user_initiated = true,
+            priority = "interactive_bg",
+            on_progress = function(pct, sub)
+                if finished or is_canceled then return end
+                if pct then job.pct = pct end
+                if sub then job.subtitle = sub end
+                if prog_dlg and not prog_dlg.is_closed then
+                    prog_dlg:setProgress(job.pct, job.subtitle)
+                end
+                if job.is_background then
+                    NimbusProgress.notifyStatus(true)
+                end
             end,
         })
+        active_cancel_fn = cancel_fn
     end)
 end
 

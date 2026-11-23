@@ -217,4 +217,99 @@ describe("nimbus_covers cache safety & normalization", function()
         assert.is_false(called)
         package.loaded["ui/uimanager"] = orig_ui
     end)
+
+    it("never calls blocking waitpid (isSubProcessDone(pid, true)) during clearFetchQueue", function()
+        local orig_ui = package.loaded["ui/uimanager"]
+        local orig_fu = package.loaded["ffi/util"]
+        local orig_dev = package.loaded["device"]
+        local timers = {}
+        local wait_flags = {}
+        local terminated = false
+        local spawned_count = 0
+
+        package.loaded["device"] = { isAndroid = function() return false end }
+        package.loaded["ui/uimanager"] = {
+            scheduleIn = function(_, _, fn) table.insert(timers, fn) end,
+            unschedule = function() end,
+        }
+        package.loaded["ffi/util"] = {
+            runInSubProcess = function(fn, _double_fork)
+                spawned_count = spawned_count + 1
+                return 4242, 99
+            end,
+            terminateSubProcess = function() terminated = true end,
+            isSubProcessDone = function(_, wait)
+                table.insert(wait_flags, wait == true)
+                return false
+            end,
+            readAllFromFD = function() return "" end,
+        }
+
+        Covers.enqueueFetchCover({ id = "local_1", local_path = "/tmp/book1.epub" }, function() end)
+        -- Fire settle timer to spawn subprocess
+        assert.is_true(#timers >= 1)
+        timers[1]()
+        assert.are.equal(1, spawned_count)
+
+        Covers.clearFetchQueue()
+        assert.is_true(terminated)
+        for _, w in ipairs(wait_flags) do
+            assert.is_false(w)
+        end
+
+        package.loaded["ui/uimanager"] = orig_ui
+        package.loaded["ffi/util"] = orig_fu
+        package.loaded["device"] = orig_dev
+    end)
+
+    it("decodes disk-cached covers incrementally via enqueueDecodeCover and aborts on clearFetchQueue", function()
+        local orig_ui = package.loaded["ui/uimanager"]
+        local orig_iw = package.loaded["ui/widget/imagewidget"]
+        local orig_ri = package.loaded["ui/renderimage"]
+        local orig_bb = package.loaded["ffi/blitbuffer"]
+        local timers = {}
+
+        package.loaded["ui/uimanager"] = {
+            scheduleIn = function(_, _, fn) table.insert(timers, fn) end,
+            unschedule = function() end,
+        }
+        package.loaded["ffi/blitbuffer"] = {
+            TYPE_BBRGB24 = 1, TYPE_BBRGB32 = 2, TYPE_BB8A = 3, COLOR_WHITE = 0,
+        }
+        package.loaded["ui/widget/imagewidget"] = {
+            new = function(_, o) return o end,
+        }
+        package.loaded["ui/renderimage"] = {
+            renderImageFile = function()
+                return {
+                    stride = 300,
+                    getWidth = function() return 100 end,
+                    getHeight = function() return 150 end,
+                    getType = function() return 1 end,
+                }
+            end,
+            scaleBlitBuffer = function(_, bb) return bb end,
+        }
+
+        local decoded = {}
+        assert.is_false(Covers.hasMemoryCachedCover("tests/tmp/dec_1.jpg", 100, 150))
+        Covers.enqueueDecodeCover("tests/tmp/dec_1.jpg", 100, 150, function(w) table.insert(decoded, w) end)
+        Covers.enqueueDecodeCover("tests/tmp/dec_2.jpg", 100, 150, function(w) table.insert(decoded, w) end)
+        assert.are.equal(0, #decoded)
+
+        -- First tick decodes only 1 cover
+        timers[1]()
+        assert.are.equal(1, #decoded)
+        assert.is_true(Covers.hasMemoryCachedCover("tests/tmp/dec_1.jpg", 100, 150))
+
+        -- Clear queue before second tick
+        Covers.clearFetchQueue()
+        timers[2]()
+        assert.are.equal(1, #decoded)
+
+        package.loaded["ui/uimanager"] = orig_ui
+        package.loaded["ui/widget/imagewidget"] = orig_iw
+        package.loaded["ui/renderimage"] = orig_ri
+        package.loaded["ffi/blitbuffer"] = orig_bb
+    end)
 end)

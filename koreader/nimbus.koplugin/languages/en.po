@@ -284,6 +284,9 @@ msgstr "Download"
 msgid "Download & Open"
 msgstr "Download & Open"
 
+msgid "Download canceled."
+msgstr "Download canceled."
+
 msgid "Download failed: "
 msgstr "Download failed: "
 
@@ -295,6 +298,9 @@ msgstr "Downloaded %d new book(s) from Nimbus Cloud."
 
 msgid "Downloaded '%s'."
 msgstr "Downloaded '%s'."
+
+msgid "Downloading '%s' in background..."
+msgstr "Downloading '%s' in background..."
 
 msgid "Downloading Book"
 msgstr "Downloading Book"
@@ -331,6 +337,9 @@ msgstr "Filter Books"
 
 msgid "Filter books by title, author, or series:"
 msgstr "Filter books by title, author, or series:"
+
+msgid "Finalizing %d of %d..."
+msgstr "Finalizing %d of %d..."
 
 msgid "Finalizing catalog…"
 msgstr "Finalizing catalog…"
@@ -650,11 +659,17 @@ msgstr "Sync Now"
 msgid "Sync Reading Statistics"
 msgstr "Sync Reading Statistics"
 
+msgid "Sync canceled."
+msgstr "Sync canceled."
+
 msgid "Sync complete"
 msgstr "Sync complete"
 
 msgid "Sync error: "
 msgstr "Sync error: "
+
+msgid "Sync failed: "
+msgstr "Sync failed: "
 
 msgid "Sync on Book Open/Close"
 msgstr "Sync on Book Open/Close"
@@ -670,6 +685,9 @@ msgstr "Syncing Library"
 
 msgid "Syncing device progress & stats..."
 msgstr "Syncing device progress & stats..."
+
+msgid "Syncing library in background..."
+msgstr "Syncing library in background..."
 
 msgid "Test"
 msgstr "Test"
@@ -746,6 +764,9 @@ msgstr "Uploaded '%s' to Nimbus Cloud!"
 msgid "Uploading %d book(s) in background..."
 msgstr "Uploading %d book(s) in background..."
 
+msgid "Uploading %d of %d (%d%%)..."
+msgstr "Uploading %d of %d (%d%%)..."
+
 msgid "Uploading %d of %d..."
 msgstr "Uploading %d of %d..."
 
@@ -788,11 +809,17 @@ msgstr "item"
 msgid "items"
 msgstr "items"
 
+msgid "· Downloading (%d%%)..."
+msgstr "· Downloading (%d%%)..."
+
 msgid "· Offline"
 msgstr "· Offline"
 
 msgid "· Sync error"
 msgstr "· Sync error"
+
+msgid "· Syncing (%d%%)..."
+msgstr "· Syncing (%d%%)..."
 
 msgid "· Syncing..."
 msgstr "· Syncing..."

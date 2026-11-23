@@ -118,4 +118,64 @@ describe("nimbus_sync Android guard & progress collection", function()
         assert.are.equal("Books/Old/cover.jpg", uploaded_files[1])
         assert.is_true(tostring(catalog.books.old1.cover_etag):sub(1, 3) == "v2_")
     end)
+
+    it("runInBackground uses file-backed IPC for large payloads and delivers on_progress", function()
+        local orig_ui = package.loaded["ui/uimanager"]
+        local orig_fu = package.loaded["ffi/util"]
+        local orig_dev = package.loaded["device"]
+        local pipe_writes = {}
+        local timers = {}
+        local child_done = false
+
+        package.loaded["device"] = { isAndroid = function() return false end }
+        package.loaded["ui/uimanager"] = {
+            scheduleIn = function(_, _, fn) table.insert(timers, fn) end,
+            unschedule = function() end,
+        }
+        package.loaded["ffi/util"] = {
+            runInSubProcess = function(fn, _double_fork)
+                fn(777, 101)
+                child_done = true
+                return 777, 102
+            end,
+            writeToFD = function(_, data) table.insert(pipe_writes, data) end,
+            isSubProcessDone = function() return child_done end,
+            readAllFromFD = function() return "DONE" end,
+        }
+
+        local big_payload = string.rep("X", 150000) -- >128 KB, exceeds 64 KB pipe buffer
+        local progress_updates = {}
+        local final_ok, final_res
+
+        Sync.runInBackground(function(report_progress)
+            report_progress(42, "Halfway", "big.epub")
+            return { big = big_payload }
+        end, function(ok, res)
+            final_ok = ok
+            final_res = res
+        end, {
+            user_initiated = true,
+            on_progress = function(pct, sub, det)
+                table.insert(progress_updates, { pct = pct, sub = sub, det = det })
+            end,
+        })
+
+        -- Pipe only received tiny "DONE" sentinel, never the 150 KB JSON
+        assert.are.equal(1, #pipe_writes)
+        assert.are.equal("DONE", pipe_writes[1])
+
+        -- Trigger poll timer
+        assert.is_true(#timers >= 1)
+        timers[#timers]()
+
+        assert.is_true(final_ok)
+        assert.are.equal(big_payload, final_res.big)
+        assert.are.equal(1, #progress_updates)
+        assert.are.equal(42, progress_updates[1].pct)
+        assert.are.equal("Halfway", progress_updates[1].sub)
+
+        package.loaded["ui/uimanager"] = orig_ui
+        package.loaded["ffi/util"] = orig_fu
+        package.loaded["device"] = orig_dev
+    end)
 end)

@@ -416,6 +416,35 @@ function NimbusProgress:setDetail(detail)
     self:_applyUpdates(true)
 end
 
+NimbusProgress._active_job = nil
+NimbusProgress._status_listener = nil
+
+function NimbusProgress.setActiveJob(job)
+    NimbusProgress._active_job = job
+    NimbusProgress.notifyStatus(false)
+end
+
+function NimbusProgress.getActiveJob()
+    return NimbusProgress._active_job
+end
+
+function NimbusProgress.clearActiveJob(job)
+    if job == nil or NimbusProgress._active_job == job then
+        NimbusProgress._active_job = nil
+        NimbusProgress.notifyStatus(false)
+    end
+end
+
+function NimbusProgress.setStatusListener(fn)
+    NimbusProgress._status_listener = fn
+end
+
+function NimbusProgress.notifyStatus(is_progress_only)
+    if type(NimbusProgress._status_listener) == "function" then
+        pcall(NimbusProgress._status_listener, is_progress_only == true)
+    end
+end
+
 function NimbusProgress.formatBytes(bytes)
     local b = tonumber(bytes) or 0
     if b >= 1024 * 1024 then

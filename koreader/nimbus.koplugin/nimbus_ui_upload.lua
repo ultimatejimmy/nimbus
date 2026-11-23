@@ -24,26 +24,22 @@ local theme = require("nimbus_theme")
 local UploadMixin = {}
 local sc = theme.sc
 
-UploadMixin._active_job = nil
-UploadMixin._status_listener = nil
-
 function UploadMixin.getActiveJob()
-    return UploadMixin._active_job
+    return NimbusProgress.getActiveJob()
 end
 
 function UploadMixin.setStatusListener(fn)
-    UploadMixin._status_listener = fn
+    NimbusProgress.setStatusListener(fn)
 end
 
-local function notifyUploadStatus()
-    if type(UploadMixin._status_listener) == "function" then
-        pcall(UploadMixin._status_listener)
-    end
+local function notifyUploadStatus(is_progress_only)
+    NimbusProgress.notifyStatus(is_progress_only)
 end
 
 function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
-    if UploadMixin._active_job then
-        UploadMixin._active_job.reopen()
+    local existing_job = NimbusProgress.getActiveJob()
+    if existing_job then
+        if existing_job.reopen then existing_job.reopen() end
         return
     end
     if not Cloud.isConfigured() then
@@ -69,6 +65,7 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
 
     local prog_dlg
     local job = {
+        kind = "upload",
         current = 1,
         total = total_books,
         uploaded = 0,
@@ -77,14 +74,13 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
         detail = string.format(_("0 of %d books"), total_books),
         is_background = false,
     }
-    UploadMixin._active_job = job
+    NimbusProgress.setActiveJob(job)
 
     local function closeAndFinish(is_canceled_flag)
-        UploadMixin._active_job = nil
         if prog_dlg and not prog_dlg.is_closed then
             prog_dlg:close()
         end
-        notifyUploadStatus()
+        NimbusProgress.clearActiveJob(job)
 
         local toast_msg
         if is_canceled_flag then
@@ -128,7 +124,7 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                     last_err = (type(res) == "table" and res.err) or res
                 end
                 closeAndFinish(is_canceled_flag)
-            end)
+            end, { user_initiated = true, priority = "interactive_bg" })
         else
             if uploaded > 0 and batch_catalog then
                 local _cat, merged = Sync.loadCachedCatalog()
@@ -179,7 +175,7 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
             prog_dlg:setProgress(pct, subtitle, detail)
         end
         if job.is_background then
-            notifyUploadStatus()
+            notifyUploadStatus(true)
         end
     end
 
@@ -210,7 +206,7 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
             partial_md5 = book.partial_md5,
         }
 
-        local _started, cancel_fn = Sync.runInBackground(function()
+        local _started, cancel_fn = Sync.runInBackground(function(report_progress)
             local ok_up, res_or_err = false, nil
             Sync.uploadBook(filepath, props, nil, function(ok, res)
                 ok_up = ok
@@ -219,6 +215,16 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                 catalog = batch_catalog,
                 defer_catalog_save = true,
                 skip_metadata_file = true,
+                on_progress = function(sent, total, phase)
+                    if report_progress then
+                        local book_frac = (total and total > 0) and (sent / total) or 0
+                        local overall_pct = math.floor((((idx - 1) + book_frac) / total_books) * 100)
+                        local sub = (phase == "finalizing")
+                            and string.format(_("Finalizing %d of %d..."), idx, total_books)
+                            or string.format(_("Uploading %d of %d (%d%%)..."), idx, total_books, math.floor(book_frac * 100))
+                        report_progress(overall_pct, sub, title)
+                    end
+                end,
             })
             return {
                 ok = ok_up,
@@ -255,7 +261,7 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                             dirty_catalog = false
                         end
                         uploadNext(idx + 1)
-                    end)
+                    end, { user_initiated = true, priority = "interactive_bg" })
                     active_cancel_fn = c_fn
                 else
                     uploadNext(idx + 1)
@@ -268,7 +274,15 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                     uploadNext(idx + 1)
                 end
             end
-        end)
+        end, {
+            user_initiated = true,
+            priority = "interactive_bg",
+            on_progress = function(pct, sub, det)
+                if not finished and not is_canceled and pct then
+                    updateJobProgress(pct, sub or job.subtitle, det or job.detail)
+                end
+            end,
+        })
         active_cancel_fn = cancel_fn
     end
 
@@ -282,20 +296,19 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
             end)
             return {
                 ok = ok_cat,
-                catalog = ok_cat and cat_or_err or nil,
                 err = (not ok_cat) and tostring(cat_or_err or _("Unknown error")) or nil,
             }
         end, function(ok_bg, res)
             active_cancel_fn = nil
             if finished or is_canceled then return end
-            if not ok_bg or type(res) ~= "table" or not res.ok or type(res.catalog) ~= "table" then
+            if not ok_bg or type(res) ~= "table" or not res.ok then
                 last_err = (type(res) == "table" and res.err) or res
                 finalizeBatch(false)
                 return
             end
-            batch_catalog = res.catalog
+            batch_catalog = Sync.loadCachedCatalog() or { books = {} }
             uploadNext(1)
-        end)
+        end, { user_initiated = true, priority = "interactive_bg" })
         active_cancel_fn = cancel_fn
     end)
 end
@@ -445,8 +458,9 @@ function UploadMixin.showBookSelectionChecklist(device_books, open_doc, on_compl
 end
 
 function UploadMixin.showUploadDialog(device_books, open_doc_info, on_complete)
-    if UploadMixin._active_job then
-        UploadMixin._active_job.reopen()
+    local existing_job = NimbusProgress.getActiveJob()
+    if existing_job then
+        if existing_job.reopen then existing_job.reopen() end
         return
     end
     local unsynced = {}

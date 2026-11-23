@@ -1181,12 +1181,85 @@ local function runConducted(opts)
     return nil
 end
 
+local _bg_seq = 0
+
+local function writeAtomicFile(path, content)
+    local tmp = path .. ".tmp"
+    local f = io.open(tmp, "wb")
+    if not f then return false end
+    f:write(content)
+    f:close()
+    os.remove(path)
+    if os.rename(tmp, path) then
+        return true
+    end
+    os.remove(tmp)
+    return false
+end
+
+local function readAndRemoveFile(path)
+    if not path then return nil end
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local content = f:read("*a")
+    f:close()
+    pcall(os.remove, path)
+    return content
+end
+
+local function reapSubProcessAsync(ffiUtil, UIManager, pid, read_fd, extra_paths)
+    local function cleanup()
+        if read_fd and ffiUtil and ffiUtil.readAllFromFD then
+            pcall(ffiUtil.readAllFromFD, read_fd)
+        end
+        for _, p in ipairs(extra_paths or {}) do
+            if p then
+                pcall(os.remove, p)
+                pcall(os.remove, p .. ".tmp")
+            end
+        end
+    end
+    if not ffiUtil then
+        cleanup()
+        return
+    end
+    local ok_d, done = pcall(function()
+        return ffiUtil.isSubProcessDone and ffiUtil.isSubProcessDone(pid, false)
+    end)
+    if ok_d and done then
+        cleanup()
+        return
+    end
+    if UIManager and UIManager.scheduleIn then
+        local attempts = 0
+        local function reap()
+            attempts = attempts + 1
+            local ok_r, is_done = pcall(function()
+                return ffiUtil.isSubProcessDone and ffiUtil.isSubProcessDone(pid, false)
+            end)
+            if (ok_r and is_done) or attempts >= 40 then
+                cleanup()
+                return
+            end
+            UIManager:scheduleIn(0.25, reap)
+        end
+        UIManager:scheduleIn(0.25, reap)
+    else
+        cleanup()
+    end
+end
+
 --- Runs a blocking sync function in a background subprocess and delivers its JSON result on the UI thread.
+-- Uses file-backed IPC to avoid OS pipe buffer deadlocks on large payloads (e.g. catalog.json).
 function Sync.runInBackground(worker_fn, on_complete, opts)
     if type(worker_fn) ~= "function" then return false end
+    opts = opts or {}
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
     if not ok_ui or not UIManager then
-        local ok_w, res = xpcall(worker_fn, debug.traceback)
+        local function direct_progress(pct, sub, det)
+            if opts.on_progress then pcall(opts.on_progress, pct, sub, det) end
+        end
+        local ok_w, res = xpcall(function() return worker_fn(direct_progress) end, debug.traceback)
         if on_complete then on_complete(ok_w, res) end
         return true, function() end
     end
@@ -1202,10 +1275,18 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
         if active_cancel then active_cancel() end
     end
 
-    runConducted({
+    local runner = function(slot_opts)
+        if opts.user_initiated then
+            slot_opts.run(function() end)
+            return nil
+        end
+        return runConducted(slot_opts)
+    end
+
+    runner({
         plugin = "nimbus",
         task = "bg_sync",
-        priority = (opts and opts.priority) or "idle_bg",
+        priority = opts.priority or "idle_bg",
         subprocess = use_subprocess,
         cancel = cancel,
         run = function(done)
@@ -1227,7 +1308,12 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                         finish_slot()
                         return
                     end
-                    local ok_run, res = xpcall(worker_fn, debug.traceback)
+                    local function direct_progress(pct, sub, det)
+                        if not canceled and opts.on_progress then
+                            pcall(opts.on_progress, pct, sub, det)
+                        end
+                    end
+                    local ok_run, res = xpcall(function() return worker_fn(direct_progress) end, debug.traceback)
                     if not ok_run then
                         Logger.err("Background worker exception: " .. tostring(res))
                     end
@@ -1237,22 +1323,45 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                 return
             end
 
+            _bg_seq = _bg_seq + 1
+            local nimbus_dir = Settings.getNimbusDir()
+            local res_path = nimbus_dir .. "/.bg_res_" .. tostring(_bg_seq) .. ".json"
+            local prog_path = nimbus_dir .. "/.bg_prog_" .. tostring(_bg_seq) .. ".json"
+
             local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_pid, child_write_fd)
-                local ok_run, res = xpcall(worker_fn, debug.traceback)
+                local last_prog_ts = 0
+                local function report_progress(pct, sub, det)
+                    if not opts.on_progress then return end
+                    local now_t = os.time()
+                    if (now_t - last_prog_ts) < 1 and (tonumber(pct) or 0) < 100 and last_prog_ts ~= 0 then
+                        return
+                    end
+                    last_prog_ts = now_t
+                    writeAtomicFile(prog_path, Http.jsonEncode({
+                        pct = pct,
+                        subtitle = sub,
+                        detail = det,
+                    }))
+                end
+
+                local ok_run, res = xpcall(function() return worker_fn(report_progress) end, debug.traceback)
                 if not ok_run then
                     Logger.err("Background worker exception: " .. tostring(res))
                 end
+                local payload = Http.jsonEncode({
+                    ok = ok_run,
+                    res = ok_run and res or tostring(res),
+                })
+                local wrote = writeAtomicFile(res_path, payload)
                 if child_write_fd then
-                    local payload = Http.jsonEncode({
-                        ok = ok_run,
-                        res = ok_run and res or tostring(res),
-                    })
-                    ffiUtil.writeToFD(child_write_fd, payload, true)
+                    ffiUtil.writeToFD(child_write_fd, wrote and "DONE" or "ERR", true)
                 end
             end, true)
 
             if not pid then
                 Logger.err("Sync.runInBackground fork failed")
+                pcall(os.remove, res_path)
+                pcall(os.remove, prog_path)
                 finish_slot()
                 if on_complete then on_complete(false, "fork_failed") end
                 return
@@ -1260,33 +1369,45 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
 
             active_cancel = function()
                 if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
-                if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
-                if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+                reapSubProcessAsync(ffiUtil, UIManager, pid, parent_read_fd, { res_path, prog_path })
                 finish_slot()
             end
 
+            local function flushProgressFile()
+                if not opts.on_progress then return end
+                local raw_p = readAndRemoveFile(prog_path)
+                if raw_p and raw_p ~= "" then
+                    local ok_p, dec_p = pcall(Http.jsonDecode, raw_p)
+                    if ok_p and type(dec_p) == "table" then
+                        pcall(opts.on_progress, dec_p.pct, dec_p.subtitle, dec_p.detail)
+                    end
+                end
+            end
+
             local attempts = 0
+            local max_attempts = tonumber(opts.max_poll_attempts) or 1200 -- 6 minutes at 0.3s
             local function poll()
                 if canceled then
                     finish_slot()
                     return
                 end
                 attempts = attempts + 1
-                if attempts > 180 then
+                flushProgressFile()
+                if attempts > max_attempts then
                     Logger.warn("Sync.runInBackground timed out")
                     if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
-                    if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
-                    if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+                    reapSubProcessAsync(ffiUtil, UIManager, pid, parent_read_fd, { res_path, prog_path })
                     finish_slot()
                     if on_complete then on_complete(false, "timeout") end
                     return
                 end
                 if ffiUtil.isSubProcessDone(pid) then
-                    local msg = ""
+                    flushProgressFile()
                     if parent_read_fd and ffiUtil.readAllFromFD then
-                        local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
-                        if ok_r and type(raw) == "string" then msg = raw end
+                        pcall(ffiUtil.readAllFromFD, parent_read_fd)
                     end
+                    local msg = readAndRemoveFile(res_path) or ""
+                    pcall(os.remove, prog_path)
                     finish_slot()
                     local ok_dec, decoded = pcall(Http.jsonDecode, msg)
                     if ok_dec and type(decoded) == "table" then

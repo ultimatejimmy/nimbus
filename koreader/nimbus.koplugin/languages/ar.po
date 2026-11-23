@@ -377,6 +377,10 @@ msgstr "تنزيل"
 msgid "Download & Open"
 msgstr "تنزيل وفتح"
 
+# en-hash: e454c2e4912f1534340282bc2a17bbf1
+msgid "Download canceled."
+msgstr "تم إلغاء التنزيل."
+
 # en-hash: 59d30102eb8d3c0c8b031e08a28acd28
 msgid "Download failed: "
 msgstr "فشل التنزيل: "
@@ -392,6 +396,10 @@ msgstr "تم تنزيل %d كتاب (كتب) جديد من سحابة Nimbus."
 # en-hash: d0823558291ef268fed478a0369da5e8
 msgid "Downloaded '%s'."
 msgstr "تم تنزيل '%s'."
+
+# en-hash: c0105b4a79272685ba1eb94618ffdbe4
+msgid "Downloading '%s' in background..."
+msgstr "جاري تنزيل '%s' في الخلفية..."
 
 # en-hash: 6f4ae97857f62d9269358fd71663be7c
 msgid "Downloading Book"
@@ -440,6 +448,10 @@ msgstr "تصفية الكتب"
 # en-hash: 166fc1b0c6bd096fa7235863a8bdb0e9
 msgid "Filter books by title, author, or series:"
 msgstr "تصفية الكتب حسب العنوان أو المؤلف أو السلسلة:"
+
+# en-hash: f1f52329b8eac84be605b93a5f1bee4e
+msgid "Finalizing %d of %d..."
+msgstr "جاري الانتهاء من %d من %d..."
 
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
@@ -865,6 +877,10 @@ msgstr "مزامنة الآن"
 msgid "Sync Reading Statistics"
 msgstr "مزامنة إحصاءات القراءة"
 
+# en-hash: be576564addeba72493580a65914079c
+msgid "Sync canceled."
+msgstr "تم إلغاء المزامنة."
+
 # en-hash: e57f4816285d9b4b90e1e66aecb855b9
 msgid "Sync complete"
 msgstr "تمت المزامنة"
@@ -872,6 +888,10 @@ msgstr "تمت المزامنة"
 # en-hash: 29d70df09a61d88c3f2ecaaa5f479848
 msgid "Sync error: "
 msgstr "خطأ في المزامنة: "
+
+# en-hash: 8cb025116cf18b2ea16a86344ee7e8eb
+msgid "Sync failed: "
+msgstr "فشلت المزامنة: "
 
 # en-hash: a22c1c4f6157fcb89a6fab8de530e257
 msgid "Sync on Book Open/Close"
@@ -892,6 +912,10 @@ msgstr "جاري مزامنة المكتبة"
 # en-hash: be633d065af8047fb567a2000cb18275
 msgid "Syncing device progress & stats..."
 msgstr "جاري مزامنة تقدم الجهاز والإحصاءات..."
+
+# en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
+msgid "Syncing library in background..."
+msgstr "جاري مزامنة المكتبة في الخلفية..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"
@@ -993,6 +1017,10 @@ msgstr "تم رفع '%s' إلى Nimbus Cloud!"
 msgid "Uploading %d book(s) in background..."
 msgstr "جارٍ رفع %d كتاب في الخلفية..."
 
+# en-hash: dc81c1b2fe7b5f9409135a18c176b3b5
+msgid "Uploading %d of %d (%d%%)..."
+msgstr "جاري رفع %d من %d (%d%%)..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "جاري رفع %d من %d..."
@@ -1049,6 +1077,10 @@ msgstr "عنصر"
 msgid "items"
 msgstr "عناصر"
 
+# en-hash: 6f76d7f71863996f4095d5322d06d290
+msgid "· Downloading (%d%%)..."
+msgstr "· جاري التنزيل (%d%%)..."
+
 # en-hash: 4b7edb48409266950a05418e080ab2c1
 msgid "· Offline"
 msgstr "· غير متصل"
@@ -1056,6 +1088,10 @@ msgstr "· غير متصل"
 # en-hash: 7507b4c2337968b7fc7cdda1398f36e1
 msgid "· Sync error"
 msgstr "· خطأ في المزامنة"
+
+# en-hash: 036a791a530a0f910ae787fc98cbb436
+msgid "· Syncing (%d%%)..."
+msgstr "· جاري المزامنة (%d%%)..."
 
 # en-hash: 2d8ad8668093592f584b2a0f447e2165
 msgid "· Syncing..."

@@ -377,6 +377,10 @@ msgstr "다운로드"
 msgid "Download & Open"
 msgstr "다운로드 및 열기"
 
+# en-hash: e454c2e4912f1534340282bc2a17bbf1
+msgid "Download canceled."
+msgstr "다운로드가 취소되었습니다."
+
 # en-hash: 59d30102eb8d3c0c8b031e08a28acd28
 msgid "Download failed: "
 msgstr "다운로드 실패: "
@@ -392,6 +396,10 @@ msgstr "Nimbus Cloud에서 새 도서 %d권을 다운로드했습니다."
 # en-hash: d0823558291ef268fed478a0369da5e8
 msgid "Downloaded '%s'."
 msgstr "'%s' 다운로드 완료."
+
+# en-hash: c0105b4a79272685ba1eb94618ffdbe4
+msgid "Downloading '%s' in background..."
+msgstr "백그라운드에서 '%s' 다운로드 중..."
 
 # en-hash: 6f4ae97857f62d9269358fd71663be7c
 msgid "Downloading Book"
@@ -440,6 +448,10 @@ msgstr "도서 필터링"
 # en-hash: 166fc1b0c6bd096fa7235863a8bdb0e9
 msgid "Filter books by title, author, or series:"
 msgstr "제목, 저자 또는 시리즈로 도서 필터링:"
+
+# en-hash: f1f52329b8eac84be605b93a5f1bee4e
+msgid "Finalizing %d of %d..."
+msgstr "%d / %d 마무리 중..."
 
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
@@ -865,6 +877,10 @@ msgstr "지금 동기화"
 msgid "Sync Reading Statistics"
 msgstr "독서 통계 동기화"
 
+# en-hash: be576564addeba72493580a65914079c
+msgid "Sync canceled."
+msgstr "동기화가 취소되었습니다."
+
 # en-hash: e57f4816285d9b4b90e1e66aecb855b9
 msgid "Sync complete"
 msgstr "동기화 완료"
@@ -872,6 +888,10 @@ msgstr "동기화 완료"
 # en-hash: 29d70df09a61d88c3f2ecaaa5f479848
 msgid "Sync error: "
 msgstr "동기화 오류: "
+
+# en-hash: 8cb025116cf18b2ea16a86344ee7e8eb
+msgid "Sync failed: "
+msgstr "동기화 실패: "
 
 # en-hash: a22c1c4f6157fcb89a6fab8de530e257
 msgid "Sync on Book Open/Close"
@@ -892,6 +912,10 @@ msgstr "도서관 동기화 중"
 # en-hash: be633d065af8047fb567a2000cb18275
 msgid "Syncing device progress & stats..."
 msgstr "기기 진행 상황 및 통계 동기화 중..."
+
+# en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
+msgid "Syncing library in background..."
+msgstr "백그라운드에서 라이브러리 동기화 중..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"
@@ -993,6 +1017,10 @@ msgstr "Nimbus Cloud에 '%s'을(를) 업로드했습니다!"
 msgid "Uploading %d book(s) in background..."
 msgstr "%d권을 백그라운드에서 업로드 중..."
 
+# en-hash: dc81c1b2fe7b5f9409135a18c176b3b5
+msgid "Uploading %d of %d (%d%%)..."
+msgstr "%d/%d 업로드 중 (%d%%)..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "%d/%d 업로드 중..."
@@ -1049,6 +1077,10 @@ msgstr "항목"
 msgid "items"
 msgstr "항목"
 
+# en-hash: 6f76d7f71863996f4095d5322d06d290
+msgid "· Downloading (%d%%)..."
+msgstr "· 다운로드 중 (%d%%)..."
+
 # en-hash: 4b7edb48409266950a05418e080ab2c1
 msgid "· Offline"
 msgstr "· 오프라인"
@@ -1056,6 +1088,10 @@ msgstr "· 오프라인"
 # en-hash: 7507b4c2337968b7fc7cdda1398f36e1
 msgid "· Sync error"
 msgstr "· 동기화 오류"
+
+# en-hash: 036a791a530a0f910ae787fc98cbb436
+msgid "· Syncing (%d%%)..."
+msgstr "· 동기화 중 (%d%%)..."
 
 # en-hash: 2d8ad8668093592f584b2a0f447e2165
 msgid "· Syncing..."

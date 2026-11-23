@@ -208,13 +208,16 @@ local function writeScaledBlitBuffer(orig_bb, dest_path)
 end
 
 --- Extracts a cover thumbnail from a local ebook file and saves it to dest_path.
-function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc, force_overwrite)
+-- Pass opts = { subprocess_safe = true } when running in a forked subprocess to avoid
+-- touching open_doc or BookInfoManager's SQLite handle.
+function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc, force_overwrite, opts)
     if not filepath or not dest_path or not fileExists(filepath) then
         return false
     end
     if not force_overwrite and fileExists(dest_path) then
         return true
     end
+    local subprocess_safe = type(opts) == "table" and opts.subprocess_safe == true
 
     -- 1. Check custom cover in .sdr sidecar
     local ok_ds, DocSettings = pcall(require, "docsettings")
@@ -234,7 +237,7 @@ function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc, force_ove
     end
 
     -- 2. If currently open in Reader, use the active document directly
-    if open_doc and open_doc.file == filepath and open_doc.getCoverPageImage then
+    if not subprocess_safe and open_doc and open_doc.file == filepath and open_doc.getCoverPageImage then
         local ok_bb, bb = pcall(function() return open_doc:getCoverPageImage() end)
         if ok_bb and bb then
             local ok_w = writeScaledBlitBuffer(bb, dest_path)
@@ -244,21 +247,23 @@ function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc, force_ove
     end
 
     -- 3. Check KOReader's BookInfoManager cache only if it holds a full-color, >=250px buffer
-    local ok_bim, BookInfoManager = pcall(require, "bookinfomanager")
-    if ok_bim and BookInfoManager and BookInfoManager.getBookInfo then
-        local ok_bi, info = pcall(function() return BookInfoManager:getBookInfo(filepath, true) end)
-        if ok_bi and type(info) == "table" and info.cover_bb then
-            local ok_bb_mod, Blitbuffer = pcall(require, "ffi/blitbuffer")
-            local bb = info.cover_bb
-            local bb_type = bb.getType and bb:getType()
-            local bb_w = bb.getWidth and bb:getWidth() or 0
-            local is_color = ok_bb_mod and Blitbuffer and (bb_type == Blitbuffer.TYPE_BBRGB24 or bb_type == Blitbuffer.TYPE_BBRGB32)
-            local ok_w = false
-            if is_color and bb_w >= 250 then
-                ok_w = writeScaledBlitBuffer(bb, dest_path)
+    if not subprocess_safe then
+        local ok_bim, BookInfoManager = pcall(require, "bookinfomanager")
+        if ok_bim and BookInfoManager and BookInfoManager.getBookInfo then
+            local ok_bi, info = pcall(function() return BookInfoManager:getBookInfo(filepath, true) end)
+            if ok_bi and type(info) == "table" and info.cover_bb then
+                local ok_bb_mod, Blitbuffer = pcall(require, "ffi/blitbuffer")
+                local bb = info.cover_bb
+                local bb_type = bb.getType and bb:getType()
+                local bb_w = bb.getWidth and bb:getWidth() or 0
+                local is_color = ok_bb_mod and Blitbuffer and (bb_type == Blitbuffer.TYPE_BBRGB24 or bb_type == Blitbuffer.TYPE_BBRGB32)
+                local ok_w = false
+                if is_color and bb_w >= 250 then
+                    ok_w = writeScaledBlitBuffer(bb, dest_path)
+                end
+                if bb.free then pcall(function() bb:free() end) end
+                if ok_w then return true end
             end
-            if bb.free then pcall(function() bb:free() end) end
-            if ok_w then return true end
         end
     end
 
@@ -331,6 +336,8 @@ local _fetch_settle_timer = nil
 local _fetch_poll_timer = nil
 local _fetch_subproc = nil -- { pid, read_fd, tmp_paths, pending_jobs }
 local _fetch_gen = 0
+local _decode_queue = {}
+local _decode_timer = nil
 
 local function canUseSubProcess()
     local ok_d, Device = pcall(require, "device")
@@ -341,24 +348,58 @@ local function canUseSubProcess()
     return ok_fu and ffiUtil ~= nil and ffiUtil.runInSubProcess ~= nil
 end
 
-local function cleanupSubProcess()
-    local sp = _fetch_subproc
-    if not sp then return end
-    _fetch_subproc = nil
-    local ok_fu, ffiUtil = pcall(require, "ffi/util")
-    if ok_fu and ffiUtil then
-        if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, sp.pid) end
-        if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, sp.pid, true) end
-        if sp.read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, sp.read_fd) end
+local function finishReapedSubProcess(sp, ffiUtil)
+    if sp.read_fd and ffiUtil and ffiUtil.readAllFromFD then
+        pcall(ffiUtil.readAllFromFD, sp.read_fd)
     end
     for _, tmp in ipairs(sp.tmp_paths or {}) do
         pcall(os.remove, tmp)
     end
 end
 
+local function cleanupSubProcess()
+    local sp = _fetch_subproc
+    if not sp then return end
+    _fetch_subproc = nil
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    if not ok_fu or not ffiUtil then
+        finishReapedSubProcess(sp, nil)
+        return
+    end
+    if ffiUtil.terminateSubProcess then
+        pcall(ffiUtil.terminateSubProcess, sp.pid)
+    end
+    local ok_done, done = pcall(function()
+        return ffiUtil.isSubProcessDone and ffiUtil.isSubProcessDone(sp.pid, false)
+    end)
+    if ok_done and done then
+        finishReapedSubProcess(sp, ffiUtil)
+        return
+    end
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if ok_ui and UIManager and UIManager.scheduleIn then
+        local reap_attempts = 0
+        local function reapAsync()
+            reap_attempts = reap_attempts + 1
+            local ok_d, is_done = pcall(function()
+                return ffiUtil.isSubProcessDone and ffiUtil.isSubProcessDone(sp.pid, false)
+            end)
+            if (ok_d and is_done) or reap_attempts >= 40 then
+                finishReapedSubProcess(sp, ffiUtil)
+                return
+            end
+            UIManager:scheduleIn(0.25, reapAsync)
+        end
+        UIManager:scheduleIn(0.25, reapAsync)
+    else
+        finishReapedSubProcess(sp, ffiUtil)
+    end
+end
+
 function Covers.clearFetchQueue()
     _fetch_gen = _fetch_gen + 1
     _fetch_queue = {}
+    _decode_queue = {}
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
     if ok_ui and UIManager and UIManager.unschedule then
         if _fetch_settle_timer then
@@ -368,6 +409,10 @@ function Covers.clearFetchQueue()
         if _fetch_poll_timer then
             pcall(UIManager.unschedule, UIManager, _fetch_poll_timer)
             _fetch_poll_timer = nil
+        end
+        if _decode_timer then
+            pcall(UIManager.unschedule, UIManager, _decode_timer)
+            _decode_timer = nil
         end
     end
     cleanupSubProcess()
@@ -417,28 +462,50 @@ local function startSubProcessBatch(jobs, expected_gen)
     for _, job in ipairs(jobs) do
         local e = job.entry
         local dest = Covers.getCoverFilePath(e)
-        if dest and e and e.has_cover and e.folder then
+        if dest and e and (e.local_path or (e.has_cover and e.folder)) then
             table.insert(pending_jobs, { dest = dest, cb = job.cb, done = false })
-            table.insert(dl_specs, { folder = e.folder, dest = dest })
+            table.insert(dl_specs, {
+                local_path = e.local_path,
+                has_cover = e.has_cover,
+                folder = e.folder,
+                dest = dest,
+            })
         end
     end
     if #dl_specs == 0 then return end
 
     local pid, parent_read_fd = ffiUtil.runInSubProcess(function(child_pid, child_write_fd)
         pcall(function()
+            local CoversChild = require("nimbus_covers")
             local CloudFS = require("nimbus_cloud")
             for _, spec in ipairs(dl_specs) do
                 local tmp = spec.dest .. "." .. tostring(child_pid or "bg") .. ".tmp"
-                CloudFS.downloadFile(spec.folder .. "/cover.jpg", tmp, function(ok)
-                    if ok then
+                local extracted = false
+                if spec.local_path and CoversChild and CoversChild.extractLocalCoverToFile then
+                    extracted = CoversChild.extractLocalCoverToFile(spec.local_path, tmp, nil, true, { subprocess_safe = true })
+                    if extracted and fileExists(tmp) then
                         os.remove(spec.dest)
                         if not os.rename(tmp, spec.dest) then
                             os.remove(tmp)
+                            extracted = false
                         end
                     else
                         os.remove(tmp)
+                        extracted = false
                     end
-                end, { total_timeout = 15 })
+                end
+                if not extracted and spec.has_cover and spec.folder then
+                    CloudFS.downloadFile(spec.folder .. "/cover.jpg", tmp, function(ok)
+                        if ok then
+                            os.remove(spec.dest)
+                            if not os.rename(tmp, spec.dest) then
+                                os.remove(tmp)
+                            end
+                        else
+                            os.remove(tmp)
+                        end
+                    end, { total_timeout = 15 })
+                end
             end
         end)
         if child_write_fd then
@@ -463,6 +530,7 @@ local function startSubProcessBatch(jobs, expected_gen)
     }
 
     local attempts = 0
+    local last_progress_attempt = 0
     local function pollSubProc()
         if expected_gen ~= _fetch_gen or not _fetch_subproc or _fetch_subproc.pid ~= pid then
             return
@@ -473,6 +541,7 @@ local function startSubProcessBatch(jobs, expected_gen)
             if not pj.done then
                 if fileExists(pj.dest) then
                     pj.done = true
+                    last_progress_attempt = attempts
                     if pj.cb then pcall(pj.cb, pj.dest) end
                 else
                     any_left = true
@@ -480,7 +549,8 @@ local function startSubProcessBatch(jobs, expected_gen)
             end
         end
 
-        if ffiUtil.isSubProcessDone(pid) or not any_left or attempts > 240 then
+        local stalled = (attempts - last_progress_attempt) > 120
+        if ffiUtil.isSubProcessDone(pid) or not any_left or stalled then
             cleanupSubProcess()
             _fetch_poll_timer = nil
             -- Final sweep for any file renamed right as the subprocess exited
@@ -506,51 +576,20 @@ local function flushSettledQueue(expected_gen)
     local batch = _fetch_queue
     _fetch_queue = {}
 
+    table.sort(batch, function(a, b)
+        return (a.priority or 1) < (b.priority or 1)
+    end)
+
     if not canUseSubProcess() then
         _fetch_queue = batch
         pumpFallbackQueue(expected_gen)
         return
     end
 
-    local local_jobs = {}
-    local remote_jobs = {}
-    for _, job in ipairs(batch) do
-        local e = job.entry
-        if e and e.local_path then
-            table.insert(local_jobs, job)
-        else
-            table.insert(remote_jobs, job)
-        end
-    end
-
-    if #remote_jobs > 0 then
-        startSubProcessBatch(remote_jobs, expected_gen)
-    end
-
-    if #local_jobs > 0 then
-        local ok_ui, UIManager = pcall(require, "ui/uimanager")
-        local function pumpLocal(idx)
-            if expected_gen ~= _fetch_gen or idx > #local_jobs then return end
-            local job = local_jobs[idx]
-            local dest = Covers.getCoverFilePath(job.entry)
-            if dest and Covers.extractLocalCoverToFile(job.entry.local_path, dest, job.open_doc) then
-                if job.cb then pcall(job.cb, dest) end
-            elseif job.entry and job.entry.has_cover and job.entry.folder then
-                table.insert(_fetch_queue, job)
-            end
-            if idx < #local_jobs and ok_ui and UIManager and UIManager.scheduleIn then
-                UIManager:scheduleIn(0.03, function() pumpLocal(idx + 1) end)
-            elseif #_fetch_queue > 0 and not _fetch_subproc then
-                local rem = _fetch_queue
-                _fetch_queue = {}
-                startSubProcessBatch(rem, expected_gen)
-            end
-        end
-        pumpLocal(1)
-    end
+    startSubProcessBatch(batch, expected_gen)
 end
 
-function Covers.enqueueFetchCover(entry, cb, open_doc)
+function Covers.enqueueFetchCover(entry, cb, open_doc, priority)
     if not entry then
         if cb then cb(nil) end
         return
@@ -564,7 +603,7 @@ function Covers.enqueueFetchCover(entry, cb, open_doc)
         if cb then cb(nil) end
         return
     end
-    table.insert(_fetch_queue, { entry = entry, cb = cb, open_doc = open_doc })
+    table.insert(_fetch_queue, { entry = entry, cb = cb, open_doc = open_doc, priority = priority or 1 })
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
     local my_gen = _fetch_gen
     if ok_ui and UIManager and UIManager.scheduleIn then
@@ -639,6 +678,64 @@ local function getCachedScaledBB(key)
     entry.gen = _render_gen
     touchCacheOrder(key)
     return entry.bb
+end
+
+function Covers.hasMemoryCachedCover(file_path, target_w, target_h)
+    if not file_path or not target_w or not target_h then return false end
+    local cache_key = file_path .. ":" .. tostring(target_w) .. "x" .. tostring(target_h)
+    return _scaled_bb_cache[cache_key] ~= nil
+end
+
+local function pumpDecodeQueue(expected_gen)
+    _decode_timer = nil
+    if expected_gen ~= _fetch_gen or #_decode_queue == 0 then
+        _decode_queue = {}
+        return
+    end
+    local item = table.remove(_decode_queue, 1)
+    if item then
+        local widget = Covers.createCoverImageWidget(item.file_path, item.target_w, item.target_h)
+        if expected_gen == _fetch_gen and item.cb then
+            pcall(item.cb, widget)
+        end
+    end
+    if expected_gen == _fetch_gen and #_decode_queue > 0 then
+        local ok_ui, UIManager = pcall(require, "ui/uimanager")
+        if ok_ui and UIManager and UIManager.scheduleIn then
+            _decode_timer = function() pumpDecodeQueue(expected_gen) end
+            UIManager:scheduleIn(0.01, _decode_timer)
+        else
+            pumpDecodeQueue(expected_gen)
+        end
+    end
+end
+
+function Covers.enqueueDecodeCover(file_path, target_w, target_h, cb)
+    if not file_path or not target_w or not target_h then
+        if cb then cb(nil) end
+        return
+    end
+    if Covers.hasMemoryCachedCover(file_path, target_w, target_h) then
+        local w = Covers.createCoverImageWidget(file_path, target_w, target_h)
+        if cb then cb(w) end
+        return
+    end
+    table.insert(_decode_queue, {
+        file_path = file_path,
+        target_w = target_w,
+        target_h = target_h,
+        cb = cb,
+    })
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    local my_gen = _fetch_gen
+    if ok_ui and UIManager and UIManager.scheduleIn then
+        if not _decode_timer then
+            _decode_timer = function() pumpDecodeQueue(my_gen) end
+            UIManager:scheduleIn(0.01, _decode_timer)
+        end
+    else
+        pumpDecodeQueue(my_gen)
+    end
 end
 
 local function putCachedScaledBB(key, bb)
@@ -754,9 +851,10 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
     local inner_h = math.max(20, slot_h - (pad * 2) - 2)
     local count = math.min(4, #(sample_books or {}))
 
-    local function makeTileContainer(book, tile_w, tile_h)
+    local function makeTileContainer(book, tile_w, tile_h, tile_idx)
         local cached = book and Covers.getCachedCoverPath(book)
-        local tile_widget = cached and Covers.createCoverImageWidget(cached, tile_w, tile_h)
+        local in_ram = cached and Covers.hasMemoryCachedCover(cached, tile_w, tile_h)
+        local tile_widget = in_ram and Covers.createCoverImageWidget(cached, tile_w, tile_h)
             or FrameContainer:new{
                 bordersize = 1,
                 color = Blitbuffer.COLOR_GRAY_E,
@@ -771,19 +869,24 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
             dimen = Geom:new{ w = tile_w, h = tile_h },
             tile_widget,
         }
-        if book and not cached then
+        local function applyDecodedTile(new_img)
+            if is_valid and not is_valid() then return end
+            if new_img then
+                cell[1] = new_img
+                if on_async_loaded then
+                    on_async_loaded()
+                end
+            end
+        end
+        if cached and not in_ram then
+            Covers.enqueueDecodeCover(cached, tile_w, tile_h, applyDecodedTile)
+        elseif book and not cached then
             Covers.enqueueFetchCover(book, function(loaded_path)
                 if is_valid and not is_valid() then return end
                 if loaded_path then
-                    local new_img = Covers.createCoverImageWidget(loaded_path, tile_w, tile_h)
-                    if new_img then
-                        cell[1] = new_img
-                    end
-                    if on_async_loaded then
-                        on_async_loaded()
-                    end
+                    Covers.enqueueDecodeCover(loaded_path, tile_w, tile_h, applyDecodedTile)
                 end
-            end, open_doc)
+            end, open_doc, tile_idx or 1)
         end
         return cell
     end
@@ -800,25 +903,25 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
             alpha = true,
         }
     elseif count == 1 then
-        content = makeTileContainer(sample_books[1], inner_w, inner_h)
+        content = makeTileContainer(sample_books[1], inner_w, inner_h, 1)
     elseif count == 2 then
         local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
         content = HorizontalGroup:new{
             align = "center",
-            makeTileContainer(sample_books[1], mini_w, inner_h),
+            makeTileContainer(sample_books[1], mini_w, inner_h, 1),
             HorizontalSpan:new{ width = gap },
-            makeTileContainer(sample_books[2], mini_w, inner_h),
+            makeTileContainer(sample_books[2], mini_w, inner_h, 2),
         }
     elseif count == 3 then
         local mini_w = math.max(8, math.floor((inner_w - gap) / 2))
         local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
         local row1 = HorizontalGroup:new{
             align = "center",
-            makeTileContainer(sample_books[1], mini_w, mini_h),
+            makeTileContainer(sample_books[1], mini_w, mini_h, 1),
             HorizontalSpan:new{ width = gap },
-            makeTileContainer(sample_books[2], mini_w, mini_h),
+            makeTileContainer(sample_books[2], mini_w, mini_h, 2),
         }
-        local row2 = makeTileContainer(sample_books[3], mini_w, mini_h)
+        local row2 = makeTileContainer(sample_books[3], mini_w, mini_h, 3)
         content = VerticalGroup:new{
             align = "center",
             row1,
@@ -830,15 +933,15 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
         local mini_h = math.max(10, math.floor((inner_h - gap) / 2))
         local row1 = HorizontalGroup:new{
             align = "center",
-            makeTileContainer(sample_books[1], mini_w, mini_h),
+            makeTileContainer(sample_books[1], mini_w, mini_h, 1),
             HorizontalSpan:new{ width = gap },
-            makeTileContainer(sample_books[2], mini_w, mini_h),
+            makeTileContainer(sample_books[2], mini_w, mini_h, 2),
         }
         local row2 = HorizontalGroup:new{
             align = "center",
-            makeTileContainer(sample_books[3], mini_w, mini_h),
+            makeTileContainer(sample_books[3], mini_w, mini_h, 3),
             HorizontalSpan:new{ width = gap },
-            makeTileContainer(sample_books[4], mini_w, mini_h),
+            makeTileContainer(sample_books[4], mini_w, mini_h, 4),
         }
         content = VerticalGroup:new{
             align = "center",

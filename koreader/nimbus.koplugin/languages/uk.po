@@ -377,6 +377,10 @@ msgstr "Завантажити"
 msgid "Download & Open"
 msgstr "Завантажити й відкрити"
 
+# en-hash: e454c2e4912f1534340282bc2a17bbf1
+msgid "Download canceled."
+msgstr "Завантаження скасовано."
+
 # en-hash: 59d30102eb8d3c0c8b031e08a28acd28
 msgid "Download failed: "
 msgstr "Помилка завантаження: "
@@ -392,6 +396,10 @@ msgstr "Завантажено нових книг з Nimbus Cloud: %d."
 # en-hash: d0823558291ef268fed478a0369da5e8
 msgid "Downloaded '%s'."
 msgstr "Завантажено '%s'."
+
+# en-hash: c0105b4a79272685ba1eb94618ffdbe4
+msgid "Downloading '%s' in background..."
+msgstr "Завантаження '%s' у фоновому режимі..."
 
 # en-hash: 6f4ae97857f62d9269358fd71663be7c
 msgid "Downloading Book"
@@ -440,6 +448,10 @@ msgstr "Фільтрувати книги"
 # en-hash: 166fc1b0c6bd096fa7235863a8bdb0e9
 msgid "Filter books by title, author, or series:"
 msgstr "Фільтрувати книги за назвою, автором чи серією:"
+
+# en-hash: f1f52329b8eac84be605b93a5f1bee4e
+msgid "Finalizing %d of %d..."
+msgstr "Завершення %d з %d..."
 
 # en-hash: f1c4b90a806e78960f1e7f1b4408185a
 msgid "Finalizing catalog…"
@@ -865,12 +877,20 @@ msgstr "Синхронізувати зараз"
 msgid "Sync Reading Statistics"
 msgstr "Синхронізувати статистику читання"
 
+# en-hash: be576564addeba72493580a65914079c
+msgid "Sync canceled."
+msgstr "Синхронізацію скасовано."
+
 # en-hash: e57f4816285d9b4b90e1e66aecb855b9
 msgid "Sync complete"
 msgstr "Синхронізацію завершено"
 
 # en-hash: 29d70df09a61d88c3f2ecaaa5f479848
 msgid "Sync error: "
+msgstr "Помилка синхронізації: "
+
+# en-hash: 8cb025116cf18b2ea16a86344ee7e8eb
+msgid "Sync failed: "
 msgstr "Помилка синхронізації: "
 
 # en-hash: a22c1c4f6157fcb89a6fab8de530e257
@@ -892,6 +912,10 @@ msgstr "Синхронізація бібліотеки"
 # en-hash: be633d065af8047fb567a2000cb18275
 msgid "Syncing device progress & stats..."
 msgstr "Синхронізація прогресу та статистики пристрою..."
+
+# en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
+msgid "Syncing library in background..."
+msgstr "Синхронізація бібліотеки у фоновому режимі..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"
@@ -993,6 +1017,10 @@ msgstr "Вивантажено '%s' в Nimbus Cloud!"
 msgid "Uploading %d book(s) in background..."
 msgstr "Завантаження %d книг у фоні..."
 
+# en-hash: dc81c1b2fe7b5f9409135a18c176b3b5
+msgid "Uploading %d of %d (%d%%)..."
+msgstr "Вивантаження %d з %d (%d%%)..."
+
 # en-hash: 2a57415db14150f740816b3b3ca86b85
 msgid "Uploading %d of %d..."
 msgstr "Вивантаження %d з %d..."
@@ -1049,6 +1077,10 @@ msgstr "елемент"
 msgid "items"
 msgstr "елементи"
 
+# en-hash: 6f76d7f71863996f4095d5322d06d290
+msgid "· Downloading (%d%%)..."
+msgstr "· Завантаження (%d%%)..."
+
 # en-hash: 4b7edb48409266950a05418e080ab2c1
 msgid "· Offline"
 msgstr "· Офлайн"
@@ -1056,6 +1088,10 @@ msgstr "· Офлайн"
 # en-hash: 7507b4c2337968b7fc7cdda1398f36e1
 msgid "· Sync error"
 msgstr "· Помилка синхронізації"
+
+# en-hash: 036a791a530a0f910ae787fc98cbb436
+msgid "· Syncing (%d%%)..."
+msgstr "· Синхронізація (%d%%)..."
 
 # en-hash: 2d8ad8668093592f584b2a0f447e2165
 msgid "· Syncing..."
