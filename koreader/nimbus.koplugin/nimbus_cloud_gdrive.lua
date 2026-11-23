@@ -306,7 +306,7 @@ function GDrive.downloadFile(remote_path, local_dest_path, creds, cb, opts)
             method = "GET",
             headers = { ["Authorization"] = "Bearer " .. token_or_err },
             sink = Http.makeFileProgressSink(f, total_size, opts.on_progress, opts.is_canceled),
-            total_timeout = 300,
+            total_timeout = opts.total_timeout or 300,
         })
         pcall(function() f:close() end)
         if opts.is_canceled and opts.is_canceled() then

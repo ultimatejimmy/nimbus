@@ -127,6 +127,22 @@ local function embedIntoFileManager(fm_self)
                 return orig_onKeyPress(self_fm, key)
             end
         end
+        if not fm_self._nimbus_swipe_patched and type(fm_self.onSwipeFM) == "function" then
+            fm_self._nimbus_swipe_patched = true
+            local orig_onSwipeFM = fm_self.onSwipeFM
+            fm_self.onSwipeFM = function(self_fm, ges)
+                local cur_slot = getEmbedSlot(self_fm)
+                if self_fm._nimbus_embedded_view and cur_slot and cur_slot[1] == self_fm._nimbus_embedded_view
+                    and not self_fm._nimbus_browsing_files then
+                    if ges and self_fm._nimbus_embedded_view.onSwipe then
+                        self_fm._nimbus_embedded_view:onSwipe(nil, ges)
+                        self_fm._nimbus_embedded_view._last_handled_ges = ges
+                        return true
+                    end
+                end
+                return orig_onSwipeFM(self_fm, ges)
+            end
+        end
     end)
     if not ok_err then
         Logger.warn("Failed to embed into FileManager, falling back: " .. tostring(err))

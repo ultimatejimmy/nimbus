@@ -86,6 +86,15 @@ function Covers.getCoverFilePath(entry)
     local dir = Settings.getCoversCacheDir()
     mkdirRecursive(dir)
     ensureCoverCacheVersion(dir)
+    local is_v2 = type(entry.cover_etag) == "string" and entry.cover_etag:sub(1, 3) == "v2_"
+    if is_v2 then
+        local v2_path = dir .. "/" .. key .. "_v2.jpg"
+        local old_path = dir .. "/" .. key .. ".jpg"
+        if not fileExists(v2_path) and fileExists(old_path) then
+            pcall(os.remove, old_path)
+        end
+        return v2_path
+    end
     return dir .. "/" .. key .. ".jpg"
 end
 
@@ -199,11 +208,11 @@ local function writeScaledBlitBuffer(orig_bb, dest_path)
 end
 
 --- Extracts a cover thumbnail from a local ebook file and saves it to dest_path.
-function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc)
+function Covers.extractLocalCoverToFile(filepath, dest_path, open_doc, force_overwrite)
     if not filepath or not dest_path or not fileExists(filepath) then
         return false
     end
-    if fileExists(dest_path) then
+    if not force_overwrite and fileExists(dest_path) then
         return true
     end
 
@@ -313,31 +322,232 @@ function Covers.fetchCover(entry, cb, open_doc)
         end
         os.remove(tmp)
         if cb then cb(nil) end
-    end)
+    end, { total_timeout = 15 })
 end
 
 local _fetch_queue = {}
 local _fetch_running = false
+local _fetch_settle_timer = nil
+local _fetch_poll_timer = nil
+local _fetch_subproc = nil -- { pid, read_fd, tmp_paths, pending_jobs }
+local _fetch_gen = 0
 
-function Covers.clearFetchQueue()
-    _fetch_queue = {}
+local function canUseSubProcess()
+    local ok_d, Device = pcall(require, "device")
+    if ok_d and Device and Device.isAndroid and Device:isAndroid() then
+        return false
+    end
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    return ok_fu and ffiUtil ~= nil and ffiUtil.runInSubProcess ~= nil
 end
 
-local function pumpFetchQueue()
-    if _fetch_running then return end
+local function cleanupSubProcess()
+    local sp = _fetch_subproc
+    if not sp then return end
+    _fetch_subproc = nil
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    if ok_fu and ffiUtil then
+        if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, sp.pid) end
+        if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, sp.pid, true) end
+        if sp.read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, sp.read_fd) end
+    end
+    for _, tmp in ipairs(sp.tmp_paths or {}) do
+        pcall(os.remove, tmp)
+    end
+end
+
+function Covers.clearFetchQueue()
+    _fetch_gen = _fetch_gen + 1
+    _fetch_queue = {}
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if ok_ui and UIManager and UIManager.unschedule then
+        if _fetch_settle_timer then
+            pcall(UIManager.unschedule, UIManager, _fetch_settle_timer)
+            _fetch_settle_timer = nil
+        end
+        if _fetch_poll_timer then
+            pcall(UIManager.unschedule, UIManager, _fetch_poll_timer)
+            _fetch_poll_timer = nil
+        end
+    end
+    cleanupSubProcess()
+end
+
+local function pumpFallbackQueue(expected_gen)
+    if expected_gen ~= _fetch_gen or _fetch_running then return end
     local job = table.remove(_fetch_queue, 1)
     if not job then return end
     _fetch_running = true
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
-    Covers.fetchCover(job.entry, function(path)
+    local ok_call, err = pcall(Covers.fetchCover, job.entry, function(path)
         _fetch_running = false
-        if job.cb then pcall(job.cb, path) end
-        if ok_ui and UIManager and UIManager.nextTick then
-            UIManager:nextTick(pumpFetchQueue)
-        else
-            pumpFetchQueue()
+        if expected_gen == _fetch_gen and job.cb then
+            pcall(job.cb, path)
+        end
+        if expected_gen == _fetch_gen and #_fetch_queue > 0 then
+            if ok_ui and UIManager and UIManager.scheduleIn then
+                UIManager:scheduleIn(0.2, function() pumpFallbackQueue(expected_gen) end)
+            else
+                pumpFallbackQueue(expected_gen)
+            end
         end
     end, job.open_doc)
+    if not ok_call then
+        _fetch_running = false
+        if expected_gen == _fetch_gen and #_fetch_queue > 0 then
+            if ok_ui and UIManager and UIManager.scheduleIn then
+                UIManager:scheduleIn(0.2, function() pumpFallbackQueue(expected_gen) end)
+            end
+        end
+    end
+end
+
+local function startSubProcessBatch(jobs, expected_gen)
+    local ok_fu, ffiUtil = pcall(require, "ffi/util")
+    local ok_ui, UIManager = pcall(require, "ui/uimanager")
+    if not ok_fu or not ffiUtil or not ffiUtil.runInSubProcess or not ok_ui or not UIManager then
+        for _, j in ipairs(jobs) do table.insert(_fetch_queue, j) end
+        pumpFallbackQueue(expected_gen)
+        return
+    end
+
+    local pending_jobs = {}
+    local tmp_paths = {}
+    local dl_specs = {}
+    for _, job in ipairs(jobs) do
+        local e = job.entry
+        local dest = Covers.getCoverFilePath(e)
+        if dest and e and e.has_cover and e.folder then
+            table.insert(pending_jobs, { dest = dest, cb = job.cb, done = false })
+            table.insert(dl_specs, { folder = e.folder, dest = dest })
+        end
+    end
+    if #dl_specs == 0 then return end
+
+    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(child_pid, child_write_fd)
+        pcall(function()
+            local CloudFS = require("nimbus_cloud")
+            for _, spec in ipairs(dl_specs) do
+                local tmp = spec.dest .. "." .. tostring(child_pid or "bg") .. ".tmp"
+                CloudFS.downloadFile(spec.folder .. "/cover.jpg", tmp, function(ok)
+                    if ok then
+                        os.remove(spec.dest)
+                        if not os.rename(tmp, spec.dest) then
+                            os.remove(tmp)
+                        end
+                    else
+                        os.remove(tmp)
+                    end
+                end, { total_timeout = 15 })
+            end
+        end)
+        if child_write_fd then
+            pcall(ffiUtil.writeToFD, child_write_fd, "DONE", true)
+        end
+    end, true)
+
+    if not pid then
+        for _, j in ipairs(jobs) do table.insert(_fetch_queue, j) end
+        pumpFallbackQueue(expected_gen)
+        return
+    end
+
+    for _, spec in ipairs(dl_specs) do
+        table.insert(tmp_paths, spec.dest .. "." .. tostring(pid) .. ".tmp")
+    end
+    _fetch_subproc = {
+        pid = pid,
+        read_fd = parent_read_fd,
+        tmp_paths = tmp_paths,
+        pending_jobs = pending_jobs,
+    }
+
+    local attempts = 0
+    local function pollSubProc()
+        if expected_gen ~= _fetch_gen or not _fetch_subproc or _fetch_subproc.pid ~= pid then
+            return
+        end
+        attempts = attempts + 1
+        local any_left = false
+        for _, pj in ipairs(pending_jobs) do
+            if not pj.done then
+                if fileExists(pj.dest) then
+                    pj.done = true
+                    if pj.cb then pcall(pj.cb, pj.dest) end
+                else
+                    any_left = true
+                end
+            end
+        end
+
+        if ffiUtil.isSubProcessDone(pid) or not any_left or attempts > 240 then
+            cleanupSubProcess()
+            _fetch_poll_timer = nil
+            -- Final sweep for any file renamed right as the subprocess exited
+            for _, pj in ipairs(pending_jobs) do
+                if not pj.done and fileExists(pj.dest) then
+                    pj.done = true
+                    if pj.cb then pcall(pj.cb, pj.dest) end
+                end
+            end
+            return
+        end
+
+        _fetch_poll_timer = pollSubProc
+        UIManager:scheduleIn(0.25, _fetch_poll_timer)
+    end
+    _fetch_poll_timer = pollSubProc
+    UIManager:scheduleIn(0.25, _fetch_poll_timer)
+end
+
+local function flushSettledQueue(expected_gen)
+    _fetch_settle_timer = nil
+    if expected_gen ~= _fetch_gen or #_fetch_queue == 0 then return end
+    local batch = _fetch_queue
+    _fetch_queue = {}
+
+    if not canUseSubProcess() then
+        _fetch_queue = batch
+        pumpFallbackQueue(expected_gen)
+        return
+    end
+
+    local local_jobs = {}
+    local remote_jobs = {}
+    for _, job in ipairs(batch) do
+        local e = job.entry
+        if e and e.local_path then
+            table.insert(local_jobs, job)
+        else
+            table.insert(remote_jobs, job)
+        end
+    end
+
+    if #remote_jobs > 0 then
+        startSubProcessBatch(remote_jobs, expected_gen)
+    end
+
+    if #local_jobs > 0 then
+        local ok_ui, UIManager = pcall(require, "ui/uimanager")
+        local function pumpLocal(idx)
+            if expected_gen ~= _fetch_gen or idx > #local_jobs then return end
+            local job = local_jobs[idx]
+            local dest = Covers.getCoverFilePath(job.entry)
+            if dest and Covers.extractLocalCoverToFile(job.entry.local_path, dest, job.open_doc) then
+                if job.cb then pcall(job.cb, dest) end
+            elseif job.entry and job.entry.has_cover and job.entry.folder then
+                table.insert(_fetch_queue, job)
+            end
+            if idx < #local_jobs and ok_ui and UIManager and UIManager.scheduleIn then
+                UIManager:scheduleIn(0.03, function() pumpLocal(idx + 1) end)
+            elseif #_fetch_queue > 0 and not _fetch_subproc then
+                local rem = _fetch_queue
+                _fetch_queue = {}
+                startSubProcessBatch(rem, expected_gen)
+            end
+        end
+        pumpLocal(1)
+    end
 end
 
 function Covers.enqueueFetchCover(entry, cb, open_doc)
@@ -350,12 +560,20 @@ function Covers.enqueueFetchCover(entry, cb, open_doc)
         if cb then cb(cached) end
         return
     end
+    if not entry.local_path and (not entry.has_cover or not entry.folder) then
+        if cb then cb(nil) end
+        return
+    end
     table.insert(_fetch_queue, { entry = entry, cb = cb, open_doc = open_doc })
     local ok_ui, UIManager = pcall(require, "ui/uimanager")
-    if ok_ui and UIManager and UIManager.nextTick then
-        UIManager:nextTick(pumpFetchQueue)
+    local my_gen = _fetch_gen
+    if ok_ui and UIManager and UIManager.scheduleIn then
+        if not _fetch_settle_timer then
+            _fetch_settle_timer = function() flushSettledQueue(my_gen) end
+            UIManager:scheduleIn(0.35, _fetch_settle_timer)
+        end
     else
-        pumpFetchQueue()
+        flushSettledQueue(my_gen)
     end
 end
 
@@ -518,7 +736,7 @@ function Covers.createPlaceholderWidget(target_w, target_h, title)
     }
 end
 
-function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_loaded, open_doc)
+function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_loaded, open_doc, is_valid)
     local FrameContainer = require("ui/widget/container/framecontainer")
     local CenterContainer = require("ui/widget/container/centercontainer")
     local HorizontalGroup = require("ui/widget/horizontalgroup")
@@ -539,13 +757,23 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
     local function makeTileContainer(book, tile_w, tile_h)
         local cached = book and Covers.getCachedCoverPath(book)
         local tile_widget = cached and Covers.createCoverImageWidget(cached, tile_w, tile_h)
-            or VerticalSpan:new{ width = 0 }
+            or FrameContainer:new{
+                bordersize = 1,
+                color = Blitbuffer.COLOR_GRAY_E,
+                padding = 0,
+                margin = 0,
+                background = Blitbuffer.COLOR_WHITE,
+                width = math.max(8, tile_w - 2),
+                height = math.max(10, tile_h - 2),
+                VerticalSpan:new{ width = 0 },
+            }
         local cell = CenterContainer:new{
             dimen = Geom:new{ w = tile_w, h = tile_h },
             tile_widget,
         }
         if book and not cached then
             Covers.enqueueFetchCover(book, function(loaded_path)
+                if is_valid and not is_valid() then return end
                 if loaded_path then
                     local new_img = Covers.createCoverImageWidget(loaded_path, tile_w, tile_h)
                     if new_img then

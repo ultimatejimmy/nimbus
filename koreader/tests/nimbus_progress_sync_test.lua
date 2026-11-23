@@ -68,4 +68,54 @@ describe("nimbus_sync Android guard & progress collection", function()
         assert.are.equal("finished", merged.b2.status)
         assert.are.equal(1, merged.b2.percent)
     end)
+
+    it("reuploadFixedCovers upgrades entries without v2_ cover_etag and skips already-upgraded ones", function()
+        local Covers = require("nimbus_covers")
+        local orig_cfg = Cloud.isConfigured
+        local orig_up_file = Cloud.uploadFile
+        local orig_up_str = Cloud.uploadString
+        local orig_extract = Covers.extractLocalCoverToFile
+
+        local uploaded_files = {}
+        local saved_catalog = false
+        Cloud.isConfigured = function() return true end
+        Cloud.uploadFile = function(rel, local_p, cb)
+            table.insert(uploaded_files, rel)
+            if cb then cb(true) end
+        end
+        Cloud.uploadString = function(rel, body, mime, cb)
+            if rel == "_sync/catalog.json" then saved_catalog = true end
+            if cb then cb(true) end
+        end
+        Covers.extractLocalCoverToFile = function(fp, dest)
+            local f = io.open(dest, "wb")
+            if f then f:write("clean-rgb24"); f:close() end
+            return true
+        end
+
+        local catalog = {
+            books = {
+                old1 = { id = "old1", title = "Old Cover", folder = "Books/Old", cover_etag = "12345", deleted = false },
+                new1 = { id = "new1", title = "V2 Cover", folder = "Books/New", cover_etag = "v2_99999", deleted = false },
+            },
+        }
+        local device_books = {
+            { cloud_id = "old1", local_path = "tests/tmp/old1.epub" },
+            { cloud_id = "new1", local_path = "tests/tmp/new1.epub" },
+        }
+
+        local count, cat_changed = Sync.reuploadFixedCovers(catalog, device_books)
+
+        Cloud.isConfigured = orig_cfg
+        Cloud.uploadFile = orig_up_file
+        Cloud.uploadString = orig_up_str
+        Covers.extractLocalCoverToFile = orig_extract
+
+        assert.are.equal(1, count)
+        assert.is_true(cat_changed)
+        assert.is_true(saved_catalog)
+        assert.are.equal(1, #uploaded_files)
+        assert.are.equal("Books/Old/cover.jpg", uploaded_files[1])
+        assert.is_true(tostring(catalog.books.old1.cover_etag):sub(1, 3) == "v2_")
+    end)
 end)

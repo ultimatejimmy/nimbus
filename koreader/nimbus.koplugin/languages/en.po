@@ -704,8 +704,8 @@ msgstr "Untitled"
 msgid "Updating cloud catalog..."
 msgstr "Updating cloud catalog..."
 
-msgid "Updating cloud covers..."
-msgstr "Updating cloud covers..."
+msgid "Upgrading cloud covers (%d/%d)..."
+msgstr "Upgrading cloud covers (%d/%d)..."
 
 msgid "Upload"
 msgstr "Upload"

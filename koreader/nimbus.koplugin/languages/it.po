@@ -937,9 +937,9 @@ msgstr "Senza titolo"
 msgid "Updating cloud catalog..."
 msgstr "Aggiornamento catalogo cloud..."
 
-# en-hash: 62ddb525b756a5480c71a83a87840578
-msgid "Updating cloud covers..."
-msgstr "Aggiornamento copertine cloud..."
+# en-hash: 28fee36887f5b3eb5a7958476c9761d8
+msgid "Upgrading cloud covers (%d/%d)..."
+msgstr "Aggiornamento copertine cloud (%d/%d)..."
 
 # en-hash: 91412465ea9169dfd901dd5e7c96dd99
 msgid "Upload"
@@ -1051,7 +1051,7 @@ msgstr "elementi"
 
 # en-hash: 4b7edb48409266950a05418e080ab2c1
 msgid "· Offline"
-msgstr "· Offline"
+msgstr "· Non in linea"
 
 # en-hash: 7507b4c2337968b7fc7cdda1398f36e1
 msgid "· Sync error"

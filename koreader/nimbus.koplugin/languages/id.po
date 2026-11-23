@@ -937,9 +937,9 @@ msgstr "Tanpa Judul"
 msgid "Updating cloud catalog..."
 msgstr "Memperbarui katalog cloud..."
 
-# en-hash: 62ddb525b756a5480c71a83a87840578
-msgid "Updating cloud covers..."
-msgstr "Memperbarui sampul cloud..."
+# en-hash: 28fee36887f5b3eb5a7958476c9761d8
+msgid "Upgrading cloud covers (%d/%d)..."
+msgstr "Memperbarui sampul cloud (%d/%d)..."
 
 # en-hash: 91412465ea9169dfd901dd5e7c96dd99
 msgid "Upload"

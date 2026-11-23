@@ -327,9 +327,11 @@ function UILibrary.buildView(on_open_book, opts)
                 refreshLocalBooks(true)
                 if not sync_error then
                     merged_progress = Sync.collectAndUploadLocalProgress(catalog_data, device_books, merged_progress)
-                    if Sync.reuploadFixedCovers and Covers.hasPendingCloudCoverReupload and Covers.hasPendingCloudCoverReupload() then
-                        prog_dlg:setProgress(93, _("Updating cloud covers..."))
-                        pcall(Sync.reuploadFixedCovers, catalog_data, device_books)
+                    if Sync.reuploadFixedCovers then
+                        pcall(Sync.reuploadFixedCovers, catalog_data, device_books, function(idx, total, title)
+                            prog_dlg:setProgress(math.min(97, 92 + math.floor((idx / math.max(1, total)) * 5)),
+                                string.format(_("Upgrading cloud covers (%d/%d)..."), idx, total))
+                        end, function() return prog_dlg:isCanceled() end)
                     end
                     if Sync.backfillRelativeDirs(catalog_data, device_books) then
                         Sync.saveCatalog(catalog_data, function() end)
@@ -1275,18 +1277,14 @@ function UILibrary.buildView(on_open_book, opts)
                         },
                     }
                     if not cached_cover then
-                        UIManager:scheduleIn(idx * 0.05, function()
-                            if not isAlive() then return end
-                            Covers.fetchCover(item, function(loaded_path)
-                                if loaded_path and isAlive() and thumb_frame and thumb_frame[1] then
-                                    local new_img = Covers.createCoverImageWidget(loaded_path, thumb_w, thumb_h)
-                                    if new_img then
-                                        thumb_frame[1][1] = new_img
-                                        dirtyHost()
-                                    end
-                                end
-                            end, opts.open_doc_info and opts.open_doc_info.open_doc)
-                        end)
+                        Covers.enqueueFetchCover(item, function(loaded_path)
+                            if my_gen ~= render_gen or not loaded_path or not isAlive() or not thumb_frame or not thumb_frame[1] then return end
+                            local new_img = Covers.createCoverImageWidget(loaded_path, thumb_w, thumb_h)
+                            if new_img then
+                                thumb_frame[1][1] = new_img
+                                dirtyHost()
+                            end
+                        end, opts.open_doc_info and opts.open_doc_info.open_doc)
                     end
                 end
 
@@ -1367,7 +1365,10 @@ function UILibrary.buildView(on_open_book, opts)
                         function()
                             if my_gen == render_gen and isAlive() then dirtyHost() end
                         end,
-                        opts.open_doc_info and opts.open_doc_info.open_doc
+                        opts.open_doc_info and opts.open_doc_info.open_doc,
+                        function()
+                            return my_gen == render_gen and isAlive()
+                        end
                     )
                     cover_slot = BottomContainer:new{
                         dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
@@ -1558,11 +1559,18 @@ function UILibrary.buildView(on_open_book, opts)
             },
         }
 
-        if host_container[1] and host_container[1].free then
-            pcall(function() host_container[1]:free() end)
-        end
-        if Covers.pruneMemoryCache then Covers.pruneMemoryCache() end
+        local old_shelf = host_container[1]
         host_container[1] = shelf_bg
+        if old_shelf or Covers.pruneMemoryCache then
+            UIManager:nextTick(function()
+                if old_shelf and old_shelf.free then
+                    pcall(function() old_shelf:free() end)
+                end
+                if Covers.pruneMemoryCache then
+                    Covers.pruneMemoryCache()
+                end
+            end)
+        end
         host_container.layout = Widgets.collectFocusableLayout(shelf_bg)
         if #host_container.layout > 0 then
             local sel = host_container.selected or { x = 1, y = 1 }
@@ -1622,13 +1630,19 @@ function UILibrary.buildView(on_open_book, opts)
     host_container.onNextPage = function()
         if current_page < total_pages then current_page = current_page + 1; renderShelf(); return true end
     end
-    host_container.onSwipe = function(_, ges)
-        if ges.direction == "south" and ges.pos and ges.pos.y <= math.floor(sh * 0.15) then
+    host_container.onSwipe = function(self, arg, ges)
+        local g = ges or arg
+        if type(g) ~= "table" then return false end
+        if g == self._last_handled_ges then
+            self._last_handled_ges = nil
+            return true
+        end
+        if g.direction == "south" and g.pos and g.pos.y <= math.floor(sh * 0.15) then
             return openKOReaderTopMenu(embedded_fm)
-        elseif ges.direction == "west" then
+        elseif g.direction == "west" then
             host_container:onNextPage()
             return true
-        elseif ges.direction == "east" then
+        elseif g.direction == "east" then
             host_container:onPrevPage()
             return true
         end

@@ -687,7 +687,7 @@ function Sync.uploadBook(filepath, doc_props, cover_path, cb, opts)
             format = Constants.SUPPORTED_FORMATS[ext] and ext or "epub",
             size_bytes = size_bytes,
             has_cover = has_cover,
-            cover_etag = has_cover and tostring(os.time()) or nil,
+            cover_etag = has_cover and ("v2_" .. tostring(os.time())) or nil,
             hashes = {
                 partial_md5 = partial_md5 or "",
                 sha256 = sha256 or "",
@@ -935,31 +935,42 @@ function Sync.collectAndUploadLocalProgress(catalog, device_books, existing_merg
     return merged, changed
 end
 
---- Re-uploads clean v2 cover.jpg files to Cloud for local books after a cover cache migration.
-function Sync.reuploadFixedCovers(catalog, device_books, on_progress)
+--- Re-uploads clean v2 cover.jpg files to Cloud for local books lacking a v2_ cover_etag.
+function Sync.reuploadFixedCovers(catalog, device_books, on_progress, is_canceled)
     if not Cloud.isConfigured() or type(catalog) ~= "table" or type(catalog.books) ~= "table" then
-        return 0
+        return 0, false
     end
     local ok_cov, Covers = pcall(require, "nimbus_covers")
-    if not ok_cov or not Covers or not Covers.hasPendingCloudCoverReupload or not Covers.hasPendingCloudCoverReupload() then
-        return 0
+    if not ok_cov or not Covers or not Covers.extractLocalCoverToFile or not Covers.getCoverFilePath then
+        return 0, false
     end
 
     local targets = {}
     for _, b in ipairs(device_books or {}) do
         if b.cloud_id and b.local_path and catalog.books[b.cloud_id] and not catalog.books[b.cloud_id].deleted then
             local entry = catalog.books[b.cloud_id]
-            if entry.folder and entry.folder ~= "" then
+            local is_v2 = type(entry.cover_etag) == "string" and entry.cover_etag:sub(1, 3) == "v2_"
+            if entry.folder and entry.folder ~= "" and not is_v2 then
                 table.insert(targets, { book = b, entry = entry })
             end
         end
     end
 
+    if #targets == 0 then
+        if Covers.clearPendingCloudCoverReupload then
+            Covers.clearPendingCloudCoverReupload()
+        end
+        return 0, false
+    end
+
     local uploaded = 0
+    local catalog_changed = false
     for idx, t in ipairs(targets) do
+        if is_canceled and is_canceled() then break end
         if on_progress then pcall(on_progress, idx, #targets, t.entry.title) end
+        t.entry.cover_etag = "v2_" .. tostring(os.time())
         local dest = Covers.getCoverFilePath(t.entry)
-        if dest and Covers.extractLocalCoverToFile(t.book.local_path, dest) then
+        if dest and Covers.extractLocalCoverToFile(t.book.local_path, dest, nil, true) then
             local ok_up = false
             Cloud.uploadFile(t.entry.folder .. "/cover.jpg", dest, function(ok)
                 ok_up = ok
@@ -967,12 +978,25 @@ function Sync.reuploadFixedCovers(catalog, device_books, on_progress)
             if ok_up then
                 t.entry.has_cover = true
                 uploaded = uploaded + 1
+                catalog_changed = true
+                if uploaded % 15 == 0 then
+                    Sync.saveCatalog(catalog, function() end)
+                end
+            else
+                t.entry.cover_etag = nil
             end
+        else
+            t.entry.cover_etag = nil
         end
     end
-    Covers.clearPendingCloudCoverReupload()
-    Logger.info(string.format("Re-uploaded %d clean cover(s) to Nimbus Cloud", uploaded))
-    return uploaded
+    if catalog_changed then
+        Sync.saveCatalog(catalog, function() end)
+    end
+    if Covers.clearPendingCloudCoverReupload and not (is_canceled and is_canceled()) then
+        Covers.clearPendingCloudCoverReupload()
+    end
+    Logger.info(string.format("Re-uploaded %d clean v2 cover(s) to Nimbus Cloud", uploaded))
+    return uploaded, catalog_changed
 end
 
 function Sync.findNewCloudBooks(prev_cat, new_cat)

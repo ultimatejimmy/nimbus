@@ -180,4 +180,41 @@ describe("nimbus_covers cache safety & normalization", function()
         FreshCovers.clearPendingCloudCoverReupload()
         assert.is_false(FreshCovers.hasPendingCloudCoverReupload())
     end)
+
+    it("uses _v2 cache path and removes stale pre-v2 file when cover_etag starts with v2_", function()
+        local entry = { id = "etag_book_1" }
+        local old_path = Covers.getCoverFilePath(entry)
+        local f = io.open(old_path, "wb")
+        assert.is_not_nil(f)
+        f:write("stale-grayscale")
+        f:close()
+
+        entry.cover_etag = "v2_1700000000"
+        local v2_path = Covers.getCoverFilePath(entry)
+        assert.is_not_nil(v2_path:find("_v2%.jpg$"))
+        -- Old pre-v2 cache file should have been removed
+        local check_old = io.open(old_path, "rb")
+        assert.is_nil(check_old)
+    end)
+
+    it("cancels debounced queue cleanly via clearFetchQueue without crashing", function()
+        local orig_ui = package.loaded["ui/uimanager"]
+        local scheduled = nil
+        local unscheduled = nil
+        package.loaded["ui/uimanager"] = {
+            scheduleIn = function(_, _, fn) scheduled = fn end,
+            unschedule = function(_, fn) unscheduled = fn end,
+        }
+        local called = false
+        Covers.enqueueFetchCover({ id = "queued_1", has_cover = true, folder = "Books/A" }, function()
+            called = true
+        end)
+        assert.is_not_nil(scheduled)
+        Covers.clearFetchQueue()
+        assert.are.equal(scheduled, unscheduled)
+        -- Firing stale timer after clearFetchQueue must be a no-op
+        scheduled()
+        assert.is_false(called)
+        package.loaded["ui/uimanager"] = orig_ui
+    end)
 end)
