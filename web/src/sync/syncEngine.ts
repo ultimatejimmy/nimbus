@@ -326,6 +326,29 @@ function normKey(val?: string | null): string {
     .replace(/[^a-z0-9]+/g, '');
 }
 
+function normalizeTitleKey(raw?: string | null): string {
+  let s = String(raw || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/:.*$/, '')
+    .trim()
+    .toLowerCase();
+  s = s.replace(/,\s*(the|a|an)\s*$/i, '').replace(/^(the|a|an)\s+/i, '');
+  return s.replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeAuthorKey(raw?: string | null): string {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s || s === 'unknown' || s === 'unknown author') return '';
+  const tokens = s
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && w !== 'sir' && w !== 'dr' && w !== 'mr' && w !== 'mrs' && w !== 'ms');
+  if (tokens.length === 0) return '';
+  tokens.sort();
+  return tokens.join('');
+}
+
 function primaryAuthor(book: BookCatalogEntry): string {
   if (Array.isArray(book.authors) && book.authors.length > 0) return String(book.authors[0] || '');
   if (typeof (book as any).authors === 'string') return String((book as any).authors);
@@ -358,16 +381,37 @@ export function findDuplicateGroups(books: BookCatalogEntry[]): BookCatalogEntry
     else seen.set(key, idx);
   };
 
+  const byTitle = new Map<string, number[]>();
+
   active.forEach((b, i) => {
     if (b.hashes?.sha256) register(`sha:${b.hashes.sha256}`, i);
     if (b.hashes?.partial_md5) register(`pmd5:${b.hashes.partial_md5}`, i);
     const isbn = normKey(b.isbn);
     if (isbn.length >= 10) register(`isbn:${isbn}`, i);
     if (b.calibre_uuid) register(`cuuid:${b.calibre_uuid}`, i);
-    const t = normKey(b.title);
-    const a = normKey(primaryAuthor(b));
-    if (t && a) register(`ta:${t}|${a}`, i);
+
+    const t = normalizeTitleKey(b.title);
+    const a = normalizeAuthorKey(primaryAuthor(b));
+    if (t && a) {
+      register(`ta:${t}|${a}`, i);
+    }
+    if (t && t.length >= 10) {
+      const list = byTitle.get(t) || [];
+      list.push(i);
+      byTitle.set(t, list);
+    }
   });
+
+  // Match an unknown-author entry against another entry with the exact same normalized title
+  for (const indices of byTitle.values()) {
+    if (indices.length < 2) continue;
+    const hasUnknown = indices.some((idx) => !normalizeAuthorKey(primaryAuthor(active[idx])));
+    if (hasUnknown) {
+      for (let k = 1; k < indices.length; k++) {
+        union(indices[0], indices[k]);
+      }
+    }
+  }
 
   const buckets = new Map<number, BookCatalogEntry[]>();
   active.forEach((b, i) => {
