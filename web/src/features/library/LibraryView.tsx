@@ -36,10 +36,16 @@ export const LibraryView: React.FC<Props> = ({
   const [confirmDeleteBook, setConfirmDeleteBook] = useState<BookCatalogEntry | null>(null);
   const [deletingCloud, setDeletingCloud] = useState(false);
   const [confirmMergeOpen, setConfirmMergeOpen] = useState(false);
+  const [selectedMergeKeys, setSelectedMergeKeys] = useState<Set<string>>(new Set());
   const [mergingDuplicates, setMergingDuplicates] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const duplicateGroups = useMemo(() => findDuplicateGroups(books), [books]);
+
+  const openMergeModal = () => {
+    setSelectedMergeKeys(new Set(duplicateGroups.map((g) => g[0].id)));
+    setConfirmMergeOpen(true);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,7 +91,7 @@ export const LibraryView: React.FC<Props> = ({
         <div className="flex flex-wrap items-center gap-2">
           {duplicateGroups.length > 0 && (
             <button
-              onClick={() => setConfirmMergeOpen(true)}
+              onClick={openMergeModal}
               className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/60"
             >
               <GitMerge className="h-4 w-4" />
@@ -290,20 +296,73 @@ export const LibraryView: React.FC<Props> = ({
 
       {confirmMergeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Merge Duplicate Books
-            </h3>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Merge Duplicate Books
+              </h3>
+              <button
+                type="button"
+                disabled={mergingDuplicates}
+                onClick={() => {
+                  if (selectedMergeKeys.size === duplicateGroups.length) {
+                    setSelectedMergeKeys(new Set());
+                  } else {
+                    setSelectedMergeKeys(new Set(duplicateGroups.map((g) => g[0].id)));
+                  }
+                }}
+                className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
+              >
+                {selectedMergeKeys.size === duplicateGroups.length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Found {duplicateGroups.length} duplicate book group{duplicateGroups.length === 1 ? '' : 's'}. Merging keeps the best cover/metadata and combines all reading progress, highlights, and stats onto one entry:
+              Select which duplicate groups to merge. Merging keeps the best cover/metadata and combines reading progress, highlights, and stats onto one entry:
             </p>
-            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-              {duplicateGroups.map((g) => (
-                <li key={g[0].id} className="truncate">
-                  • <span className="font-medium">{g[0].title}</span> ({g.length} copies)
-                </li>
-              ))}
-            </ul>
+            <div className="mt-3 max-h-60 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-950">
+              {duplicateGroups.map((g) => {
+                const key = g[0].id;
+                const checked = selectedMergeKeys.has(key);
+                const authors = Array.isArray(g[0].authors) ? g[0].authors.join(', ') : '';
+                const copyDetails = g
+                  .map((item) => {
+                    const pct = Math.round((progressByBook[item.id]?.percent || 0) * 100);
+                    const tag = item.metadata_source === 'calibre' ? 'Calibre' : item.format?.toUpperCase() || 'Book';
+                    return `${tag} ${pct}%`;
+                  })
+                  .join(' · ');
+                return (
+                  <label
+                    key={key}
+                    className="flex cursor-pointer items-start gap-2.5 rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-900"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={mergingDuplicates}
+                      onChange={() => {
+                        setSelectedMergeKeys((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
+                          return next;
+                        });
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100">
+                        {g[0].title} <span className="font-normal text-slate-500">({g.length} copies)</span>
+                      </div>
+                      <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                        {authors ? `${authors} · ` : ''}
+                        {copyDetails}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 disabled={mergingDuplicates}
@@ -313,11 +372,13 @@ export const LibraryView: React.FC<Props> = ({
                 Cancel
               </button>
               <button
-                disabled={mergingDuplicates}
+                disabled={mergingDuplicates || selectedMergeKeys.size === 0}
                 onClick={async () => {
+                  const chosen = duplicateGroups.filter((g) => selectedMergeKeys.has(g[0].id));
+                  if (chosen.length === 0) return;
                   setMergingDuplicates(true);
                   try {
-                    await onMergeDuplicates(duplicateGroups);
+                    await onMergeDuplicates(chosen);
                     setConfirmMergeOpen(false);
                   } finally {
                     setMergingDuplicates(false);
@@ -325,7 +386,9 @@ export const LibraryView: React.FC<Props> = ({
                 }}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                {mergingDuplicates ? 'Merging...' : 'Merge All'}
+                {mergingDuplicates
+                  ? 'Merging...'
+                  : `Merge Selected (${selectedMergeKeys.size})`}
               </button>
             </div>
           </div>
