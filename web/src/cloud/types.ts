@@ -51,6 +51,8 @@ export interface BookCatalogEntry {
   calibre_uuid?: string | null;
   folder: string;
   filename: string;
+  relative_dir?: string;
+  metadata_source?: string;
   format: 'epub' | 'pdf' | 'cbz' | 'mobi' | 'azw3' | 'fb2';
   size_bytes: number;
   has_cover: boolean;

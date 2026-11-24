@@ -18,6 +18,8 @@ import { StatsView } from './features/stats/StatsView';
 import { db } from './sync/db';
 import {
   deleteBookFromCloud,
+  findDuplicateGroups,
+  mergeDuplicateGroups,
   pushDeviceAnnotations,
   pushDeviceProgress,
   pushDeviceSession,
@@ -165,7 +167,19 @@ export function App() {
 
   const downloadOffline = async (book: BookCatalogEntry): Promise<Blob> => {
     if (!fs) throw new Error('Cloud is not connected');
-    const bytes = await fs.downloadBytes(`${book.folder}/${book.filename}`);
+    let bytes: Uint8Array;
+    try {
+      bytes = await fs.downloadBytes(`${book.folder}/${book.filename}`);
+    } catch (err: any) {
+      if (err?.name !== 'CloudNotFoundError' || !book.folder) throw err;
+      const entries = await fs.listDir(book.folder);
+      const ext = `.${(book.format || 'epub').toLowerCase()}`;
+      const match =
+        entries.find((e) => !e.is_dir && e.name.toLowerCase().endsWith(ext)) ||
+        entries.find((e) => !e.is_dir && e.name !== 'cover.jpg' && e.name !== 'metadata.json');
+      if (!match) throw err;
+      bytes = await fs.downloadBytes(`${book.folder}/${match.name}`);
+    }
     const blob = new Blob([bytes.slice().buffer]);
     await db.books.put({
       book_id: book.id,
@@ -347,6 +361,19 @@ export function App() {
                 return n;
               });
               await loadFromIndexedDB();
+            }}
+            onMergeDuplicates={async (groups) => {
+              if (!fs) {
+                setShowConnect(true);
+                return;
+              }
+              setSyncing(true);
+              try {
+                await mergeDuplicateGroups(fs, config, groups);
+                await runSync();
+              } finally {
+                setSyncing(false);
+              }
             }}
             onUploadFiles={handleUploadFiles}
           />

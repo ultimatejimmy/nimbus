@@ -28,7 +28,7 @@ export class GDriveWebDriver implements CloudDriver {
     if (isDir === true) mimeClause = " and mimeType = 'application/vnd.google-apps.folder'";
     if (isDir === false) mimeClause = " and mimeType != 'application/vnd.google-apps.folder'";
     const q = `name = '${escapeQuery(name)}' and '${escapeQuery(parentId)}' in parents and trashed = false${mimeClause}`;
-    const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&orderBy=createdTime asc&pageSize=5`;
+    const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&orderBy=modifiedTime desc&pageSize=5`;
     const resp = await fetch(url, { headers: await this.headers() });
     if (!resp.ok) throw new Error(`Google Drive query failed (${resp.status})`);
     const data = await resp.json();

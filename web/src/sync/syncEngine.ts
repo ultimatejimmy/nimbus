@@ -1,5 +1,6 @@
 import { NimbusWebConfig, RootPrefixedCloudFS } from '../cloud';
 import {
+  AnnotationRecord,
   AnnotationsShard,
   BookCatalogEntry,
   CatalogFile,
@@ -317,4 +318,259 @@ export async function syncCoversFromCloud(
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()));
+}
+
+function normKey(val?: string | null): string {
+  return String(val || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function primaryAuthor(book: BookCatalogEntry): string {
+  if (Array.isArray(book.authors) && book.authors.length > 0) return String(book.authors[0] || '');
+  if (typeof (book as any).authors === 'string') return String((book as any).authors);
+  return '';
+}
+
+export function findDuplicateGroups(books: BookCatalogEntry[]): BookCatalogEntry[][] {
+  const active = books.filter((b) => !b.deleted);
+  if (active.length < 2) return [];
+
+  const parent = active.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
+  const seen = new Map<string, number>();
+  const register = (key: string, idx: number) => {
+    if (!key) return;
+    const prev = seen.get(key);
+    if (prev !== undefined) union(prev, idx);
+    else seen.set(key, idx);
+  };
+
+  active.forEach((b, i) => {
+    if (b.hashes?.sha256) register(`sha:${b.hashes.sha256}`, i);
+    if (b.hashes?.partial_md5) register(`pmd5:${b.hashes.partial_md5}`, i);
+    const isbn = normKey(b.isbn);
+    if (isbn.length >= 10) register(`isbn:${isbn}`, i);
+    if (b.calibre_uuid) register(`cuuid:${b.calibre_uuid}`, i);
+    const t = normKey(b.title);
+    const a = normKey(primaryAuthor(b));
+    if (t && a) register(`ta:${t}|${a}`, i);
+  });
+
+  const buckets = new Map<number, BookCatalogEntry[]>();
+  active.forEach((b, i) => {
+    const root = find(i);
+    const list = buckets.get(root) || [];
+    list.push(b);
+    buckets.set(root, list);
+  });
+
+  return Array.from(buckets.values()).filter((g) => g.length >= 2);
+}
+
+function scoreBookForKeep(book: BookCatalogEntry): number {
+  let score = 0;
+  const etag = String(book.cover_etag || '');
+  if (etag.startsWith('v2_cal_')) score += 1000;
+  else if (etag.startsWith('v2_')) score += 500;
+  if (book.has_cover) score += 200;
+  if ((book as any).metadata_source === 'calibre') score += 100;
+  if (book.hashes?.sha256) score += 20;
+  if (book.series) score += 10;
+  return score;
+}
+
+export async function mergeDuplicateGroups(
+  fs: RootPrefixedCloudFS,
+  cfg: NimbusWebConfig,
+  groups: BookCatalogEntry[][],
+): Promise<{ mergedGroups: number; removedBooks: number }> {
+  if (!groups.length) return { mergedGroups: 0, removedBooks: 0 };
+
+  const now = new Date().toISOString();
+  const catalog = await loadOrInitCatalog(fs, cfg.deviceId);
+  const remap = new Map<string, string>();
+  const dupFoldersToDelete: string[] = [];
+  const dupIds: string[] = [];
+
+  for (const group of groups) {
+    const live = group
+      .map((g) => catalog.books[g.id] || g)
+      .filter((b) => b && !b.deleted);
+    if (live.length < 2) continue;
+
+    live.sort((a, b) => {
+      const sa = scoreBookForKeep(a);
+      const sb = scoreBookForKeep(b);
+      if (sa !== sb) return sb - sa;
+      return String(a.added_at || '9999').localeCompare(String(b.added_at || '9999'));
+    });
+
+    const keep = live[0];
+    const dups = live.slice(1);
+    for (const dup of dups) {
+      remap.set(dup.id, keep.id);
+      dupIds.push(dup.id);
+      if (!keep.hashes) keep.hashes = { partial_md5: '', sha256: '' };
+      if (!keep.hashes.sha256 && dup.hashes?.sha256) keep.hashes.sha256 = dup.hashes.sha256;
+      if (!keep.hashes.partial_md5 && dup.hashes?.partial_md5) keep.hashes.partial_md5 = dup.hashes.partial_md5;
+      if (!keep.isbn && dup.isbn) keep.isbn = dup.isbn;
+      if (!keep.calibre_uuid && dup.calibre_uuid) keep.calibre_uuid = dup.calibre_uuid;
+      if (!keep.series && dup.series) {
+        keep.series = dup.series;
+        keep.series_index = keep.series_index ?? dup.series_index;
+      }
+      if (!keep.relative_dir && dup.relative_dir) keep.relative_dir = dup.relative_dir;
+      if (!keep.has_cover && dup.has_cover) {
+        keep.has_cover = true;
+        keep.cover_etag = dup.cover_etag;
+      }
+      if (dup.added_at && (!keep.added_at || dup.added_at < keep.added_at)) {
+        keep.added_at = dup.added_at;
+      }
+      dup.deleted = true;
+      dup.updated_at = now;
+      catalog.books[dup.id] = dup;
+      if (dup.folder && dup.folder !== keep.folder) {
+        dupFoldersToDelete.push(dup.folder);
+      }
+    }
+    keep.updated_at = now;
+    catalog.books[keep.id] = keep;
+    if (keep.folder) {
+      try {
+        await fs.uploadJson(`${keep.folder}/metadata.json`, keep);
+      } catch {
+        // non-fatal
+      }
+    }
+  }
+
+  if (remap.size === 0) return { mergedGroups: 0, removedBooks: 0 };
+
+  // Migrate progress, annotations, and sessions across all device shards
+  try {
+    const devEntries = await fs.listDir('_sync/devices');
+    const devices = Array.from(new Set(devEntries.filter((e) => e.is_dir).map((e) => e.name)));
+    for (const dev of devices) {
+      try {
+        const p = await fs.downloadJson<ProgressShard>(`_sync/devices/${dev}/progress.json`);
+        if (p?.books) {
+          let changed = false;
+          for (const [dupId, keepId] of remap.entries()) {
+            const dupRec = p.books[dupId];
+            if (!dupRec) continue;
+            const keepRec = p.books[keepId];
+            const dupTs = dupRec.updated_at || 0;
+            const keepTs = keepRec?.updated_at || 0;
+            if (!keepRec || dupTs > keepTs || (dupTs === keepTs && (dupRec.percent || 0) > (keepRec.percent || 0))) {
+              p.books[keepId] = { ...dupRec, book_id: keepId };
+            }
+            delete p.books[dupId];
+            changed = true;
+          }
+          if (changed) {
+            p.updated_at = now;
+            await fs.uploadJson(`_sync/devices/${dev}/progress.json`, p);
+          }
+        }
+      } catch {
+        // ignore missing shard
+      }
+
+      try {
+        const a = await fs.downloadJson<AnnotationsShard>(`_sync/devices/${dev}/annotations.json`);
+        if (a?.books) {
+          let changed = false;
+          for (const [dupId, keepId] of remap.entries()) {
+            const dupAnns = a.books[dupId];
+            if (!dupAnns) continue;
+            const existing = a.books[keepId] || [];
+            const byId = new Map<string, AnnotationRecord>();
+            for (const item of existing) byId.set(item.id, item);
+            for (const item of dupAnns) {
+              const moved = { ...item, book_id: keepId };
+              const prev = byId.get(moved.id);
+              if (!prev || (moved.updated_at || 0) > (prev.updated_at || 0)) {
+                byId.set(moved.id, moved);
+              }
+            }
+            a.books[keepId] = Array.from(byId.values());
+            delete a.books[dupId];
+            changed = true;
+          }
+          if (changed) {
+            a.updated_at = now;
+            await fs.uploadJson(`_sync/devices/${dev}/annotations.json`, a);
+          }
+        }
+      } catch {
+        // ignore missing shard
+      }
+
+      try {
+        const monthFiles = await fs.listDir(`_sync/devices/${dev}/sessions`);
+        for (const mf of monthFiles.filter((f) => !f.is_dir && f.name.endsWith('.json'))) {
+          try {
+            const s = await fs.downloadJson<SessionsShard>(`_sync/devices/${dev}/sessions/${mf.name}`);
+            if (Array.isArray(s?.sessions)) {
+              let changed = false;
+              for (const rec of s.sessions) {
+                const keepId = remap.get(rec.book_id);
+                if (keepId) {
+                  rec.book_id = keepId;
+                  changed = true;
+                }
+              }
+              if (changed) {
+                await fs.uploadJson(`_sync/devices/${dev}/sessions/${mf.name}`, s);
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore if _sync/devices missing
+  }
+
+  catalog.updated_at = now;
+  catalog.updated_by = cfg.deviceId;
+  await fs.uploadJson('_sync/catalog.json', catalog);
+
+  for (const folder of dupFoldersToDelete) {
+    try {
+      await fs.deletePath(folder);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  await db.transaction('rw', [db.catalog, db.books, db.covers, db.progress, db.annotations], async () => {
+    for (const id of dupIds) {
+      await db.catalog.delete(id);
+      await db.books.delete(id);
+      await db.covers.delete(id);
+      await db.progress.delete(id);
+      await db.annotations.delete(id);
+    }
+  });
+
+  return { mergedGroups: groups.length, removedBooks: dupIds.length };
 }

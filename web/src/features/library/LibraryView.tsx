@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { BookOpen, CheckCircle2, CloudDownload, HardDrive, Search, Trash2, Upload } from 'lucide-react';
+import { BookOpen, CheckCircle2, CloudDownload, GitMerge, HardDrive, Search, Trash2, Upload } from 'lucide-react';
 import { BookCatalogEntry, ProgressRecord } from '../../cloud/types';
+import { findDuplicateGroups } from '../../sync/syncEngine';
 
 type FilterTab = 'all' | 'reading' | 'unread' | 'finished' | 'offline';
 
@@ -13,6 +14,7 @@ interface Props {
   onDownloadOffline: (book: BookCatalogEntry) => Promise<void>;
   onRemoveOffline: (book: BookCatalogEntry) => Promise<void>;
   onDeleteFromCloud: (book: BookCatalogEntry) => Promise<void>;
+  onMergeDuplicates: (groups: BookCatalogEntry[][]) => Promise<void>;
   onUploadFiles: (files: FileList) => Promise<void>;
 }
 
@@ -25,6 +27,7 @@ export const LibraryView: React.FC<Props> = ({
   onDownloadOffline,
   onRemoveOffline,
   onDeleteFromCloud,
+  onMergeDuplicates,
   onUploadFiles,
 }) => {
   const [filter, setFilter] = useState<FilterTab>('all');
@@ -32,7 +35,11 @@ export const LibraryView: React.FC<Props> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteBook, setConfirmDeleteBook] = useState<BookCatalogEntry | null>(null);
   const [deletingCloud, setDeletingCloud] = useState(false);
+  const [confirmMergeOpen, setConfirmMergeOpen] = useState(false);
+  const [mergingDuplicates, setMergingDuplicates] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const duplicateGroups = useMemo(() => findDuplicateGroups(books), [books]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -75,7 +82,16 @@ export const LibraryView: React.FC<Props> = ({
             {books.length} book{books.length === 1 ? '' : 's'} synced across your cloud storage
           </p>
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
+          {duplicateGroups.length > 0 && (
+            <button
+              onClick={() => setConfirmMergeOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/60"
+            >
+              <GitMerge className="h-4 w-4" />
+              Merge {duplicateGroups.length} Duplicate{duplicateGroups.length === 1 ? '' : 's'}
+            </button>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -266,6 +282,50 @@ export const LibraryView: React.FC<Props> = ({
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
               >
                 {deletingCloud ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmMergeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Merge Duplicate Books
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Found {duplicateGroups.length} duplicate book group{duplicateGroups.length === 1 ? '' : 's'}. Merging keeps the best cover/metadata and combines all reading progress, highlights, and stats onto one entry:
+            </p>
+            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+              {duplicateGroups.map((g) => (
+                <li key={g[0].id} className="truncate">
+                  • <span className="font-medium">{g[0].title}</span> ({g.length} copies)
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                disabled={mergingDuplicates}
+                onClick={() => setConfirmMergeOpen(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={mergingDuplicates}
+                onClick={async () => {
+                  setMergingDuplicates(true);
+                  try {
+                    await onMergeDuplicates(duplicateGroups);
+                    setConfirmMergeOpen(false);
+                  } finally {
+                    setMergingDuplicates(false);
+                  }
+                }}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {mergingDuplicates ? 'Merging...' : 'Merge All'}
               </button>
             </div>
           </div>
