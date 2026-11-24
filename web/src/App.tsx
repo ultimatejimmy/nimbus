@@ -362,14 +362,14 @@ export function App() {
               });
               await loadFromIndexedDB();
             }}
-            onMergeDuplicates={async (groups) => {
+            onMergeDuplicates={async (groups, preferredKeepIds) => {
               if (!fs) {
                 setShowConnect(true);
                 return;
               }
               setSyncing(true);
               try {
-                await mergeDuplicateGroups(fs, config, groups);
+                await mergeDuplicateGroups(fs, config, groups, preferredKeepIds);
                 await runSync();
               } finally {
                 setSyncing(false);

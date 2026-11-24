@@ -350,9 +350,10 @@ function normalizeAuthorKey(raw?: string | null): string {
 }
 
 function primaryAuthor(book: BookCatalogEntry): string {
-  if (Array.isArray(book.authors) && book.authors.length > 0) return String(book.authors[0] || '');
-  if (typeof (book as any).authors === 'string') return String((book as any).authors);
-  return '';
+  let raw = '';
+  if (Array.isArray(book.authors) && book.authors.length > 0) raw = String(book.authors[0] || '');
+  else if (typeof (book as any).authors === 'string') raw = String((book as any).authors);
+  return raw.split(/\s*(?:&|;|\band\b)\s*/i)[0].trim();
 }
 
 export function findDuplicateGroups(books: BookCatalogEntry[]): BookCatalogEntry[][] {
@@ -440,6 +441,7 @@ export async function mergeDuplicateGroups(
   fs: RootPrefixedCloudFS,
   cfg: NimbusWebConfig,
   groups: BookCatalogEntry[][],
+  preferredKeepIds?: Record<string, string>,
 ): Promise<{ mergedGroups: number; removedBooks: number }> {
   if (!groups.length) return { mergedGroups: 0, removedBooks: 0 };
 
@@ -455,7 +457,12 @@ export async function mergeDuplicateGroups(
       .filter((b) => b && !b.deleted);
     if (live.length < 2) continue;
 
+    const explicitKeepId = preferredKeepIds?.[group[0].id];
     live.sort((a, b) => {
+      if (explicitKeepId) {
+        if (a.id === explicitKeepId) return -1;
+        if (b.id === explicitKeepId) return 1;
+      }
       const sa = scoreBookForKeep(a);
       const sb = scoreBookForKeep(b);
       if (sa !== sb) return sb - sa;

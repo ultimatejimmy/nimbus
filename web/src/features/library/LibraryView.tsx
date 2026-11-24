@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { BookOpen, CheckCircle2, CloudDownload, GitMerge, HardDrive, Search, Trash2, Upload } from 'lucide-react';
+import { BookOpen, Check, CheckCircle2, CloudDownload, GitMerge, HardDrive, Search, Trash2, Upload } from 'lucide-react';
 import { BookCatalogEntry, ProgressRecord } from '../../cloud/types';
 import { findDuplicateGroups } from '../../sync/syncEngine';
 
@@ -14,7 +14,7 @@ interface Props {
   onDownloadOffline: (book: BookCatalogEntry) => Promise<void>;
   onRemoveOffline: (book: BookCatalogEntry) => Promise<void>;
   onDeleteFromCloud: (book: BookCatalogEntry) => Promise<void>;
-  onMergeDuplicates: (groups: BookCatalogEntry[][]) => Promise<void>;
+  onMergeDuplicates: (groups: BookCatalogEntry[][], preferredKeepIds?: Record<string, string>) => Promise<void>;
   onUploadFiles: (files: FileList) => Promise<void>;
 }
 
@@ -38,9 +38,40 @@ export const LibraryView: React.FC<Props> = ({
   const [confirmMergeOpen, setConfirmMergeOpen] = useState(false);
   const [selectedMergeKeys, setSelectedMergeKeys] = useState<Set<string>>(new Set());
   const [mergingDuplicates, setMergingDuplicates] = useState(false);
+  const [manualMergeMode, setManualMergeMode] = useState(false);
+  const [manualSelectedIds, setManualSelectedIds] = useState<Set<string>>(new Set());
+  const [manualKeepId, setManualKeepId] = useState<string>('');
+  const [confirmManualMergeOpen, setConfirmManualMergeOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const duplicateGroups = useMemo(() => findDuplicateGroups(books), [books]);
+  const manualSelectedBooks = useMemo(
+    () => books.filter((b) => !b.deleted && manualSelectedIds.has(b.id)),
+    [books, manualSelectedIds],
+  );
+
+  const toggleManualSelect = (bookId: string) => {
+    setManualSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  };
+
+  const openManualMergeConfirm = () => {
+    if (manualSelectedBooks.length < 2) return;
+    const best = [...manualSelectedBooks].sort((a, b) => {
+      const aCal = String(a.cover_etag || '').startsWith('v2_cal_') ? 1 : 0;
+      const bCal = String(b.cover_etag || '').startsWith('v2_cal_') ? 1 : 0;
+      if (aCal !== bCal) return bCal - aCal;
+      const aCov = a.has_cover ? 1 : 0;
+      const bCov = b.has_cover ? 1 : 0;
+      return bCov - aCov;
+    })[0];
+    setManualKeepId(best.id);
+    setConfirmManualMergeOpen(true);
+  };
 
   const openMergeModal = () => {
     setSelectedMergeKeys(new Set(duplicateGroups.map((g) => g[0].id)));
@@ -89,14 +120,53 @@ export const LibraryView: React.FC<Props> = ({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {duplicateGroups.length > 0 && (
-            <button
-              onClick={openMergeModal}
-              className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/60"
-            >
-              <GitMerge className="h-4 w-4" />
-              Merge {duplicateGroups.length} Duplicate{duplicateGroups.length === 1 ? '' : 's'}
-            </button>
+          {manualMergeMode ? (
+            <>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                {manualSelectedIds.size} selected
+              </span>
+              <button
+                disabled={manualSelectedIds.size < 2}
+                onClick={openManualMergeConfirm}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-50 disabled:opacity-50"
+              >
+                <GitMerge className="h-4 w-4" />
+                Merge Selected ({manualSelectedIds.size})
+              </button>
+              <button
+                onClick={() => {
+                  setManualMergeMode(false);
+                  setManualSelectedIds(new Set());
+                }}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {duplicateGroups.length > 0 && (
+                <button
+                  onClick={openMergeModal}
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/60"
+                >
+                  <GitMerge className="h-4 w-4" />
+                  Merge {duplicateGroups.length} Duplicate{duplicateGroups.length === 1 ? '' : 's'}
+                </button>
+              )}
+              {books.length >= 2 && (
+                <button
+                  onClick={() => {
+                    setManualSelectedIds(new Set());
+                    setManualMergeMode(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <GitMerge className="h-4 w-4" />
+                  Select to Merge
+                </button>
+              )}
+            </>
           )}
           <input
             ref={fileRef}
@@ -167,16 +237,32 @@ export const LibraryView: React.FC<Props> = ({
             const pct = prog ? Math.round((prog.percent || 0) * 100) : 0;
             const isOffline = offlineBookIds.has(book.id);
             const cover = coverUrls[book.id];
+            const isManualSelected = manualMergeMode && manualSelectedIds.has(book.id);
 
             return (
               <div
                 key={book.id}
-                className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700"
+                className={`group flex flex-col overflow-hidden rounded-xl border bg-white transition dark:bg-slate-900/70 ${
+                  isManualSelected
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/70 dark:border-emerald-400'
+                    : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
+                }`}
               >
                 <div
-                  onClick={() => onOpenBook(book)}
+                  onClick={() => (manualMergeMode ? toggleManualSelect(book.id) : onOpenBook(book))}
                   className="relative aspect-[2/3] cursor-pointer overflow-hidden bg-slate-100 dark:bg-slate-800"
                 >
+                  {manualMergeMode && (
+                    <span
+                      className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border shadow ${
+                        isManualSelected
+                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-white/80 bg-slate-900/60 text-transparent'
+                      }`}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                  )}
                   {cover ? (
                     <img src={cover} alt={book.title} className="h-full w-full object-cover transition group-hover:scale-105" />
                   ) : (
@@ -389,6 +475,95 @@ export const LibraryView: React.FC<Props> = ({
                 {mergingDuplicates
                   ? 'Merging...'
                   : `Merge Selected (${selectedMergeKeys.size})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmManualMergeOpen && manualSelectedBooks.length >= 2 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Merge {manualSelectedBooks.length} Selected Books
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Choose which copy to keep as the primary cover & metadata. Progress, highlights, and reading stats from all selected copies will be combined onto it:
+            </p>
+            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-950">
+              {manualSelectedBooks.map((item) => {
+                const pct = Math.round((progressByBook[item.id]?.percent || 0) * 100);
+                const authors = Array.isArray(item.authors) ? item.authors.join(', ') : String((item as any).authors || '');
+                const cover = coverUrls[item.id];
+                const isKeep = manualKeepId === item.id;
+                return (
+                  <label
+                    key={item.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2 transition ${
+                      isKeep
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:border-emerald-500/70 dark:bg-emerald-950/30'
+                        : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-900'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="manualKeepId"
+                      checked={isKeep}
+                      disabled={mergingDuplicates}
+                      onChange={() => setManualKeepId(item.id)}
+                      className="h-4 w-4 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    {cover ? (
+                      <img src={cover} alt={item.title} className="h-12 w-8 rounded object-cover" />
+                    ) : (
+                      <div className="flex h-12 w-8 items-center justify-center rounded bg-slate-200 dark:bg-slate-800">
+                        <BookOpen className="h-4 w-4 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100">
+                        {item.title}
+                      </div>
+                      <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                        {authors ? `${authors} · ` : ''}
+                        {item.metadata_source === 'calibre' ? 'Calibre' : item.format?.toUpperCase() || 'Book'} · {pct}%
+                      </div>
+                    </div>
+                    {isKeep && (
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        Keep
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                disabled={mergingDuplicates}
+                onClick={() => setConfirmManualMergeOpen(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={mergingDuplicates || !manualKeepId}
+                onClick={async () => {
+                  setMergingDuplicates(true);
+                  try {
+                    await onMergeDuplicates([manualSelectedBooks], {
+                      [manualSelectedBooks[0].id]: manualKeepId,
+                    });
+                    setConfirmManualMergeOpen(false);
+                    setManualMergeMode(false);
+                    setManualSelectedIds(new Set());
+                  } finally {
+                    setMergingDuplicates(false);
+                  }
+                }}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {mergingDuplicates ? 'Merging...' : 'Merge Books'}
               </button>
             </div>
           </div>
