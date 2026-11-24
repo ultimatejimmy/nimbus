@@ -164,6 +164,23 @@ function UILibrary.close()
     end
 end
 
+--- Returns true when Nimbus's library overlay or embedded home screen is actively in the foreground.
+function UILibrary.isOpen()
+    if active_shelf_overlay ~= nil then
+        return true
+    end
+    local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
+    local fm = ok_fm and FileManager and FileManager.instance
+    if fm and fm._nimbus_embedded_view and not fm._nimbus_browsing_files then
+        local ok_ru, ReaderUI = pcall(require, "apps/reader/readerui")
+        local reader_active = ok_ru and ReaderUI and ReaderUI.instance ~= nil
+        if not reader_active then
+            return true
+        end
+    end
+    return false
+end
+
 --- Builds an embeddable or overlay-hosted Nimbus shelf container.
 function UILibrary.buildView(on_open_book, opts)
     opts = opts or {}
@@ -271,6 +288,8 @@ function UILibrary.buildView(on_open_book, opts)
                 if dl_n > 0 and isAlive() then
                     Widgets.showToast(string.format(_("Downloaded %d new book(s) from Nimbus Cloud."), dl_n), 3)
                 end
+            elseif info == "low_memory" or info == "suspended" or info == "canceled" then
+                sync_error = nil
             else
                 sync_error = tostring(info or "sync_error")
             end
@@ -373,19 +392,17 @@ function UILibrary.buildView(on_open_book, opts)
             end
         end
 
-        UIManager:nextTick(function()
-            if finished or is_canceled then return end
-            if run_extra_sync and opts.on_sync_now then
-                updateJobProgress(15, _("Syncing device progress & stats..."))
-                opts.on_sync_now()
-            end
-            if finished or is_canceled then return end
+        local open_doc_meta = opts.open_doc_info and {
+            filepath = opts.open_doc_info.filepath,
+            props = opts.open_doc_info.props,
+        } or nil
 
-            updateJobProgress(25, _("Scanning local books..."))
-            refreshLocalBooks(true)
-            local local_snapshot = device_books
-
+        local function startBackgroundSync()
+            if finished or is_canceled then return end
             local _started, cancel_fn = Sync.runInBackground(function(report_progress)
+                if report_progress then report_progress(25, _("Scanning local books..."), provider_label) end
+                local local_snapshot = Scanner.scanLocalBooks(nil, open_doc_meta)
+
                 if report_progress then report_progress(40, _("Loading library catalog..."), provider_label) end
                 local ok_cat, cat_or_err = false, nil
                 Sync.loadCatalog(function(ok, res)
@@ -394,6 +411,16 @@ function UILibrary.buildView(on_open_book, opts)
                 end)
                 if not ok_cat or type(cat_or_err) ~= "table" then
                     return { ok = false, err = tostring(cat_or_err or "sync_error") }
+                end
+                -- Re-scan/re-link cached local books against the fresh catalog
+                local_snapshot = Scanner.getCachedLocalBooks(cat_or_err, open_doc_meta)
+                if Covers and Covers.pruneStaleCovers then
+                    pcall(Covers.pruneStaleCovers, cat_or_err.books)
+                end
+
+                if run_extra_sync and Sync.syncStats then
+                    if report_progress then report_progress(55, _("Syncing reading stats..."), provider_label) end
+                    pcall(Sync.syncStats, nil, cat_or_err)
                 end
 
                 if report_progress then report_progress(70, _("Merging reading progress..."), provider_label) end
@@ -443,7 +470,9 @@ function UILibrary.buildView(on_open_book, opts)
                 end
             end, {
                 user_initiated = true,
-                priority = "interactive_bg",
+                priority = "foreground",
+                task = "sync_library",
+                lease_s = 90,
                 on_progress = function(pct, sub, det)
                     if not finished and not is_canceled then
                         updateJobProgress(pct, sub, det)
@@ -451,6 +480,20 @@ function UILibrary.buildView(on_open_book, opts)
                 end,
             })
             active_cancel_fn = cancel_fn
+        end
+
+        UIManager:nextTick(function()
+            if finished or is_canceled then return end
+            if run_extra_sync and opts.on_sync_now then
+                updateJobProgress(15, _("Syncing device progress..."))
+                UIManager:nextTick(function()
+                    if finished or is_canceled then return end
+                    opts.on_sync_now()
+                    startBackgroundSync()
+                end)
+            else
+                startBackgroundSync()
+            end
         end)
     end
 
@@ -1393,9 +1436,10 @@ function UILibrary.buildView(on_open_book, opts)
                     }
                 else
                     local cached_cover = Covers.getCachedCoverPath(item)
-                    local in_ram = cached_cover and Covers.hasMemoryCachedCover and Covers.hasMemoryCachedCover(cached_cover, thumb_w, thumb_h)
-                    local thumb_widget = in_ram and Covers.createCoverImageWidget(cached_cover, thumb_w, thumb_h)
-                        or Covers.createPlaceholderWidget(thumb_w, thumb_h, item.title)
+                    local thumb_widget = cached_cover and Covers.createCoverImageWidget(cached_cover, thumb_w, thumb_h)
+                    if not thumb_widget then
+                        thumb_widget = Covers.createPlaceholderWidget(thumb_w, thumb_h, item.title)
+                    end
                     thumb_frame = FrameContainer:new{
                         bordersize = 0,
                         padding = 0,
@@ -1411,9 +1455,7 @@ function UILibrary.buildView(on_open_book, opts)
                         thumb_frame[1][1] = new_img
                         dirtyHost()
                     end
-                    if cached_cover and not in_ram then
-                        Covers.enqueueDecodeCover(cached_cover, thumb_w, thumb_h, applyListThumb)
-                    elseif not cached_cover then
+                    if not cached_cover then
                         Covers.enqueueFetchCover(item, function(loaded_path)
                             if my_gen ~= render_gen or not loaded_path or not isAlive() then return end
                             Covers.enqueueDecodeCover(loaded_path, thumb_w, thumb_h, applyListThumb)
@@ -1509,9 +1551,10 @@ function UILibrary.buildView(on_open_book, opts)
                     }
                 else
                     local cached_cover = Covers.getCachedCoverPath(item)
-                    local in_ram = cached_cover and Covers.hasMemoryCachedCover and Covers.hasMemoryCachedCover(cached_cover, cover_slot_w, cover_slot_h)
-                    local cover_img = in_ram and Covers.createCoverImageWidget(cached_cover, cover_slot_w, cover_slot_h)
-                        or Covers.createPlaceholderWidget(cover_slot_w, cover_slot_h, item.title)
+                    local cover_img = cached_cover and Covers.createCoverImageWidget(cached_cover, cover_slot_w, cover_slot_h)
+                    if not cover_img then
+                        cover_img = Covers.createPlaceholderWidget(cover_slot_w, cover_slot_h, item.title)
+                    end
                     cover_slot = BottomContainer:new{
                         dimen = Geom:new{ w = cover_slot_w, h = cover_slot_h },
                         cover_img,
@@ -1521,9 +1564,7 @@ function UILibrary.buildView(on_open_book, opts)
                         cover_slot[1] = new_img
                         dirtyHost()
                     end
-                    if cached_cover and not in_ram then
-                        Covers.enqueueDecodeCover(cached_cover, cover_slot_w, cover_slot_h, applyGridCover)
-                    elseif not cached_cover then
+                    if not cached_cover then
                         Covers.enqueueFetchCover(item, function(loaded_path)
                             if my_gen ~= render_gen or not loaded_path or not isAlive() then return end
                             Covers.enqueueDecodeCover(loaded_path, cover_slot_w, cover_slot_h, applyGridCover)

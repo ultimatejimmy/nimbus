@@ -180,7 +180,9 @@ function BookCardMixin.downloadBook(item, open_after, opts)
             end
         end, {
             user_initiated = true,
-            priority = "interactive_bg",
+            priority = "foreground",
+            task = "download_book",
+            lease_s = 90,
             on_progress = function(pct, sub)
                 if finished or is_canceled then return end
                 if pct then job.pct = pct end
@@ -377,7 +379,11 @@ local function buildStatusPillsRow(ctx, item, merged_prog, inner_w, closeDlg, op
                     local upload_prog = local_st.progress
                     Sync.runInBackground(function()
                         Sync.uploadDeviceProgress(upload_prog)
-                    end, nil, { priority = "interactive_bg" })
+                    end, nil, {
+                        priority = "interactive_bg",
+                        task = "upload_progress",
+                        dedupe_key = "nimbus:upload_progress",
+                    })
                 end
                 closeDlg()
                 if opts.on_progress_changed then

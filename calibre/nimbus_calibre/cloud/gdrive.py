@@ -33,7 +33,7 @@ class GDriveDriver(BaseCloudDriver):
         elif is_dir is False:
             mime_clause = " and mimeType != 'application/vnd.google-apps.folder'"
         q = f"name = '{self._escape_q(name)}' and '{self._escape_q(parent_id)}' in parents and trashed = false{mime_clause}"
-        url = f"{DRIVE_API}/files?q={urllib.parse.quote(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=5"
+        url = f"{DRIVE_API}/files?q={urllib.parse.quote(q)}&fields=files(id,name,mimeType,size,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=5"
         status, _, body = http_request(url, headers=self._headers())
         if status == 200:
             files = json.loads(body.decode("utf-8")).get("files") or []

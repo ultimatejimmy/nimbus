@@ -116,7 +116,11 @@ local function applyBatchStatus(selected_items, st_id, opts)
         local upload_prog = local_st.progress
         Sync.runInBackground(function()
             Sync.uploadDeviceProgress(upload_prog)
-        end, nil, { priority = "interactive_bg" })
+        end, nil, {
+            priority = "interactive_bg",
+            task = "upload_progress",
+            dedupe_key = "nimbus:upload_progress",
+        })
     end
 
     if opts.on_exit_select then opts.on_exit_select() end

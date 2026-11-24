@@ -38,7 +38,8 @@ from .config import (
     update_account_tokens,
 )
 from .dialogs import NimbusConfigDialog, SelectAccountsDialog
-from .sync_engine import PREFERRED_FORMATS, format_highlights_html, pull_merged_state, push_book
+from .sync_engine import PREFERRED_FORMATS, format_highlights_html, pull_merged_state, push_book, update_metadata_and_covers
+from .updater import check_for_update, download_and_install_update
 
 
 def _push_books_worker(tasks, account_configs, device_id, tmpdir, state, abort=None, log=None, notifications=None):
@@ -86,8 +87,19 @@ def _push_books_worker(tasks, account_configs, device_id, tmpdir, state, abort=N
                 _log(f"Uploading {title} ({meta.get('format')}) to {acc_name}…")
 
                 book_meta = dict(meta)
+                calibre_mi = book_meta.pop("_calibre_mi", None)
                 book_meta["nimbus_id"] = identifiers.get(id_key)
-                bid, _, catalog = push_book(fs, device_id, book_meta, dest, cover_bytes, catalog=catalog)
+                folder_template = (acc.get("folder_template") or "").strip()
+                bid, _, catalog = push_book(
+                    fs,
+                    device_id,
+                    book_meta,
+                    dest,
+                    cover_bytes,
+                    catalog=catalog,
+                    folder_template=folder_template,
+                    calibre_mi=calibre_mi,
+                )
                 state["pushed"].append((cid, id_key, bid, acc_tag))
                 _log(f"Uploaded {title} -> {acc_name} ({id_key}:{bid})")
                 done_ops += 1
@@ -96,6 +108,70 @@ def _push_books_worker(tasks, account_configs, device_id, tmpdir, state, abort=N
         return state
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _update_metadata_worker(tasks, account_configs, device_id, state, abort=None, log=None, notifications=None):
+    """Background ThreadedJob worker to update metadata & covers for already-linked books."""
+    def _log(msg):
+        if log is not None:
+            log(msg)
+
+    def _notify(frac, msg):
+        if notifications is not None:
+            notifications.put((frac, msg))
+
+    total_accounts = max(1, len(account_configs))
+    live_tokens_by_owner: Dict[str, Dict[str, Any]] = {}
+    for idx, acc in enumerate(account_configs):
+        if abort is not None and abort.is_set():
+            _log("Metadata update aborted by user.")
+            break
+
+        acc_id = acc["id"]
+        token_owner_id = acc.get("token_owner_id") or acc_id
+        acc_name = acc.get("name") or acc_id
+        id_key = acc.get("identifier_key") or "nimbus"
+        acc_tag = (acc.get("tag") or "").strip()
+        folder_template = (acc.get("folder_template") or "").strip()
+
+        if token_owner_id in live_tokens_by_owner:
+            acc["oauth_tokens"] = dict(live_tokens_by_owner[token_owner_id])
+
+        def _on_tokens(provider, new_tokens, _owner=token_owner_id, _acc=acc):
+            live_tokens_by_owner[_owner] = dict(new_tokens)
+            state["refreshed_tokens"][_owner] = dict(new_tokens)
+            _acc["oauth_tokens"] = dict(new_tokens)
+
+        _notify(idx / total_accounts, f"Updating metadata & covers in {acc_name}…")
+        _log(f"Updating metadata & covers for {len(tasks)} selected book(s) in {acc_name}…")
+        fs = build_cloud_fs(acc, on_save_tokens=_on_tokens)
+
+        items = []
+        for cid, meta, cover_bytes, identifiers in tasks:
+            book_meta = dict(meta)
+            calibre_mi = book_meta.pop("_calibre_mi", None)
+            items.append({
+                "cid": cid,
+                "meta": book_meta,
+                "cover_bytes": cover_bytes,
+                "identifiers": identifiers,
+                "id_key": id_key,
+                "acc_tag": acc_tag,
+                "calibre_mi": calibre_mi,
+            })
+
+        updated, skipped, _ = update_metadata_and_covers(
+            fs,
+            device_id,
+            items,
+            folder_template=folder_template,
+        )
+        state["updated"].extend(updated)
+        state["skipped"] += skipped
+        _log(f"{acc_name}: updated {len(updated)} book(s), skipped {skipped} unlinked book(s).")
+
+    _notify(1.0, f"Updated metadata & covers for {len(state['updated'])} item(s)")
+    return state
 
 
 def _pull_sync_worker(account_config, device_id, state, abort=None, log=None, notifications=None):
@@ -194,15 +270,35 @@ class NimbusAction(InterfaceAction):
             send_sub.addAction("Select accounts…", self.push_to_selected_accounts)
         menu.addMenu(send_sub)
 
+        menu.addAction(
+            f"Update Metadata && Covers ({default_acc['name']})",
+            lambda checked=False, aid=default_acc["id"]: self.update_metadata_selected_books([aid]),
+        )
+        if len(accounts) >= 2:
+            upd_sub = QMenu("Update Metadata && Covers in account", menu)
+            for acc in accounts:
+                resolved = resolve_account_for_cloud(acc, accounts)
+                pname = PROVIDER_LABELS.get(resolved.get("provider", "none"), resolved.get("provider", ""))
+                star = " ★" if acc["id"] == default_acc["id"] else ""
+                folder_hint = f" / {acc['remote_root']}" if acc.get("auth_source_id") else ""
+                upd_sub.addAction(
+                    f"{acc['name']} ({pname}{folder_hint}){star}",
+                    lambda checked=False, aid=acc["id"]: self.update_metadata_selected_books([aid]),
+                )
+            upd_sub.addSeparator()
+            upd_sub.addAction("Select accounts…", self.update_metadata_to_selected_accounts)
+            menu.addMenu(upd_sub)
+
         if include_sync:
             menu.addAction(
-                f"Sync Progress & Highlights ({default_acc['name']})",
+                f"Sync Progress && Highlights ({default_acc['name']})",
                 self.pull_from_cloud,
             )
 
         if include_manage:
             menu.addSeparator()
             menu.addAction("Manage Nimbus Cloud accounts…", self.open_config)
+            menu.addAction("Check for Plugin Updates…", self.check_plugin_updates)
 
     def _sync_connect_share_menu(self):
         iactions = getattr(self.gui, "iactions", None) or {}
@@ -343,13 +439,16 @@ class NimbusAction(InterfaceAction):
                 meta = {
                     "title": mi.title,
                     "authors": mi.authors,
+                    "author_sort": getattr(mi, "author_sort", None),
                     "series": mi.series,
                     "series_index": mi.series_index,
                     "tags": mi.tags,
                     "language": mi.language,
                     "isbn": identifiers.get("isbn"),
+                    "pubdate": str(getattr(mi, "pubdate", "") or ""),
                     "calibre_uuid": mi.uuid,
                     "format": chosen_fmt,
+                    "_calibre_mi": mi,
                 }
                 tasks.append((cid, meta, dest, cover_bytes, identifiers))
         except Exception as e:
@@ -424,6 +523,178 @@ class NimbusAction(InterfaceAction):
             return
 
         self._show_status(f"Nimbus Cloud: uploaded {len(pushed)} item(s).")
+
+    def update_metadata_to_selected_accounts(self):
+        accounts = get_accounts()
+        if not accounts:
+            self.open_config()
+            return
+        default_acc = get_default_account()
+        dlg = SelectAccountsDialog(self.gui, accounts, default_id=default_acc["id"] if default_acc else "")
+        if not dlg.exec():
+            return
+        selected_ids = dlg.selected_account_ids()
+        if not selected_ids:
+            info_dialog(self.gui, "Nimbus Cloud", "Select at least one cloud account.", show=True)
+            return
+        self.update_metadata_selected_books(selected_ids)
+
+    def update_metadata_selected_books(self, account_ids: Optional[List[str]] = None):
+        all_accounts = get_accounts()
+        target_accounts: List[Dict[str, Any]] = []
+        if account_ids:
+            for aid in account_ids:
+                acc = get_account_by_id(aid)
+                if acc:
+                    resolved = resolve_account_for_cloud(acc, all_accounts)
+                    if resolved.get("provider") != "none":
+                        target_accounts.append(resolved)
+        else:
+            default_acc = get_default_account()
+            if default_acc:
+                resolved = resolve_account_for_cloud(default_acc, all_accounts)
+                if resolved.get("provider") != "none":
+                    target_accounts.append(resolved)
+
+        if not target_accounts:
+            self.open_config()
+            return
+
+        rows = self.gui.library_view.selectionModel().selectedRows()
+        book_ids = [self.gui.library_view.model().id(r) for r in rows]
+        if not book_ids:
+            info_dialog(self.gui, "Nimbus Cloud", "Select one or more books first.", show=True)
+            return
+
+        db = self.gui.current_db.new_api
+        tasks = []
+        for cid in book_ids:
+            mi = db.get_metadata(cid, get_cover=False)
+            cover_bytes = db.cover(cid)
+            identifiers = dict(mi.get_identifiers() or {})
+            meta = {
+                "title": mi.title,
+                "authors": mi.authors,
+                "author_sort": getattr(mi, "author_sort", None),
+                "series": mi.series,
+                "series_index": mi.series_index,
+                "tags": mi.tags,
+                "language": mi.language,
+                "isbn": identifiers.get("isbn"),
+                "pubdate": str(getattr(mi, "pubdate", "") or ""),
+                "calibre_uuid": mi.uuid,
+                "_calibre_mi": mi,
+            }
+            tasks.append((cid, meta, cover_bytes, identifiers))
+
+        state = {"updated": [], "skipped": 0, "refreshed_tokens": {}}
+        device_id = get_device_id()
+        target_names = ", ".join(a["name"] for a in target_accounts)
+        desc = f"Update metadata & covers for {len(tasks)} book(s) in Nimbus ({target_names})"
+
+        job = ThreadedJob(
+            "nimbus_update_metadata",
+            desc,
+            _update_metadata_worker,
+            (tasks, target_accounts, device_id, state),
+            {},
+            Dispatcher(lambda j, st=state: self._on_update_metadata_done(j, st), parent=self.gui),
+            max_concurrent_count=1,
+            killable=True,
+        )
+        self.gui.job_manager.run_threaded_job(job)
+        self._show_status(f"{desc}…")
+
+    def _on_update_metadata_done(self, job, state):
+        self._persist_refreshed_tokens(state.get("refreshed_tokens"))
+        updated = state.get("updated") or []
+        skipped = int(state.get("skipped") or 0)
+        if updated:
+            db = self.gui.current_db.new_api
+            id_updates: Dict[int, Dict[str, str]] = {}
+            tag_additions: Dict[int, List[str]] = {}
+            for cid, id_key, bid, acc_tag in updated:
+                if cid not in id_updates:
+                    id_updates[cid] = dict(db.field_for("identifiers", cid) or {})
+                id_updates[cid][id_key] = bid
+                if acc_tag:
+                    tag_additions.setdefault(cid, []).append(acc_tag)
+            if id_updates:
+                db.set_field("identifiers", id_updates)
+            if tag_additions:
+                tag_updates: Dict[int, List[str]] = {}
+                for cid, new_tags in tag_additions.items():
+                    existing = list(db.field_for("tags", cid) or [])
+                    lower_set = {t.lower() for t in existing}
+                    changed = False
+                    for t in new_tags:
+                        if t.lower() not in lower_set:
+                            existing.append(t)
+                            lower_set.add(t.lower())
+                            changed = True
+                    if changed:
+                        tag_updates[cid] = existing
+                if tag_updates:
+                    db.set_field("tags", tag_updates)
+
+        if getattr(job, "failed", False):
+            error_dialog(
+                self.gui,
+                "Nimbus Cloud Error",
+                str(getattr(job, "exception", "Metadata update failed")),
+                det_msg=self._job_error_details(job),
+                show=True,
+            )
+            return
+
+        if skipped > 0:
+            self._show_status(
+                f"Nimbus Cloud: updated metadata/covers for {len(updated)} item(s) ({skipped} unlinked skipped)."
+            )
+        else:
+            self._show_status(f"Nimbus Cloud: updated metadata/covers for {len(updated)} item(s).")
+
+    def check_plugin_updates(self):
+        from . import NimbusCalibrePlugin
+
+        try:
+            info = check_for_update(NimbusCalibrePlugin.version)
+        except Exception as e:
+            error_dialog(self.gui, "Nimbus Cloud Update", f"Failed to check for updates:\n{e}", show=True)
+            return
+
+        if not info.get("has_update"):
+            info_dialog(
+                self.gui,
+                "Nimbus Cloud Update",
+                f"You are running the latest version ({info.get('current')}).",
+                show=True,
+            )
+            return
+
+        msg = (
+            f"A new version of Nimbus Cloud is available!\n\n"
+            f"Current: {info['current']}\n"
+            f"Latest:  {info['latest']} ({info.get('tag', '')})\n\n"
+            f"Download and install now?"
+        )
+        reply = QMessageBox.question(self.gui, "Nimbus Cloud Update", msg)
+        yes_val = QMessageBox.StandardButton.Yes if hasattr(QMessageBox, "StandardButton") else QMessageBox.Yes
+        if reply != yes_val:
+            return
+
+        try:
+            download_and_install_update(info["download_url"])
+        except Exception as e:
+            error_dialog(self.gui, "Nimbus Cloud Update", f"Failed to install update:\n{e}", show=True)
+            return
+
+        info_dialog(
+            self.gui,
+            "Nimbus Cloud Update",
+            f"Installed Nimbus Cloud {info['latest']}. Please restart Calibre to apply the update.",
+            show=True,
+        )
 
     def pull_from_cloud(self):
         all_accounts = get_accounts()

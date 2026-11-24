@@ -11,6 +11,7 @@ local ok_loc, Localization = pcall(require, "localization_nimbus")
 local _ = (ok_loc and Localization and Localization.getHelper) and Localization:getHelper() or require("gettext")
 
 local Constants = require("nimbus_constants")
+local Conductor = require("nimbus_conductor")
 local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
@@ -107,9 +108,6 @@ local function embedIntoFileManager(fm_self)
         end, {
             is_home_screen = true,
             embedded_fm = fm_self,
-            on_sync_now = function()
-                Sync.syncStats()
-            end,
         })
         fm_self._nimbus_embedded_view = view
         slot[1] = view
@@ -190,6 +188,31 @@ function Nimbus:init()
     self:onDispatcherRegisterActions()
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
+    end
+    Conductor.setProfile({
+        plugin = "nimbus",
+        is_foreground = function()
+            return self:isForeground()
+        end,
+        on_reclaim = function(level)
+            self:reclaimCaches(level)
+        end,
+        on_cancel_bg = function()
+            if Sync.cancelBackgroundTasks then
+                Sync.cancelBackgroundTasks()
+            end
+            if not self:isForeground() then
+                local ok_cov, Covers = pcall(require, "nimbus_covers")
+                if ok_cov and Covers and Covers.clearFetchQueue then
+                    Covers.clearFetchQueue()
+                end
+            end
+        end,
+    })
+    if UIManager and UIManager.nextTick then
+        UIManager:nextTick(function()
+            Conductor.ensureRegistered()
+        end)
     end
     installHomeScreenPatch()
     if cfg.use_as_home_screen then
@@ -276,7 +299,6 @@ function Nimbus:openLibrary(is_home_screen)
             if has_doc then
                 self:syncCurrentBook(false)
             end
-            Sync.syncStats()
         end,
     })
 end
@@ -505,6 +527,10 @@ function Nimbus:syncCurrentBook(interactive)
         }
     end, function(ok_bg, res)
         if not ok_bg or type(res) ~= "table" then
+            if not interactive and (res == "low_memory" or res == "suspended" or res == "canceled") then
+                Logger.info("Sync current book deferred: " .. tostring(res))
+                return
+            end
             Logger.warn("Sync current book failed: " .. tostring(res))
             if interactive then
                 Widgets.showToast(_("Sync error: ") .. tostring(res), 3)
@@ -530,7 +556,12 @@ function Nimbus:syncCurrentBook(interactive)
         if interactive then
             Widgets.showToast(_("Reading sync complete."), 2)
         end
-    end)
+    end, {
+        user_initiated = (interactive == true),
+        priority = interactive and "foreground" or "idle_bg",
+        task = "sync_current_book",
+        dedupe_key = "nimbus:sync_book:" .. tostring(pmd5 or filepath),
+    })
 end
 
 function Nimbus:onReaderReady()
@@ -597,12 +628,21 @@ function Nimbus:onCloseDocument()
             if cfg.sync_stats and cloud_ok then
                 Sync.syncStats()
             end
-        end, nil, { priority = "interactive_bg" })
+        end, nil, {
+            priority = "interactive_bg",
+            task = "close_sync",
+            dedupe_key = "nimbus:close_sync:" .. tostring(pmd5 or filepath),
+        })
     end)
 end
 
-function Nimbus:onMemoryReclaim(level)
-    if level == "critical" then
+function Nimbus:isForeground()
+    return UILibrary.isOpen ~= nil and UILibrary.isOpen() == true
+end
+
+function Nimbus:reclaimCaches(level)
+    local is_fg = self:isForeground()
+    if level == "critical" or not is_fg then
         local ok_sc, Scanner = pcall(require, "nimbus_scanner")
         if ok_sc and Scanner then Scanner._mem_cache = nil end
         local ok_cov, Covers = pcall(require, "nimbus_covers")
@@ -610,6 +650,16 @@ function Nimbus:onMemoryReclaim(level)
             Covers.clearMemoryCache()
         end
     end
+    if level == "critical" and not is_fg then
+        local ok_cov, Covers = pcall(require, "nimbus_covers")
+        if ok_cov and Covers and Covers.clearFetchQueue then
+            Covers.clearFetchQueue()
+        end
+    end
+end
+
+function Nimbus:onMemoryReclaim(level)
+    self:reclaimCaches(level)
     return false
 end
 
@@ -625,7 +675,11 @@ function Nimbus:onNetworkConnected()
     Logger.debug("onNetworkConnected: flushing offline queue")
     Sync.runInBackground(function()
         Sync.flushQueue()
-    end)
+    end, nil, {
+        priority = "idle_bg",
+        task = "flush_queue",
+        dedupe_key = "nimbus:flush_queue",
+    })
 end
 
 return Nimbus

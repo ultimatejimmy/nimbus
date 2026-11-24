@@ -86,6 +86,9 @@ else
 end
 
 function NimbusProgress:init()
+    if InputContainer and InputContainer.init then
+        pcall(InputContainer.init, self)
+    end
     local Screen = Device and Device.screen
     local screen_w = (Screen and Screen.getWidth and Screen:getWidth()) or 600
     local screen_h = (Screen and Screen.getHeight and Screen:getHeight()) or 800
@@ -147,7 +150,7 @@ function NimbusProgress:init()
 
     local has_bg = (type(self.on_background) == "function") and HorizontalGroup and HorizontalSpan
     if Button then
-        local function makeActionBtn(label, w, cb)
+        local function makeActionBtn(label, w, cb, is_enabled)
             local btn = Button:new{
                 text = label,
                 text_font_size = 16,
@@ -158,7 +161,7 @@ function NimbusProgress:init()
                 padding = sc(6),
                 padding_h = sc(10),
                 width = w,
-                enabled = self.cancelable,
+                enabled = (is_enabled ~= false),
                 show_parent = self,
                 callback = cb,
             }
@@ -176,14 +179,14 @@ function NimbusProgress:init()
             local w2 = inner_width - gap - w1
             self.cancel_button = makeActionBtn(self.cancel_text, w1, function()
                 self:triggerCancel()
-            end)
+            end, self.cancelable)
             self.bg_button = makeActionBtn(self.background_text, w2, function()
                 self:triggerBackground()
-            end)
+            end, true)
         else
             self.cancel_button = makeActionBtn(self.cancel_text, inner_width, function()
                 self:triggerCancel()
-            end)
+            end, self.cancelable)
         end
     elseif ButtonTable then
         local row = {
@@ -332,6 +335,9 @@ function NimbusProgress:close()
     self.is_closed = true
     if UIManager and UIManager.close then
         pcall(function() UIManager:close(self) end)
+    end
+    if UIManager and UIManager.setDirty then
+        pcall(function() UIManager:setDirty("all", "ui") end)
     end
 end
 

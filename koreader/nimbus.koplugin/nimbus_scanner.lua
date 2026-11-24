@@ -313,11 +313,20 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
 
         local cat_entry = (cloud_id and catalog and catalog.books and catalog.books[cloud_id]) or nil
         if cat_entry then
-            if not title or title == "" then
-                title = cat_entry.title
-            end
-            if not authors or authors == "" then
-                authors = type(cat_entry.authors) == "table" and table.concat(cat_entry.authors, ", ") or cat_entry.authors
+            local cat_authors = type(cat_entry.authors) == "table" and table.concat(cat_entry.authors, ", ") or cat_entry.authors
+            if cat_entry.metadata_source == "calibre" then
+                if cat_entry.title and cat_entry.title ~= "" then title = cat_entry.title end
+                if cat_authors and cat_authors ~= "" then authors = cat_authors end
+                if cat_entry.series ~= nil then series = cat_entry.series end
+                if cat_entry.series_index ~= nil then series_index = cat_entry.series_index end
+                if cat_entry.language ~= nil then language = cat_entry.language end
+            else
+                if not title or title == "" then
+                    title = cat_entry.title
+                end
+                if not authors or authors == "" then
+                    authors = cat_authors
+                end
             end
         end
 
@@ -330,6 +339,10 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
             id = cloud_id or filepath,
             cloud_id = cloud_id,
             is_in_cloud = (cloud_id ~= nil),
+            folder = cat_entry and cat_entry.folder or nil,
+            has_cover = cat_entry and cat_entry.has_cover or nil,
+            cover_etag = cat_entry and cat_entry.cover_etag or nil,
+            metadata_source = cat_entry and cat_entry.metadata_source or nil,
             local_path = filepath,
             all_local_paths = { filepath },
             filename = filename,
@@ -342,7 +355,7 @@ function Scanner.scanLocalBooks(catalog, open_doc_info)
             series = series or (cat_entry and cat_entry.series),
             series_index = series_index or (cat_entry and cat_entry.series_index),
             language = language or (cat_entry and cat_entry.language),
-            isbn = sdr.isbn or (cat_entry and cat_entry.isbn),
+            isbn = (cat_entry and cat_entry.metadata_source == "calibre" and cat_entry.isbn) or sdr.isbn or (cat_entry and cat_entry.isbn),
             percent = sdr.percent or 0,
             status = sdr.status,
             partial_md5 = pmd5,
@@ -422,6 +435,27 @@ function Scanner.getCachedLocalBooks(catalog, open_doc_info)
             item.cloud_id = cid
             item.is_in_cloud = (cid ~= nil)
             item.id = cid or item.local_path
+            local cat_entry = cid and catalog.books[cid] or nil
+            if cat_entry then
+                item.folder = cat_entry.folder
+                item.has_cover = cat_entry.has_cover
+                item.cover_etag = cat_entry.cover_etag
+                item.metadata_source = cat_entry.metadata_source
+                if cat_entry.metadata_source == "calibre" then
+                    if cat_entry.title and cat_entry.title ~= "" then item.title = cat_entry.title end
+                    local cat_authors = type(cat_entry.authors) == "table" and table.concat(cat_entry.authors, ", ") or cat_entry.authors
+                    if cat_authors and cat_authors ~= "" then item.authors = cat_authors end
+                    if cat_entry.series ~= nil then item.series = cat_entry.series end
+                    if cat_entry.series_index ~= nil then item.series_index = cat_entry.series_index end
+                    if cat_entry.language ~= nil then item.language = cat_entry.language end
+                    if cat_entry.isbn ~= nil then item.isbn = cat_entry.isbn end
+                end
+            else
+                item.folder = nil
+                item.has_cover = nil
+                item.cover_etag = nil
+                item.metadata_source = nil
+            end
         end
         if open_doc_info and open_doc_info.filepath == item.local_path then
             local sdr = Scanner.readSidecarMeta(item.local_path)

@@ -909,13 +909,17 @@ msgstr "Eşitlendi"
 msgid "Syncing Library"
 msgstr "Kütüphane Eşitleniyor"
 
-# en-hash: be633d065af8047fb567a2000cb18275
-msgid "Syncing device progress & stats..."
-msgstr "Cihaz ilerlemesi ve istatistikler eşitleniyor..."
+# en-hash: 3f8e4250bf0187f25d7357acba0f2ccd
+msgid "Syncing device progress..."
+msgstr "Cihaz ilerlemesi eşitleniyor..."
 
 # en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
 msgid "Syncing library in background..."
 msgstr "Kütüphane arka planda eşitleniyor..."
+
+# en-hash: c7c52e246c723d032208fa9e41c6551a
+msgid "Syncing reading stats..."
+msgstr "Okuma istatistikleri eşitleniyor..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"

@@ -305,4 +305,50 @@ describe("nimbus_scanner", function()
         assert.are.equal("A farewell to arms", m3.title)
         assert.are.equal("Ernest Hemingway", m3.authors)
     end)
+
+    it("attaches cover_etag and prefers Calibre-synced metadata on cached local books", function()
+        local book_path = tmp_root .. "/cal_sync_test.epub"
+        write_bytes(book_path, "dummy-epub-bytes")
+        local catalog = {
+            books = {
+                bid_cal = {
+                    id = "bid_cal",
+                    title = "Updated Calibre Title",
+                    authors = { "Calibre Author" },
+                    series = "Updated Series",
+                    series_index = 2,
+                    folder = "Books/Calibre",
+                    has_cover = true,
+                    cover_etag = "v2_cal_999",
+                    metadata_source = "calibre",
+                    deleted = false,
+                },
+            },
+        }
+        Settings.writeLuaTable(Settings.getNimbusDir() .. "/local_books_cache.lua", {
+            version = 1,
+            books = {
+                {
+                    id = book_path,
+                    local_path = book_path,
+                    title = "Old EPUB Title",
+                    authors = "Old Author",
+                    series = "Old Series",
+                    series_index = 1,
+                },
+            },
+        })
+        Settings.linkBook(book_path, "bid_cal")
+
+        local cached = Scanner.getCachedLocalBooks(catalog)
+        assert.are.equal(1, #cached)
+        assert.are.equal("bid_cal", cached[1].cloud_id)
+        assert.are.equal("v2_cal_999", cached[1].cover_etag)
+        assert.are.equal("Books/Calibre", cached[1].folder)
+        assert.is_true(cached[1].has_cover)
+        assert.are.equal("Updated Calibre Title", cached[1].title)
+        assert.are.equal("Calibre Author", cached[1].authors)
+        assert.are.equal("Updated Series", cached[1].series)
+        assert.are.equal(2, cached[1].series_index)
+    end)
 end)

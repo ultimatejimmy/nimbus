@@ -6,6 +6,8 @@ import socket
 import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
+from .templates import DEFAULT_SERIES_TEMPLATE
+
 PROVIDER_LABELS: Dict[str, str] = {
     "none": "Not Configured",
     "gdrive": "Google Drive",
@@ -83,6 +85,10 @@ def _normalize_account(acc: Dict[str, Any], existing_keys: Iterable[str]) -> Dic
     out["auth_source_id"] = str(out.get("auth_source_id") or "").strip()
     out["remote_root"] = str(out.get("remote_root") or "Nimbus").strip() or "Nimbus"
     out["tag"] = str(out.get("tag") or "").strip()
+    if "folder_template" in out:
+        out["folder_template"] = str(out.get("folder_template") or "").strip()
+    else:
+        out["folder_template"] = DEFAULT_SERIES_TEMPLATE
     out["identity"] = str(out.get("identity") or "").strip()
     wd = out.get("webdav") or {}
     out["webdav"] = {

@@ -14,6 +14,7 @@ end
 local ok_util, util = pcall(require, "util")
 
 local Constants = require("nimbus_constants")
+local Conductor = require("nimbus_conductor")
 local Logger = require("nimbus_logger")
 local Settings = require("nimbus_settings")
 local Http = require("nimbus_http")
@@ -806,7 +807,7 @@ function Sync.deleteCloudBook(book_id, item, cb)
 end
 
 --- Syncs reading statistics for the active month (and optionally imports remote sessions).
-function Sync.syncStats(cb)
+function Sync.syncStats(cb, preloaded_catalog)
     if not Cloud.isConfigured() then
         if cb then cb(false, "Not configured") end
         return
@@ -816,11 +817,7 @@ function Sync.syncStats(cb)
         if cb then cb(true, 0) end
         return
     end
-    Sync.loadCatalog(function(ok_cat, catalog)
-        if not ok_cat then
-            if cb then cb(false, catalog) end
-            return
-        end
+    local function doSync(catalog)
         local md5_to_id = {}
         for id, entry in pairs(catalog.books or {}) do
             if not entry.deleted and entry.hashes and entry.hashes.partial_md5 then
@@ -840,6 +837,17 @@ function Sync.syncStats(cb)
         Cloud.uploadString(rel, Http.jsonEncode(payload), "application/json", function(ok_up, err)
             if cb then cb(ok_up, ok_up and #sessions or err) end
         end)
+    end
+    if type(preloaded_catalog) == "table" then
+        doSync(preloaded_catalog)
+        return
+    end
+    Sync.loadCatalog(function(ok_cat, catalog)
+        if not ok_cat then
+            if cb then cb(false, catalog) end
+            return
+        end
+        doSync(catalog)
     end)
 end
 
@@ -977,6 +985,9 @@ function Sync.reuploadFixedCovers(catalog, device_books, on_progress, is_cancele
             end)
             if ok_up then
                 t.entry.has_cover = true
+                if Covers.writeEtag then
+                    Covers.writeEtag(dest, t.entry.cover_etag)
+                end
                 uploaded = uploaded + 1
                 catalog_changed = true
                 if uploaded % 15 == 0 then
@@ -1014,7 +1025,7 @@ end
 --- Non-blocking background cloud catalog + progress sync.
 -- Uses ffi/util.runInSubProcess on desktop/e-ink, or UIManager:scheduleIn on Android (fork-unsafe).
 function Sync.startBackgroundCatalogSync(on_complete, force)
-    if not Cloud.isConfigured() or Sync._bg_pid or Sync._bg_running then
+    if not Cloud.isConfigured() or Sync._bg_pid or Sync._bg_running or Sync._bg_slot_pending then
         return false
     end
     local now = os.time()
@@ -1036,6 +1047,10 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
         end)
         if not ok_cat then
             return false, tostring(cat_or_err)
+        end
+        local ok_cov, Covers = pcall(require, "nimbus_covers")
+        if ok_cov and Covers and Covers.pruneStaleCovers and type(cat_or_err) == "table" then
+            pcall(Covers.pruneStaleCovers, cat_or_err.books)
         end
         local merged = {}
         Sync.fetchAllDeviceShards("progress.json", function(ok_p, shards)
@@ -1104,84 +1119,158 @@ function Sync.startBackgroundCatalogSync(on_complete, force)
     end
 
     Sync._last_bg_sync_ts = now
+    Sync._bg_slot_pending = true
 
-    if not Sync.canUseSubProcess() then
-        Sync._bg_running = true
-        UIManager:scheduleIn(0.05, function()
-            local ok_run, ok_res, dl_or_err = xpcall(runCatalogSyncBody, debug.traceback)
-            Sync._bg_running = false
-            if not ok_run then
-                Logger.err("Background catalog sync error: " .. tostring(ok_res))
-                if on_complete then on_complete(false, tostring(ok_res)) end
-            else
-                if on_complete then on_complete(ok_res, dl_or_err) end
-            end
-        end)
-        return true
+    local use_subprocess = Sync.canUseSubProcess()
+    local ffiUtil = use_subprocess and require("ffi/util") or nil
+    local canceled = false
+    local completed = false
+    local slot_done_fn = nil
+    local active_pid = nil
+    local active_read_fd = nil
+
+    local function finishSlot()
+        Sync._bg_slot_pending = false
+        Sync._bg_running = false
+        Sync._bg_pid = nil
+        Sync._bg_cancel = nil
+        if slot_done_fn then
+            local d = slot_done_fn
+            slot_done_fn = nil
+            d()
+        end
     end
 
-    local ffiUtil = require("ffi/util")
-    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_, child_write_fd)
-        local ok_run, ok_res, dl_or_err = xpcall(runCatalogSyncBody, debug.traceback)
-        if not ok_run then
-            Logger.err("Background catalog sync error: " .. tostring(ok_res))
-            if child_write_fd then ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(ok_res), true) end
-        elseif ok_res then
-            if child_write_fd then ffiUtil.writeToFD(child_write_fd, "OK:" .. tostring(dl_or_err or 0), true) end
-        else
-            if child_write_fd then ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(dl_or_err), true) end
-        end
-    end, true)
-
-    if not pid then
-        Logger.err("Background catalog sync fork failed")
-        return false
+    local function finishComplete(ok_res, val)
+        if completed then return end
+        completed = true
+        finishSlot()
+        if on_complete then on_complete(ok_res, val) end
     end
-    Sync._bg_pid = pid
 
-    local attempts = 0
-    local function poll()
-        if Sync._bg_pid ~= pid then return end
-        attempts = attempts + 1
-        if attempts > 150 then
-            Sync._bg_pid = nil
-            Logger.warn("Background catalog sync timed out")
-            if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
-            if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, true) end
-            if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
-            if on_complete then on_complete(false, "timeout") end
-            return
+    local function cancel()
+        if canceled or completed then return end
+        canceled = true
+        if active_pid and ffiUtil then
+            if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, active_pid) end
+            if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, active_pid, false) end
+            if active_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, active_read_fd) end
         end
-        if ffiUtil.isSubProcessDone(pid) then
-            Sync._bg_pid = nil
-            local msg = ""
-            if parent_read_fd and ffiUtil.readAllFromFD then
-                local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
-                if ok_r and type(raw) == "string" then msg = raw end
-            end
-            local ok_res = msg:sub(1, 3) == "OK:"
-            local dl_n = ok_res and (tonumber(msg:sub(4)) or 0) or 0
-            if on_complete then
-                on_complete(ok_res, ok_res and dl_n or msg)
-            end
-            return
-        end
-        UIManager:scheduleIn(0.4, poll)
+        finishComplete(false, "canceled")
     end
-    UIManager:scheduleIn(0.4, poll)
+
+    Sync._bg_cancel = cancel
+
+    Conductor.requestSlot({
+        plugin = "nimbus",
+        task = "catalog_sync",
+        priority = force and "interactive_bg" or "idle_bg",
+        dedupe_key = "nimbus:catalog_sync",
+        subprocess = use_subprocess,
+        cancel = cancel,
+        on_rejected = function(reason)
+            Logger.info("Background catalog sync deferred: " .. tostring(reason))
+            Sync._last_bg_sync_ts = 0
+            finishComplete(false, reason)
+        end,
+        run = function(done)
+            slot_done_fn = done
+            Sync._bg_slot_pending = false
+            if canceled or completed then
+                finishSlot()
+                return
+            end
+
+            if not use_subprocess then
+                Sync._bg_running = true
+                UIManager:scheduleIn(0.05, function()
+                    if canceled or completed then
+                        finishSlot()
+                        return
+                    end
+                    local ok_run, ok_res, dl_or_err = xpcall(runCatalogSyncBody, debug.traceback)
+                    if not ok_run then
+                        Logger.err("Background catalog sync error: " .. tostring(ok_res))
+                        finishComplete(false, tostring(ok_res))
+                    else
+                        finishComplete(ok_res, dl_or_err)
+                    end
+                end)
+                return
+            end
+
+            local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_, child_write_fd)
+                local ok_run, ok_res, dl_or_err = xpcall(runCatalogSyncBody, debug.traceback)
+                if not ok_run then
+                    Logger.err("Background catalog sync error: " .. tostring(ok_res))
+                    if child_write_fd then ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(ok_res), true) end
+                elseif ok_res then
+                    if child_write_fd then ffiUtil.writeToFD(child_write_fd, "OK:" .. tostring(dl_or_err or 0), true) end
+                else
+                    if child_write_fd then ffiUtil.writeToFD(child_write_fd, "ERR:" .. tostring(dl_or_err), true) end
+                end
+            end, true)
+
+            if not pid then
+                Logger.err("Background catalog sync fork failed")
+                finishComplete(false, "fork_failed")
+                return
+            end
+            active_pid = pid
+            active_read_fd = parent_read_fd
+            Sync._bg_pid = pid
+
+            local attempts = 0
+            local function poll()
+                if canceled or completed or Sync._bg_pid ~= pid then
+                    finishSlot()
+                    return
+                end
+                attempts = attempts + 1
+                if attempts > 150 then
+                    Logger.warn("Background catalog sync timed out")
+                    if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
+                    if ffiUtil.isSubProcessDone then pcall(ffiUtil.isSubProcessDone, pid, false) end
+                    if parent_read_fd and ffiUtil.readAllFromFD then pcall(ffiUtil.readAllFromFD, parent_read_fd) end
+                    finishComplete(false, "timeout")
+                    return
+                end
+                if ffiUtil.isSubProcessDone(pid) then
+                    local msg = ""
+                    if parent_read_fd and ffiUtil.readAllFromFD then
+                        local ok_r, raw = pcall(ffiUtil.readAllFromFD, parent_read_fd)
+                        if ok_r and type(raw) == "string" then msg = raw end
+                    end
+                    local ok_res = msg:sub(1, 3) == "OK:"
+                    local dl_n = ok_res and (tonumber(msg:sub(4)) or 0) or 0
+                    finishComplete(ok_res, ok_res and dl_n or msg)
+                    return
+                end
+                UIManager:scheduleIn(0.4, poll)
+            end
+            UIManager:scheduleIn(0.4, poll)
+        end,
+    })
     return true
 end
 
-local function runConducted(opts)
-    local ok, Conductor = pcall(require, "storefront_conductor")
-    if ok and Conductor and Conductor.requestSlot then
-        return Conductor.requestSlot(opts)
-    end
-    opts.run(function() end)
-    return nil
-end
-
 local _bg_seq = 0
+Sync._active_bg_jobs = Sync._active_bg_jobs or {}
+
+function Sync.cancelBackgroundTasks()
+    if Sync._bg_cancel then
+        local c = Sync._bg_cancel
+        Sync._bg_cancel = nil
+        pcall(c)
+    end
+    local to_cancel = {}
+    for _, cancel_fn in pairs(Sync._active_bg_jobs) do
+        table.insert(to_cancel, cancel_fn)
+    end
+    for _, cancel_fn in ipairs(to_cancel) do
+        pcall(cancel_fn)
+    end
+end
 
 local function writeAtomicFile(path, content)
     local tmp = path .. ".tmp"
@@ -1266,45 +1355,71 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
 
     local use_subprocess = Sync.canUseSubProcess()
     local ffiUtil = use_subprocess and require("ffi/util") or nil
+    local is_user = (opts.user_initiated == true)
+    local priority = opts.priority or (is_user and "foreground" or "idle_bg")
+    local task_name = opts.task or "bg_sync"
+
+    _bg_seq = _bg_seq + 1
+    local job_id = _bg_seq
 
     local canceled = false
+    local completed = false
     local active_cancel = nil
+    local slot_done_fn = nil
+
+    local function finish_slot()
+        Sync._active_bg_jobs[job_id] = nil
+        if slot_done_fn then
+            local d = slot_done_fn
+            slot_done_fn = nil
+            d()
+        end
+    end
+
+    local function deliver_complete(ok_res, res)
+        if completed then return end
+        completed = true
+        finish_slot()
+        if on_complete then on_complete(ok_res, res) end
+    end
+
     local function cancel()
-        if canceled then return end
+        if canceled or completed then return end
         canceled = true
         if active_cancel then active_cancel() end
+        deliver_complete(false, "canceled")
     end
 
-    local runner = function(slot_opts)
-        if opts.user_initiated then
-            slot_opts.run(function() end)
-            return nil
-        end
-        return runConducted(slot_opts)
+    if not is_user then
+        Sync._active_bg_jobs[job_id] = cancel
     end
 
-    runner({
+    Conductor.requestSlot({
         plugin = "nimbus",
-        task = "bg_sync",
-        priority = opts.priority or "idle_bg",
+        task = task_name,
+        priority = priority,
+        min_free_kb = opts.min_free_kb,
+        lease_s = opts.lease_s,
+        dedupe_key = opts.dedupe_key,
         subprocess = use_subprocess,
         cancel = cancel,
-        run = function(done)
-            local done_called = false
-            local function finish_slot()
-                if not done_called then
-                    done_called = true
-                    done()
-                end
+        on_rejected = function(reason)
+            Logger.info(string.format("Sync.runInBackground deferred (%s): %s", tostring(task_name), tostring(reason)))
+            if opts.on_rejected then
+                pcall(opts.on_rejected, reason)
             end
-            if canceled then
+            deliver_complete(false, reason)
+        end,
+        run = function(done)
+            slot_done_fn = done
+            if canceled or completed then
                 finish_slot()
                 return
             end
 
             if not use_subprocess then
                 UIManager:scheduleIn(0.05, function()
-                    if canceled then
+                    if canceled or completed then
                         finish_slot()
                         return
                     end
@@ -1317,16 +1432,14 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                     if not ok_run then
                         Logger.err("Background worker exception: " .. tostring(res))
                     end
-                    finish_slot()
-                    if on_complete then on_complete(ok_run, res) end
+                    deliver_complete(ok_run, res)
                 end)
                 return
             end
 
-            _bg_seq = _bg_seq + 1
             local nimbus_dir = Settings.getNimbusDir()
-            local res_path = nimbus_dir .. "/.bg_res_" .. tostring(_bg_seq) .. ".json"
-            local prog_path = nimbus_dir .. "/.bg_prog_" .. tostring(_bg_seq) .. ".json"
+            local res_path = nimbus_dir .. "/.bg_res_" .. tostring(job_id) .. ".json"
+            local prog_path = nimbus_dir .. "/.bg_prog_" .. tostring(job_id) .. ".json"
 
             local pid, parent_read_fd = ffiUtil.runInSubProcess(function(_pid, child_write_fd)
                 local last_prog_ts = 0
@@ -1362,8 +1475,7 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                 Logger.err("Sync.runInBackground fork failed")
                 pcall(os.remove, res_path)
                 pcall(os.remove, prog_path)
-                finish_slot()
-                if on_complete then on_complete(false, "fork_failed") end
+                deliver_complete(false, "fork_failed")
                 return
             end
 
@@ -1387,7 +1499,7 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
             local attempts = 0
             local max_attempts = tonumber(opts.max_poll_attempts) or 1200 -- 6 minutes at 0.3s
             local function poll()
-                if canceled then
+                if canceled or completed then
                     finish_slot()
                     return
                 end
@@ -1397,8 +1509,7 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                     Logger.warn("Sync.runInBackground timed out")
                     if ffiUtil.terminateSubProcess then pcall(ffiUtil.terminateSubProcess, pid) end
                     reapSubProcessAsync(ffiUtil, UIManager, pid, parent_read_fd, { res_path, prog_path })
-                    finish_slot()
-                    if on_complete then on_complete(false, "timeout") end
+                    deliver_complete(false, "timeout")
                     return
                 end
                 if ffiUtil.isSubProcessDone(pid) then
@@ -1408,12 +1519,11 @@ function Sync.runInBackground(worker_fn, on_complete, opts)
                     end
                     local msg = readAndRemoveFile(res_path) or ""
                     pcall(os.remove, prog_path)
-                    finish_slot()
                     local ok_dec, decoded = pcall(Http.jsonDecode, msg)
                     if ok_dec and type(decoded) == "table" then
-                        if on_complete then on_complete(decoded.ok == true, decoded.res) end
+                        deliver_complete(decoded.ok == true, decoded.res)
                     else
-                        if on_complete then on_complete(false, msg ~= "" and msg or "empty_response") end
+                        deliver_complete(false, msg ~= "" and msg or "empty_response")
                     end
                     return
                 end

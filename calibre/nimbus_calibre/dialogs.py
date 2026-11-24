@@ -67,6 +67,7 @@ from .config import (
     resolve_account_for_cloud,
     save_accounts,
 )
+from .templates import DEFAULT_SERIES_TEMPLATE, FOLDER_TEMPLATE_PRESETS, format_book_path
 
 
 def _expanding_policy():
@@ -115,6 +116,7 @@ class NimbusAccountDialog(QDialog):
             "remote_root": "Nimbus",
             "identifier_key": "",
             "tag": "",
+            "folder_template": DEFAULT_SERIES_TEMPLATE,
             "webdav": {"url": "", "username": "", "password": ""},
             "oauth_tokens": {},
             "identity": "",
@@ -211,6 +213,23 @@ class NimbusAccountDialog(QDialog):
         self.tag_edit.setPlaceholderText("e.g. Nimbus: Emma (optional tag added on send)")
         form.addRow("Tag on Send (Optional):", self.tag_edit)
 
+        self.folder_preset_combo = QComboBox()
+        for label, tpl in FOLDER_TEMPLATE_PRESETS:
+            self.folder_preset_combo.addItem(label, tpl)
+        self.folder_preset_combo.addItem("Custom…", "__custom__")
+        self.folder_template_edit = QLineEdit(self._account.get("folder_template", ""))
+        self.folder_template_edit.setPlaceholderText("e.g. {series}/{series_index:0>2s|| - }{title} (blank = Root)")
+        self._sync_preset_combo_from_edit()
+        self.folder_preset_combo.currentIndexChanged.connect(self._on_folder_preset_changed)
+        self.folder_template_edit.textChanged.connect(self._on_folder_template_edited)
+        form.addRow("Folder Format Preset:", self.folder_preset_combo)
+        form.addRow("Folder Template (Optional):", self.folder_template_edit)
+
+        self.template_preview_label = QLabel("")
+        self.template_preview_label.setWordWrap(True)
+        self.template_preview_label.setStyleSheet("color: #475569; font-size: 11px;")
+        form.addRow("Path Preview:", self.template_preview_label)
+
         self.id_key_label = QLabel("")
         form.addRow("Calibre Identifier Key:", self.id_key_label)
 
@@ -227,6 +246,69 @@ class NimbusAccountDialog(QDialog):
 
         self._on_provider_changed()
         self._update_identifier_preview()
+        self._update_template_preview()
+
+    def _sync_preset_combo_from_edit(self):
+        cur = self.folder_template_edit.text().strip()
+        idx = self.folder_preset_combo.findData(cur)
+        if idx >= 0:
+            self.folder_preset_combo.setCurrentIndex(idx)
+        else:
+            custom_idx = self.folder_preset_combo.findData("__custom__")
+            if custom_idx >= 0:
+                self.folder_preset_combo.setCurrentIndex(custom_idx)
+
+    def _on_folder_preset_changed(self):
+        data = self.folder_preset_combo.currentData()
+        if data is not None and data != "__custom__":
+            self.folder_template_edit.blockSignals(True)
+            self.folder_template_edit.setText(data)
+            self.folder_template_edit.blockSignals(False)
+            self._update_template_preview()
+
+    def _on_folder_template_edited(self):
+        self.folder_preset_combo.blockSignals(True)
+        self._sync_preset_combo_from_edit()
+        self.folder_preset_combo.blockSignals(False)
+        self._update_template_preview()
+
+    def _update_template_preview(self):
+        tpl = self.folder_template_edit.text().strip()
+        if not tpl:
+            self.template_preview_label.setText(
+                "Root (flat): The Final Empire.epub\n"
+                "Tokens: {series}, {series_index}, {title}, {author}, {author_sort}, {authors}, {tags}, {year}"
+            )
+            return
+        s_dir, s_file = format_book_path(
+            tpl,
+            {
+                "title": "The Final Empire",
+                "authors": ["Brandon Sanderson"],
+                "author_sort": "Sanderson, Brandon",
+                "series": "Mistborn",
+                "series_index": 1,
+                "year": "2006",
+            },
+            "epub",
+        )
+        b_dir, b_file = format_book_path(
+            tpl,
+            {
+                "title": "Elantris",
+                "authors": ["Brandon Sanderson"],
+                "author_sort": "Sanderson, Brandon",
+                "series": "",
+                "series_index": None,
+                "year": "2005",
+            },
+            "epub",
+        )
+        s_path = f"{s_dir}/{s_file or 'The Final Empire.epub'}" if s_dir else (s_file or "The Final Empire.epub")
+        b_path = f"{b_dir}/{b_file or 'Elantris.epub'}" if b_dir else (b_file or "Elantris.epub")
+        self.template_preview_label.setText(
+            f"Series: {s_path}\nStandalone: {b_path}"
+        )
 
     def _update_identifier_preview(self):
         key = self._account.get("identifier_key") or make_identifier_key(self.name_edit.text(), self._existing_keys)
@@ -426,6 +508,7 @@ class NimbusAccountDialog(QDialog):
         self._account["name"] = name
         self._account["remote_root"] = self.root_edit.text().strip() or "Nimbus"
         self._account["tag"] = self.tag_edit.text().strip()
+        self._account["folder_template"] = self.folder_template_edit.text().strip()
         if not self._account.get("identifier_key"):
             self._account["identifier_key"] = make_identifier_key(name, self._existing_keys)
         self.accept()

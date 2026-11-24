@@ -312,4 +312,64 @@ describe("nimbus_covers cache safety & normalization", function()
         package.loaded["ui/renderimage"] = orig_ri
         package.loaded["ffi/blitbuffer"] = orig_bb
     end)
+
+    it("invalidates stale disk cache on v2_cal_ cover_etag change and prefers cloud cover over local file", function()
+        local Cloud = require("nimbus_cloud")
+        local orig_dl = Cloud.downloadFile
+        local orig_extract = Covers.extractLocalCoverToFile
+
+        local entry = {
+            id = "cal_etag_book",
+            folder = "Books/CalibreBook",
+            has_cover = true,
+            local_path = "tests/tmp/cal_local.epub",
+            cover_etag = "v2_cal_aaa111",
+        }
+        local path = Covers.getCoverFilePath(entry)
+        local f = io.open(path, "wb")
+        assert.is_not_nil(f)
+        f:write("old-cover")
+        f:close()
+        Covers.writeEtag(path, "v2_cal_aaa111")
+
+        -- Matching etag returns cached path
+        assert.are.equal(path, Covers.getCachedCoverPath(entry))
+
+        -- Updated Calibre etag invalidates stale cache and returns nil
+        entry.cover_etag = "v2_cal_bbb222"
+        assert.is_nil(Covers.getCachedCoverPath(entry))
+        local check_gone = io.open(path, "rb")
+        assert.is_nil(check_gone)
+
+        -- fetchCover downloads from cloud before local extraction when cover_etag is v2_cal_
+        local extract_called = false
+        local downloaded_rel = nil
+        Covers.extractLocalCoverToFile = function()
+            extract_called = true
+            return true
+        end
+        Cloud.downloadFile = function(rel, dest, cb)
+            downloaded_rel = rel
+            local out = io.open(dest, "wb")
+            if out then out:write("new-calibre-cover"); out:close() end
+            if cb then cb(true) end
+        end
+
+        local fetched_path = nil
+        Covers.fetchCover(entry, function(p) fetched_path = p end)
+
+        Cloud.downloadFile = orig_dl
+        Covers.extractLocalCoverToFile = orig_extract
+
+        assert.is_false(extract_called)
+        assert.are.equal("Books/CalibreBook/cover.jpg", downloaded_rel)
+        assert.are.equal(path, fetched_path)
+        assert.are.equal(path, Covers.getCachedCoverPath(entry))
+
+        -- pruneStaleCovers sweeps stale entries across catalog
+        entry.cover_etag = "v2_cal_ccc333"
+        local pruned = Covers.pruneStaleCovers({ [entry.id] = entry })
+        assert.are.equal(1, pruned)
+        assert.is_nil(Covers.getCachedCoverPath(entry))
+    end)
 end)

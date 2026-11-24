@@ -909,13 +909,17 @@ msgstr "Sincronizzato"
 msgid "Syncing Library"
 msgstr "Sincronizzazione libreria in corso"
 
-# en-hash: be633d065af8047fb567a2000cb18275
-msgid "Syncing device progress & stats..."
-msgstr "Sincronizzazione progressi e statistiche..."
+# en-hash: 3f8e4250bf0187f25d7357acba0f2ccd
+msgid "Syncing device progress..."
+msgstr "Sincronizzazione progresso dispositivo..."
 
 # en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
 msgid "Syncing library in background..."
 msgstr "Sincronizzazione della libreria in background..."
+
+# en-hash: c7c52e246c723d032208fa9e41c6551a
+msgid "Syncing reading stats..."
+msgstr "Sincronizzazione statistiche di lettura..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"

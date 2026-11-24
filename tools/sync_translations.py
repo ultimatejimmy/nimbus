@@ -63,6 +63,13 @@ ALLOWLIST = {
     'Beam',
     'Cloudflare',
     'Worker',
+    'Nimbus',
+    'Nimbus Cloud',
+    'Dropbox',
+    'Google Drive',
+    'Microsoft OneDrive',
+    'WebDAV',
+    'CrossPoint / Sink / KOSync',
     'OK',
     'btn_ok',
     '1 / 1',
@@ -80,8 +87,25 @@ ALLOWLIST = {
     '?',
 }
 
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_GEMINI_FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+]
+
 def get_md5(text):
     return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+def needs_translation(key, current_val, en_val, current_hash):
+    if not key or key == 'language_name':
+        return False
+    if not current_val:
+        return True
+    if current_hash and en_val and current_hash != get_md5(en_val):
+        return True
+    if not current_hash and current_val == en_val and key not in ALLOWLIST:
+        return True
+    return False
 
 def decode_po_string(s):
     if not s: return ""
@@ -207,8 +231,9 @@ def parse_po(file_path):
             entries.append(current_entry)
     return entries
 
-def save_po(file_path, lang_name, lang_code, keys, translations, fallback_map, en_final):
+def save_po(file_path, lang_name, lang_code, keys, translations, fallback_map, en_final, existing_hashes=None):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    existing_hashes = existing_hashes or {}
     chunks = [
         'msgid ""\nmsgstr ""\n',
         f'"Language-Team: {lang_name}\\n"\n',
@@ -230,7 +255,13 @@ def save_po(file_path, lang_name, lang_code, keys, translations, fallback_map, e
 
         if lang_code != 'en':
             en_val = en_final.get(key, "")
-            if en_val:
+            prev_hash = existing_hashes.get(key)
+            # Only stamp the new en-hash if the key is actually translated and up-to-date.
+            # If it is still missing or failed to translate, preserve prev_hash so it stays flagged.
+            if needs_translation(key, val, en_val, prev_hash):
+                if prev_hash:
+                    chunks.append(f'# en-hash: {prev_hash}\n')
+            elif en_val:
                 chunks.append(f'# en-hash: {get_md5(en_val)}\n')
         chunks.append(f'msgid "{encode_po_string(key)}"\n')
         chunks.append(f'msgstr "{encode_po_string(val)}"\n\n')
@@ -315,68 +346,97 @@ def parse_json_response(text):
 
     return None
 
-def call_gemini(prompt):
-    key = get_gemini_key()
-    if not key: return None
+def get_gemini_models(primary_model=None, fallback_models=None):
+    primary = (primary_model or os.environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL).strip()
+    if fallback_models is None:
+        env_fallbacks = os.environ.get("GEMINI_FALLBACK_MODELS", "")
+        if env_fallbacks.strip():
+            fallback_list = [m.strip() for m in env_fallbacks.split(",") if m.strip()]
+        else:
+            fallback_list = list(DEFAULT_GEMINI_FALLBACK_MODELS)
+    else:
+        fallback_list = [m.strip() for m in fallback_models if m and m.strip()]
 
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    models = []
+    for m in [primary] + fallback_list:
+        if m and m not in models:
+            models.append(m)
+    return models
+
+def call_gemini(prompt, models=None):
+    key = get_gemini_key()
+    if not key:
+        return None
+
+    model_list = models if models else get_gemini_models()
     headers = {"Content-Type": "application/json"}
-    data = {
+    data = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"}
-    }
+    }).encode('utf-8')
 
-    req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
+    max_retries_per_model = 2
+    for model_idx, model in enumerate(model_list):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+        if model_idx > 0:
+            print(f"  - Falling back to model: {model}...")
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=90) as response:
-                res_data = json.loads(response.read().decode('utf-8'))
-                parts = res_data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
-                if not parts:
-                    if attempt < max_retries - 1:
+        for attempt in range(max_retries_per_model):
+            req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+            try:
+                with urllib.request.urlopen(req, timeout=90) as response:
+                    res_data = json.loads(response.read().decode('utf-8'))
+                    parts = res_data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+                    if not parts:
+                        if attempt < max_retries_per_model - 1:
+                            time.sleep(3 * (attempt + 1))
+                            continue
+                        print(f"API Error ({model}): Empty response candidates.")
+                        break
+                    text = parts[0].get('text', '')
+                    parsed = parse_json_response(text)
+                    if parsed:
+                        return parsed
+
+                    if attempt < max_retries_per_model - 1:
+                        print(f"  - Invalid JSON from {model} (attempt {attempt + 1}/{max_retries_per_model}). Retrying...")
                         time.sleep(3 * (attempt + 1))
                         continue
-                    return None
-                text = parts[0].get('text', '')
-                parsed = parse_json_response(text)
-                if parsed:
-                    return parsed
-
-                if attempt < max_retries - 1:
-                    print(f"  - Invalid JSON in response (attempt {attempt + 1}/{max_retries - 1}). Retrying...")
+                    print(f"API Error ({model}): Failed to parse JSON response.")
+                    break
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 500, 502, 503, 504) and attempt < max_retries_per_model - 1:
+                    sleep_time = 10 * (attempt + 1)
+                    print(f"  - {model}: HTTP {e.code}, waiting {sleep_time}s before retry {attempt + 1}/{max_retries_per_model - 1}...")
+                    time.sleep(sleep_time)
+                else:
+                    print(f"API Error calling Gemini ({model}): {e}")
+                    break
+            except urllib.error.URLError as e:
+                print(f"API Connection Error ({model}): {e}")
+                if attempt < max_retries_per_model - 1:
+                    time.sleep(5)
+                else:
+                    break
+            except Exception as e:
+                if attempt < max_retries_per_model - 1:
+                    print(f"  - Request/parse warning ({model}): {e}. Retrying ({attempt + 1}/{max_retries_per_model - 1})...")
                     time.sleep(3 * (attempt + 1))
                     continue
-                else:
-                    print(f"API Error: Failed to parse JSON response after {max_retries} attempts.")
-                    return None
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
-                sleep_time = 20 * (attempt + 1)
-                print(f"  - HTTP {e.code}, waiting {sleep_time}s before retry {attempt + 1}/{max_retries - 1}...")
-                time.sleep(sleep_time)
-            else:
-                print(f"API Error calling Gemini: {e}")
-                return None
-        except urllib.error.URLError as e:
-            print(f"API Connection Error: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(5)
-            else:
-                return None
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"  - Request/parse warning: {e}. Retrying ({attempt + 1}/{max_retries - 1})...")
-                time.sleep(3 * (attempt + 1))
-                continue
-            else:
-                print(f"API Error: {e}")
-                return None
+                print(f"API Error ({model}): {e}")
+                break
     return None
 
-def translate_all_gemini(all_untranslated, lang_names, max_pairs=40):
+def _is_valid_translation(key, english, value):
+    if not isinstance(value, str) or not value.strip():
+        return False, "empty"
+    if "???" in value:
+        return False, "placeholder"
+    if format_specifiers(value) != format_specifiers(english):
+        return False, "format specifiers differ"
+    return True, None
+
+def translate_all_gemini(all_untranslated, lang_names, max_pairs=40, models=None, on_batch_complete=None):
     flat_pairs = []
     for lang_code, keys in all_untranslated.items():
         for key, en_val in keys.items():
@@ -393,10 +453,15 @@ def translate_all_gemini(all_untranslated, lang_names, max_pairs=40):
         batch_num = i // max_pairs + 1
 
         batch_dict = {}
+        requested_by_lang = {}
         for lang_code, key, en_val in chunk:
             if lang_code not in batch_dict:
                 batch_dict[lang_code] = []
+                requested_by_lang[lang_code] = {}
             batch_dict[lang_code].append({"key": key, "english": en_val})
+            requested_by_lang[lang_code][key] = en_val
+
+        lang_lookup = {lc.lower(): lc for lc in batch_dict}
 
         targets = []
         for lang_code, strings in batch_dict.items():
@@ -431,15 +496,38 @@ Target languages and strings to translate:
 {json.dumps(targets, indent=2, ensure_ascii=False)}
 """
         print(f"  - Requesting translations for batch {batch_num}/{total_batches} ({len(chunk)} strings)...")
-        result = call_gemini(prompt)
+        result = call_gemini(prompt, models=models)
 
-        if result and isinstance(result, dict) and "translations" in result:
+        if result and isinstance(result, dict) and isinstance(result.get("translations"), dict):
             translations = result["translations"]
-            for lang_code, tr_map in translations.items():
-                if lang_code not in all_results:
-                    all_results[lang_code] = {}
+            batch_results = {}
+            rejected_count = 0
+            for raw_lang_code, tr_map in translations.items():
+                lang_code = raw_lang_code if raw_lang_code in requested_by_lang else lang_lookup.get(str(raw_lang_code).lower())
+                if not lang_code or not isinstance(tr_map, dict):
+                    continue
+                req_map = requested_by_lang[lang_code]
                 for k, v in tr_map.items():
-                    all_results[lang_code][k] = str(v)
+                    if k not in req_map:
+                        continue
+                    val_str = str(v) if v is not None else ""
+                    ok, reason = _is_valid_translation(k, req_map[k], val_str)
+                    if not ok:
+                        rejected_count += 1
+                        print(f"  - WARNING: Rejected {lang_code} translation for {k!r} ({reason}).")
+                        continue
+                    batch_results.setdefault(lang_code, {})[k] = val_str
+                    all_results.setdefault(lang_code, {})[k] = val_str
+
+            missing_in_batch = sum(
+                1 for lc, req_map in requested_by_lang.items()
+                for k in req_map
+                if k not in batch_results.get(lc, {})
+            )
+            if missing_in_batch:
+                print(f"  - WARNING: Batch {batch_num} left {missing_in_batch} string(s) untranslated/invalid (kept valid results).")
+            if batch_results and on_batch_complete:
+                on_batch_complete(batch_results)
         else:
             print(f"  - WARNING: Batch {batch_num} failed or returned invalid response.")
 
@@ -451,6 +539,8 @@ Target languages and strings to translate:
 def sync():
     parser = argparse.ArgumentParser(description="Synchronize and translate KOReader Device Backup & Restore plugin localizations.")
     parser.add_argument("-m", "--mode", choices=["auto", "manual", "skip"], help="Translation mode: auto (Gemini), manual (interactive CLI), or skip.")
+    parser.add_argument("--model", help=f"Primary Gemini model (default: $GEMINI_MODEL or {DEFAULT_GEMINI_MODEL}).")
+    parser.add_argument("--fallback-models", help="Comma-separated fallback Gemini models (default: $GEMINI_FALLBACK_MODELS or built-in list).")
     args = parser.parse_args()
 
     print("--- Starting Translation Sync ---")
@@ -505,17 +595,38 @@ def sync():
 
         untranslated = {}
         for key in en_final:
-            if key != 'language_name' and key != "":
-                current_val = existing_tr.get(key, "")
-                en_val = en_final.get(key, "")
-                current_hash = existing_hashes.get(key)
-                new_hash = get_md5(en_val)
-                # Untranslated if empty, or equal to English and not allowlisted, or hash outdated
-                if current_val == "" or (current_val == en_val and key not in ALLOWLIST) or (current_hash and current_hash != new_hash):
-                    untranslated[key] = en_val
+            current_val = existing_tr.get(key, "")
+            en_val = en_final.get(key, "")
+            current_hash = existing_hashes.get(key)
+            if needs_translation(key, current_val, en_val, current_hash):
+                untranslated[key] = en_val
 
         if untranslated:
             all_untranslated[lang_code] = untranslated
+
+    def save_lang_po(lang_code):
+        path = os.path.join(LANGUAGES_DIR, f"{lang_code}.po")
+        save_po(
+            path,
+            lang_names[lang_code],
+            lang_code,
+            en_final.keys(),
+            all_existing_tr[lang_code],
+            fallback_map,
+            en_final,
+            existing_hashes=all_existing_hashes[lang_code],
+        )
+
+    def handle_batch_complete(batch_results):
+        for lang_code, tr_map in batch_results.items():
+            if lang_code not in all_existing_tr:
+                continue
+            for k, v in tr_map.items():
+                all_existing_tr[lang_code][k] = v
+                en_val = en_final.get(k, "")
+                if en_val:
+                    all_existing_hashes[lang_code][k] = get_md5(en_val)
+            save_lang_po(lang_code)
 
     mode = args.mode
     has_gemini = get_gemini_key() is not None
@@ -534,24 +645,33 @@ def sync():
                 print("\nError: GEMINI_API_KEY is not set.")
                 mode = "skip"
             else:
-                print("\nAuto-translating using Gemini API...")
-                translations = translate_all_gemini(all_untranslated, lang_names)
-                for lang_code, tr_map in translations.items():
-                    if lang_code in all_existing_tr:
-                        for k, v in tr_map.items():
-                            all_existing_tr[lang_code][k] = v
+                fb_list = [m.strip() for m in args.fallback_models.split(",") if m.strip()] if args.fallback_models else None
+                models = get_gemini_models(primary_model=args.model, fallback_models=fb_list)
+                print(f"\nAuto-translating using Gemini API (models: {' -> '.join(models)})...")
+                translate_all_gemini(
+                    all_untranslated,
+                    lang_names,
+                    models=models,
+                    on_batch_complete=handle_batch_complete,
+                )
 
+    total_remaining = 0
     for file in lang_files:
         lang_code = file.split('.')[0]
-        path = os.path.join(LANGUAGES_DIR, file)
-        lang_name = lang_names[lang_code]
+        save_lang_po(lang_code)
         existing_tr = all_existing_tr[lang_code]
-
-        save_po(path, lang_name, lang_code, en_final.keys(), existing_tr, fallback_map, en_final)
-        missing_count = len([k for k in en_final if k not in existing_tr or existing_tr[k] == ""])
+        existing_hashes = all_existing_hashes[lang_code]
+        missing_count = sum(
+            1 for k in en_final
+            if needs_translation(k, existing_tr.get(k, ""), en_final.get(k, ""), existing_hashes.get(k))
+        )
+        total_remaining += missing_count
         print(f"Updated {file} ({missing_count} keys need translation)")
 
     print("--- Sync Complete ---")
+    if mode == "auto" and total_remaining > 0:
+        print(f"Warning: {total_remaining} translation(s) still remaining after auto-translation.")
+        return 1
     return 0
 
 if __name__ == "__main__":

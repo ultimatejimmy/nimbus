@@ -683,11 +683,14 @@ msgstr "Synced"
 msgid "Syncing Library"
 msgstr "Syncing Library"
 
-msgid "Syncing device progress & stats..."
-msgstr "Syncing device progress & stats..."
+msgid "Syncing device progress..."
+msgstr "Syncing device progress..."
 
 msgid "Syncing library in background..."
 msgstr "Syncing library in background..."
+
+msgid "Syncing reading stats..."
+msgstr "Syncing reading stats..."
 
 msgid "Test"
 msgstr "Test"

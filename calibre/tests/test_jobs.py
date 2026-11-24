@@ -344,6 +344,33 @@ class TestCalibreJobs(unittest.TestCase):
         self.assertEqual(seen_tokens, [("Jimmy", "old_tok"), ("Emma", "fresh_tok")])
         self.assertEqual(res["refreshed_tokens"], {"acc_jimmy": {"access_token": "fresh_tok"}})
 
+    def test_update_metadata_worker_passes_folder_template_and_records_counts(self):
+        ui = _import_ui_with_qt_stub()
+        tasks = [
+            (1, {"title": "Book 1", "series": "S1", "series_index": 1}, b"cov", {"nimbus": "bid_1"}),
+            (2, {"title": "Book 2"}, None, {}),
+        ]
+        accounts = [
+            {
+                "id": "acc_1",
+                "name": "Jimmy",
+                "provider": "gdrive",
+                "identifier_key": "nimbus",
+                "tag": "Nimbus",
+                "folder_template": "{series}/{series_index:0>2s|| - }{title}",
+                "oauth_tokens": {},
+            }
+        ]
+        state = {"updated": [], "skipped": 0, "refreshed_tokens": {}}
+        with patch.object(ui, "build_cloud_fs", return_value=MagicMock()), patch.object(
+            ui, "update_metadata_and_covers", return_value=([(1, "nimbus", "bid_1", "Nimbus")], 1, {"books": {}})
+        ) as mock_upd:
+            res = ui._update_metadata_worker(tasks, accounts, "Calibre-Test", state)
+
+        self.assertEqual(res["updated"], [(1, "nimbus", "bid_1", "Nimbus")])
+        self.assertEqual(res["skipped"], 1)
+        self.assertEqual(mock_upd.call_args.kwargs["folder_template"], "{series}/{series_index:0>2s|| - }{title}")
+
 
 if __name__ == "__main__":
     unittest.main()

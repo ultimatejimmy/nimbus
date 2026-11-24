@@ -12,6 +12,7 @@ end
 
 local Settings = require("nimbus_settings")
 local Cloud = require("nimbus_cloud")
+local Conductor = require("nimbus_conductor")
 local Hash = require("nimbus_hash")
 
 local Covers = {}
@@ -21,6 +22,41 @@ local function fileExists(path)
     local f = io.open(path, "rb")
     if f then f:close() return true end
     return false
+end
+
+local function getEtagPath(cover_path)
+    return cover_path and (cover_path .. ".etag") or nil
+end
+
+local function readEtag(cover_path)
+    local ep = getEtagPath(cover_path)
+    if not ep then return nil end
+    local f = io.open(ep, "rb")
+    if not f then return nil end
+    local val = f:read("*a")
+    f:close()
+    if not val then return nil end
+    return val:gsub("%s+$", "")
+end
+
+local function writeEtag(cover_path, etag)
+    local ep = getEtagPath(cover_path)
+    if not ep then return end
+    if type(etag) ~= "string" or etag == "" then
+        pcall(os.remove, ep)
+        return
+    end
+    local f = io.open(ep, "wb")
+    if f then
+        f:write(etag)
+        f:close()
+    end
+end
+
+Covers.writeEtag = writeEtag
+
+local function isCalibreCoverEtag(etag)
+    return type(etag) == "string" and etag:sub(1, 7) == "v2_cal_"
 end
 
 local function makeCacheKey(entry)
@@ -98,12 +134,50 @@ function Covers.getCoverFilePath(entry)
     return dir .. "/" .. key .. ".jpg"
 end
 
+function Covers.isCoverCacheStale(entry, path)
+    if not entry or not path or type(entry.cover_etag) ~= "string" or entry.cover_etag == "" then
+        return false
+    end
+    local stored = readEtag(path)
+    if stored and stored ~= "" then
+        return stored ~= entry.cover_etag
+    end
+    return isCalibreCoverEtag(entry.cover_etag)
+end
+
 function Covers.getCachedCoverPath(entry)
     local path = Covers.getCoverFilePath(entry)
     if path and fileExists(path) then
+        if Covers.isCoverCacheStale(entry, path) then
+            pcall(os.remove, path)
+            pcall(os.remove, getEtagPath(path))
+            if Covers.invalidateMemoryCacheForPath then
+                Covers.invalidateMemoryCacheForPath(path)
+            end
+            return nil
+        end
         return path
     end
     return nil
+end
+
+function Covers.pruneStaleCovers(catalog_books)
+    if type(catalog_books) ~= "table" then return 0 end
+    local pruned = 0
+    for _, entry in pairs(catalog_books) do
+        if type(entry) == "table" and not entry.deleted and type(entry.cover_etag) == "string" and entry.cover_etag ~= "" then
+            local path = Covers.getCoverFilePath(entry)
+            if path and fileExists(path) and Covers.isCoverCacheStale(entry, path) then
+                pcall(os.remove, path)
+                pcall(os.remove, getEtagPath(path))
+                if Covers.invalidateMemoryCacheForPath then
+                    Covers.invalidateMemoryCacheForPath(path)
+                end
+                pruned = pruned + 1
+            end
+        end
+    end
+    return pruned
 end
 
 --- Normalizes any BlitBuffer to a tightly-packed TYPE_BBRGB24 buffer (flattening alpha onto white).
@@ -306,12 +380,27 @@ function Covers.fetchCover(entry, cb, open_doc)
         return nil
     end
 
-    if entry.local_path and Covers.extractLocalCoverToFile(entry.local_path, dest, open_doc) then
+    local function tryLocalFallback()
+        if entry.local_path and Covers.extractLocalCoverToFile(entry.local_path, dest, open_doc) then
+            writeEtag(dest, entry.cover_etag)
+            if cb then cb(dest) end
+            return dest
+        end
+        if cb then cb(nil) end
+        return nil
+    end
+
+    local prefer_cloud = isCalibreCoverEtag(entry.cover_etag) and entry.has_cover and entry.folder
+    if not prefer_cloud and entry.local_path and Covers.extractLocalCoverToFile(entry.local_path, dest, open_doc) then
+        writeEtag(dest, entry.cover_etag)
         if cb then cb(dest) end
         return dest
     end
 
     if not entry.has_cover or not entry.folder then
+        if prefer_cloud then
+            return tryLocalFallback()
+        end
         if cb then cb(nil) end
         return nil
     end
@@ -320,13 +409,18 @@ function Covers.fetchCover(entry, cb, open_doc)
     Cloud.downloadFile(entry.folder .. "/cover.jpg", tmp, function(ok)
         if ok then
             os.remove(dest)
+            writeEtag(dest, entry.cover_etag)
             if os.rename(tmp, dest) then
                 if cb then cb(dest) end
                 return
             end
         end
         os.remove(tmp)
-        if cb then cb(nil) end
+        if prefer_cloud then
+            tryLocalFallback()
+        elseif cb then
+            cb(nil)
+        end
     end, { total_timeout = 15 })
 end
 
@@ -361,6 +455,11 @@ local function cleanupSubProcess()
     local sp = _fetch_subproc
     if not sp then return end
     _fetch_subproc = nil
+    if sp.done_slot then
+        local d = sp.done_slot
+        sp.done_slot = nil
+        pcall(d)
+    end
     local ok_fu, ffiUtil = pcall(require, "ffi/util")
     if not ok_fu or not ffiUtil then
         finishReapedSubProcess(sp, nil)
@@ -468,106 +567,152 @@ local function startSubProcessBatch(jobs, expected_gen)
                 local_path = e.local_path,
                 has_cover = e.has_cover,
                 folder = e.folder,
+                cover_etag = e.cover_etag,
                 dest = dest,
             })
         end
     end
     if #dl_specs == 0 then return end
 
-    local pid, parent_read_fd = ffiUtil.runInSubProcess(function(child_pid, child_write_fd)
-        pcall(function()
-            local CoversChild = require("nimbus_covers")
-            local CloudFS = require("nimbus_cloud")
-            for _, spec in ipairs(dl_specs) do
-                local tmp = spec.dest .. "." .. tostring(child_pid or "bg") .. ".tmp"
-                local extracted = false
-                if spec.local_path and CoversChild and CoversChild.extractLocalCoverToFile then
-                    extracted = CoversChild.extractLocalCoverToFile(spec.local_path, tmp, nil, true, { subprocess_safe = true })
-                    if extracted and fileExists(tmp) then
-                        os.remove(spec.dest)
-                        if not os.rename(tmp, spec.dest) then
-                            os.remove(tmp)
-                            extracted = false
+    Conductor.requestSlot({
+        plugin = "nimbus",
+        task = "fetch_covers",
+        priority = "interactive_bg",
+        dedupe_key = "nimbus:fetch_covers",
+        subprocess = true,
+        cancel = function()
+            cleanupSubProcess()
+        end,
+        on_rejected = function()
+            -- Deferred due to low_memory or suspend; UI will re-enqueue on next render.
+        end,
+        run = function(done)
+            if expected_gen ~= _fetch_gen then
+                done()
+                return
+            end
+
+            local pid, parent_read_fd = ffiUtil.runInSubProcess(function(child_pid, child_write_fd)
+                pcall(function()
+                    local CoversChild = require("nimbus_covers")
+                    local CloudFS = require("nimbus_cloud")
+                    for _, spec in ipairs(dl_specs) do
+                        local tmp = spec.dest .. "." .. tostring(child_pid or "bg") .. ".tmp"
+                        local prefer_cloud = isCalibreCoverEtag(spec.cover_etag) and spec.has_cover and spec.folder
+                        local saved = false
+
+                        local function tryDownloadCloud()
+                            if not (spec.has_cover and spec.folder) then return false end
+                            local ok_dl = false
+                            CloudFS.downloadFile(spec.folder .. "/cover.jpg", tmp, function(ok)
+                                if ok then
+                                    os.remove(spec.dest)
+                                    writeEtag(spec.dest, spec.cover_etag)
+                                    if os.rename(tmp, spec.dest) then
+                                        ok_dl = true
+                                    else
+                                        os.remove(tmp)
+                                    end
+                                else
+                                    os.remove(tmp)
+                                end
+                            end, { total_timeout = 15 })
+                            return ok_dl
                         end
-                    else
-                        os.remove(tmp)
-                        extracted = false
-                    end
-                end
-                if not extracted and spec.has_cover and spec.folder then
-                    CloudFS.downloadFile(spec.folder .. "/cover.jpg", tmp, function(ok)
-                        if ok then
-                            os.remove(spec.dest)
-                            if not os.rename(tmp, spec.dest) then
-                                os.remove(tmp)
+
+                        local function tryExtractLocal()
+                            if not (spec.local_path and CoversChild and CoversChild.extractLocalCoverToFile) then
+                                return false
+                            end
+                            local ok_ext = CoversChild.extractLocalCoverToFile(spec.local_path, tmp, nil, true, { subprocess_safe = true })
+                            if ok_ext and fileExists(tmp) then
+                                os.remove(spec.dest)
+                                writeEtag(spec.dest, spec.cover_etag)
+                                if os.rename(tmp, spec.dest) then
+                                    return true
+                                end
+                            end
+                            os.remove(tmp)
+                            return false
+                        end
+
+                        if prefer_cloud then
+                            saved = tryDownloadCloud()
+                            if not saved then
+                                saved = tryExtractLocal()
                             end
                         else
-                            os.remove(tmp)
+                            saved = tryExtractLocal()
+                            if not saved then
+                                saved = tryDownloadCloud()
+                            end
                         end
-                    end, { total_timeout = 15 })
+                    end
+                end)
+                if child_write_fd then
+                    pcall(ffiUtil.writeToFD, child_write_fd, "DONE", true)
                 end
+            end, true)
+
+            if not pid then
+                done()
+                for _, j in ipairs(jobs) do table.insert(_fetch_queue, j) end
+                pumpFallbackQueue(expected_gen)
+                return
             end
-        end)
-        if child_write_fd then
-            pcall(ffiUtil.writeToFD, child_write_fd, "DONE", true)
-        end
-    end, true)
 
-    if not pid then
-        for _, j in ipairs(jobs) do table.insert(_fetch_queue, j) end
-        pumpFallbackQueue(expected_gen)
-        return
-    end
+            for _, spec in ipairs(dl_specs) do
+                table.insert(tmp_paths, spec.dest .. "." .. tostring(pid) .. ".tmp")
+            end
+            _fetch_subproc = {
+                pid = pid,
+                read_fd = parent_read_fd,
+                tmp_paths = tmp_paths,
+                pending_jobs = pending_jobs,
+                done_slot = done,
+            }
 
-    for _, spec in ipairs(dl_specs) do
-        table.insert(tmp_paths, spec.dest .. "." .. tostring(pid) .. ".tmp")
-    end
-    _fetch_subproc = {
-        pid = pid,
-        read_fd = parent_read_fd,
-        tmp_paths = tmp_paths,
-        pending_jobs = pending_jobs,
-    }
-
-    local attempts = 0
-    local last_progress_attempt = 0
-    local function pollSubProc()
-        if expected_gen ~= _fetch_gen or not _fetch_subproc or _fetch_subproc.pid ~= pid then
-            return
-        end
-        attempts = attempts + 1
-        local any_left = false
-        for _, pj in ipairs(pending_jobs) do
-            if not pj.done then
-                if fileExists(pj.dest) then
-                    pj.done = true
-                    last_progress_attempt = attempts
-                    if pj.cb then pcall(pj.cb, pj.dest) end
-                else
-                    any_left = true
+            local attempts = 0
+            local last_progress_attempt = 0
+            local function pollSubProc()
+                if expected_gen ~= _fetch_gen or not _fetch_subproc or _fetch_subproc.pid ~= pid then
+                    return
                 end
-            end
-        end
-
-        local stalled = (attempts - last_progress_attempt) > 120
-        if ffiUtil.isSubProcessDone(pid) or not any_left or stalled then
-            cleanupSubProcess()
-            _fetch_poll_timer = nil
-            -- Final sweep for any file renamed right as the subprocess exited
-            for _, pj in ipairs(pending_jobs) do
-                if not pj.done and fileExists(pj.dest) then
-                    pj.done = true
-                    if pj.cb then pcall(pj.cb, pj.dest) end
+                attempts = attempts + 1
+                local any_left = false
+                for _, pj in ipairs(pending_jobs) do
+                    if not pj.done then
+                        if fileExists(pj.dest) then
+                            pj.done = true
+                            last_progress_attempt = attempts
+                            if pj.cb then pcall(pj.cb, pj.dest) end
+                        else
+                            any_left = true
+                        end
+                    end
                 end
-            end
-            return
-        end
 
-        _fetch_poll_timer = pollSubProc
-        UIManager:scheduleIn(0.25, _fetch_poll_timer)
-    end
-    _fetch_poll_timer = pollSubProc
-    UIManager:scheduleIn(0.25, _fetch_poll_timer)
+                local stalled = (attempts - last_progress_attempt) > 120
+                if ffiUtil.isSubProcessDone(pid) or not any_left or stalled then
+                    cleanupSubProcess()
+                    _fetch_poll_timer = nil
+                    -- Final sweep for any file renamed right as the subprocess exited
+                    for _, pj in ipairs(pending_jobs) do
+                        if not pj.done and fileExists(pj.dest) then
+                            pj.done = true
+                            if pj.cb then pcall(pj.cb, pj.dest) end
+                        end
+                    end
+                    return
+                end
+
+                _fetch_poll_timer = pollSubProc
+                UIManager:scheduleIn(0.25, _fetch_poll_timer)
+            end
+            _fetch_poll_timer = pollSubProc
+            UIManager:scheduleIn(0.25, _fetch_poll_timer)
+        end,
+    })
 end
 
 local function flushSettledQueue(expected_gen)
@@ -647,6 +792,23 @@ function Covers.pruneMemoryCache()
             end
         else
             i = i + 1
+        end
+    end
+end
+
+function Covers.invalidateMemoryCacheForPath(file_path)
+    if not file_path or file_path == "" then return end
+    local prefix = file_path .. ":"
+    for idx = #_scaled_bb_order, 1, -1 do
+        local k = _scaled_bb_order[idx]
+        if k:sub(1, #prefix) == prefix then
+            local entry = _scaled_bb_cache[k]
+            local bb = type(entry) == "table" and entry.bb or entry
+            if bb and bb.free then
+                pcall(function() bb:free() end)
+            end
+            _scaled_bb_cache[k] = nil
+            table.remove(_scaled_bb_order, idx)
         end
     end
 end
@@ -853,9 +1015,9 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
 
     local function makeTileContainer(book, tile_w, tile_h, tile_idx)
         local cached = book and Covers.getCachedCoverPath(book)
-        local in_ram = cached and Covers.hasMemoryCachedCover(cached, tile_w, tile_h)
-        local tile_widget = in_ram and Covers.createCoverImageWidget(cached, tile_w, tile_h)
-            or FrameContainer:new{
+        local tile_widget = cached and Covers.createCoverImageWidget(cached, tile_w, tile_h)
+        if not tile_widget then
+            tile_widget = FrameContainer:new{
                 bordersize = 1,
                 color = Blitbuffer.COLOR_GRAY_E,
                 padding = 0,
@@ -865,6 +1027,7 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
                 height = math.max(10, tile_h - 2),
                 VerticalSpan:new{ width = 0 },
             }
+        end
         local cell = CenterContainer:new{
             dimen = Geom:new{ w = tile_w, h = tile_h },
             tile_widget,
@@ -878,9 +1041,7 @@ function Covers.createFolderMosaicWidget(sample_books, slot_w, slot_h, on_async_
                 end
             end
         end
-        if cached and not in_ram then
-            Covers.enqueueDecodeCover(cached, tile_w, tile_h, applyDecodedTile)
-        elseif book and not cached then
+        if book and not cached then
             Covers.enqueueFetchCover(book, function(loaded_path)
                 if is_valid and not is_valid() then return end
                 if loaded_path then

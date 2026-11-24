@@ -124,7 +124,12 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                     last_err = (type(res) == "table" and res.err) or res
                 end
                 closeAndFinish(is_canceled_flag)
-            end, { user_initiated = true, priority = "interactive_bg" })
+            end, {
+                user_initiated = true,
+                priority = "foreground",
+                task = "save_catalog",
+                lease_s = 90,
+            })
         else
             if uploaded > 0 and batch_catalog then
                 local _cat, merged = Sync.loadCachedCatalog()
@@ -261,7 +266,12 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
                             dirty_catalog = false
                         end
                         uploadNext(idx + 1)
-                    end, { user_initiated = true, priority = "interactive_bg" })
+                    end, {
+                        user_initiated = true,
+                        priority = "foreground",
+                        task = "save_catalog",
+                        lease_s = 90,
+                    })
                     active_cancel_fn = c_fn
                 else
                     uploadNext(idx + 1)
@@ -276,7 +286,9 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
             end
         end, {
             user_initiated = true,
-            priority = "interactive_bg",
+            priority = "foreground",
+            task = "upload_book",
+            lease_s = 90,
             on_progress = function(pct, sub, det)
                 if not finished and not is_canceled and pct then
                     updateJobProgress(pct, sub or job.subtitle, det or job.detail)
@@ -308,7 +320,12 @@ function UploadMixin.uploadBookBatch(books_list, _open_doc, on_complete)
             end
             batch_catalog = Sync.loadCachedCatalog() or { books = {} }
             uploadNext(1)
-        end, { user_initiated = true, priority = "interactive_bg" })
+        end, {
+            user_initiated = true,
+            priority = "foreground",
+            task = "load_catalog",
+            lease_s = 90,
+        })
         active_cancel_fn = cancel_fn
     end)
 end

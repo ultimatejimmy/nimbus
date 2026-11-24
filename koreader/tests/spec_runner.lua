@@ -160,6 +160,7 @@ local test_files = {
     "tests/nimbus_sync_dedup_test.lua",
     "tests/nimbus_covers_test.lua",
     "tests/nimbus_progress_sync_test.lua",
+    "tests/nimbus_conductor_test.lua",
     "tests/nimbus_ui_widgets_test.lua",
 }
 

@@ -909,13 +909,17 @@ msgstr "同期済み"
 msgid "Syncing Library"
 msgstr "ライブラリを同期中"
 
-# en-hash: be633d065af8047fb567a2000cb18275
-msgid "Syncing device progress & stats..."
-msgstr "端末の進捗と統計を同期中..."
+# en-hash: 3f8e4250bf0187f25d7357acba0f2ccd
+msgid "Syncing device progress..."
+msgstr "デバイスの進捗を同期中..."
 
 # en-hash: f16e9ffd7569979dc01dc2e4a6b1f0de
 msgid "Syncing library in background..."
 msgstr "ライブラリをバックグラウンドで同期中..."
+
+# en-hash: c7c52e246c723d032208fa9e41c6551a
+msgid "Syncing reading stats..."
+msgstr "読書統計を同期中..."
 
 # en-hash: 0cbc6611f5540bd0809a388dc95a615b
 msgid "Test"
