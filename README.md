@@ -4,6 +4,32 @@
 
 Nimbus uses your own cloud storage (**Google Drive**, **OneDrive**, **Dropbox**, or **WebDAV**) as the single source of truth — no VPS, no self-hosted database, and no third-party file servers.
 
+## Screenshots
+
+### Web App (PWA)
+
+![Nimbus Web App — Cloud Library](docs/screenshots/web-library-dark.png)
+
+| Built-in EPUB/PDF Reader | Highlights & Obsidian Export |
+| :---: | :---: |
+| ![Nimbus Web Reader](docs/screenshots/web-reader.png) | ![Nimbus Highlights & Notes](docs/screenshots/web-highlights.png) |
+
+| Reading Statistics Dashboard | Settings & Connected Devices |
+| :---: | :---: |
+| ![Nimbus Reading Statistics](docs/screenshots/web-stats.png) | ![Nimbus Settings](docs/screenshots/web-settings.png) |
+
+### KOReader Plugin (`nimbus.koplugin`)
+
+| Cloud Library & Home Screen | Book Details & Actions | Nimbus Settings |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/koreader-library-grid.png" alt="KOReader Cloud Library" width="260" /> | <img src="docs/screenshots/koreader-book-card.png" alt="KOReader Book Details" width="260" /> | <img src="docs/screenshots/koreader-settings.png" alt="KOReader Settings" width="260" /> |
+
+### Calibre Companion Plugin (`NimbusCalibre`)
+
+| Multi-Account & Custom Columns | Shared Login & Folder Templates |
+| :---: | :---: |
+| ![Calibre Nimbus Configuration](docs/screenshots/calibre-config.png) | ![Calibre Edit Account](docs/screenshots/calibre-account.png) |
+
 ## Monorepo Structure
 
 - [`spec/`](spec/SCHEMA.md) — Shared Cloud Storage Layout, JSON Schemas (v1), `partial_md5` hashing spec, and cross-language golden merge fixtures.
